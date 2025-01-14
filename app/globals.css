@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 224 71% 4%;
+    --foreground: 210 40% 98%;
+    
+    --card: 224 71% 4%;
+    --card-foreground: 210 40% 98%;
+ 
+    --popover: 224 71% 4%;
+    --popover-foreground: 210 40% 98%;
+ 
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+ 
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+ 
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+ 
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+ 
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+ 
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+ 
+    --radius: 0.75rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+.neon-text {
+  text-shadow: 0 0 5px theme('colors.neon.blue'),
+               0 0 10px theme('colors.neon.blue'),
+               0 0 20px theme('colors.neon.blue');
+}
+
+.neon-border {
+  box-shadow: 0 0 5px theme('colors.neon.blue'),
+              0 0 10px theme('colors.neon.blue'),
+              0 0 20px theme('colors.neon.blue');
+}
+
+.neon-pink {
+  text-shadow: 0 0 5px theme('colors.neon.pink'),
+               0 0 10px theme('colors.neon.pink'),
+               0 0 20px theme('colors.neon.pink');
+}
+
+.neon-purple {
+  text-shadow: 0 0 5px theme('colors.neon.purple'),
+               0 0 10px theme('colors.neon.purple'),
+               0 0 20px theme('colors.neon.purple');
+}
+
+.neon-yellow {
+  text-shadow: 0 0 5px theme('colors.neon.yellow'),
+               0 0 10px theme('colors.neon.yellow'),
+               0 0 20px theme('colors.neon.yellow');
+}
