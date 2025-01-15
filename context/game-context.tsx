@@ -1,78 +1,42 @@
 "use client";
 
-import React, { createContext, useContext, useReducer, ReactNode } from "react";
+import React, {
+  createContext,
+  useContext,
+  useReducer,
+  ReactNode,
+  useEffect,
+} from "react";
+import { useGameContract } from "@/hooks/use-game-contract";
+import { Move } from "@/lib/crypto";
+import { useAccount } from "wagmi";
+import {
+  GamePhase,
+  GameResult,
+  GameHistory,
+  LeaderboardEntry,
+  GameAction,
+  GameStateData,
+} from "@/types/game";
 
-export type Move = "ROCK" | "PAPER" | "SCISSORS" | null;
-export type GameState =
-  | "CHOOSING"
-  | "SELECTED"
-  | "HOUSE_PICKING"
-  | "REVEALING"
-  | "FINISHED"
-  | "ERROR";
-export type GameResult = "WIN" | "LOSE" | "DRAW" | null;
-
-interface GameHistory {
-  id: string;
-  timestamp: number;
-  playerMove: Move;
-  houseMove: Move;
-  result: GameResult;
-  playerAddress: string;
-}
-
-interface LeaderboardEntry {
-  address: string;
-  score: number;
-  gamesPlayed: number;
-  wins: number;
-  losses: number;
-  draws: number;
-}
-
-interface GameContextType {
-  playerMove: Move;
-  houseMove: Move;
-  gameState: GameState;
-  result: GameResult;
-  score: number;
-  error: string | null;
-  history: GameHistory[];
-  leaderboard: LeaderboardEntry[];
-  playerAddress: string | null;
+interface GameContextValue extends GameStateData {
+  isLoading: boolean;
   dispatch: React.Dispatch<GameAction>;
+  createGame: (move: Move) => Promise<void>;
+  joinGame: (gameId: number, move: Move) => Promise<void>;
+  finalizeGame: (gameId: number, diffMod3: number) => Promise<void>;
 }
 
-type GameAction =
-  | { type: "SELECT_MOVE"; move: Move }
-  | { type: "HOUSE_PICK" }
-  | { type: "REVEAL_RESULT" }
-  | { type: "RESET_GAME" }
-  | { type: "SET_ERROR"; error: string }
-  | { type: "SET_PLAYER_ADDRESS"; address: string };
-
-interface GameContextState {
-  playerMove: Move;
-  houseMove: Move;
-  gameState: GameState;
-  result: GameResult;
-  score: number;
-  error: string | null;
-  history: GameHistory[];
-  leaderboard: LeaderboardEntry[];
-  playerAddress: string | null;
-}
-
-const initialState: GameContextState = {
+const initialState: GameStateData = {
   playerMove: null,
   houseMove: null,
-  gameState: "CHOOSING",
+  phase: GamePhase.CHOOSING,
   result: null,
   score: 0,
   error: null,
   history: [],
   leaderboard: [],
-  playerAddress: null,
+  gameId: null,
 };
 
 function updateLeaderboard(
@@ -112,86 +76,65 @@ function updateLeaderboard(
   ];
 }
 
-function gameReducer(
-  state: GameContextState,
-  action: GameAction
-): GameContextState {
+function gameReducer(state: GameStateData, action: GameAction): GameStateData {
   switch (action.type) {
     case "SELECT_MOVE":
       return {
         ...state,
         playerMove: action.move,
-        gameState: "SELECTED",
+        phase: GamePhase.SELECTED,
         error: null,
       };
 
-    case "HOUSE_PICK": {
-      try {
-        const moves: Move[] = ["ROCK", "PAPER", "SCISSORS"];
-        const randomMove = moves[
-          Math.floor(Math.random() * moves.length)
-        ] as Move;
-        return {
-          ...state,
-          houseMove: randomMove,
-          gameState: "REVEALING",
-          error: null,
-        };
-      } catch (error) {
-        return {
-          ...state,
-          gameState: "ERROR",
-          error: "Failed to generate house move",
-        };
-      }
-    }
-
-    case "REVEAL_RESULT": {
-      try {
-        const result = calculateResult(state.playerMove, state.houseMove);
-        const scoreChange = result === "WIN" ? 1 : result === "LOSE" ? -1 : 0;
-
-        const newState = {
-          ...state,
-          result,
-          score: state.score + scoreChange,
-          gameState: "FINISHED",
-          error: null,
-        };
-
-        // Only update history and leaderboard if we have a player address
-        if (state.playerAddress && state.playerMove && state.houseMove) {
-          const gameHistory: GameHistory = {
-            id: Math.random().toString(36).substr(2, 9),
-            timestamp: Date.now(),
-            playerMove: state.playerMove,
-            houseMove: state.houseMove,
-            result,
-            playerAddress: state.playerAddress,
-          };
-
-          newState.history = [gameHistory, ...state.history].slice(0, 10);
-          newState.leaderboard = updateLeaderboard(
-            state.leaderboard,
-            result,
-            state.playerAddress
-          );
-        }
-
-        return newState;
-      } catch (error) {
-        return {
-          ...state,
-          gameState: "ERROR",
-          error: "Failed to calculate result",
-        };
-      }
-    }
-
-    case "SET_PLAYER_ADDRESS":
+    case "SET_HOUSE_MOVE":
       return {
         ...state,
-        playerAddress: action.address,
+        houseMove: action.move,
+      };
+
+    case "SET_RESULT": {
+      const newState = {
+        ...state,
+        result: action.result,
+        phase: "FINISHED",
+        error: null,
+        score:
+          state.score +
+          (action.result === "WIN" ? 1 : action.result === "LOSE" ? -1 : 0),
+      };
+
+      const address = localStorage.getItem("playerAddress");
+      if (address && state.playerMove && state.houseMove) {
+        const gameHistory: GameHistory = {
+          id: Math.random().toString(36).substr(2, 9),
+          timestamp: Date.now(),
+          playerMove: state.playerMove,
+          houseMove: state.houseMove,
+          result: action.result,
+          playerAddress: address,
+        };
+
+        newState.history = [gameHistory, ...state.history].slice(0, 10);
+        newState.leaderboard = updateLeaderboard(
+          state.leaderboard,
+          action.result,
+          address
+        );
+      }
+
+      return newState;
+    }
+
+    case "SET_PHASE":
+      return {
+        ...state,
+        phase: action.phase,
+      };
+
+    case "SET_GAME_ID":
+      return {
+        ...state,
+        gameId: action.gameId,
       };
 
     case "RESET_GAME":
@@ -199,15 +142,16 @@ function gameReducer(
         ...state,
         playerMove: null,
         houseMove: null,
-        gameState: "CHOOSING",
+        phase: GamePhase.CHOOSING,
         result: null,
         error: null,
+        gameId: null,
       };
 
     case "SET_ERROR":
       return {
         ...state,
-        gameState: "ERROR",
+        phase: GamePhase.ERROR,
         error: action.error,
       };
 
@@ -216,33 +160,41 @@ function gameReducer(
   }
 }
 
-function calculateResult(playerMove: Move, houseMove: Move): GameResult {
-  if (!playerMove || !houseMove) {
-    throw new Error("Missing moves");
-  }
-
-  if (playerMove === houseMove) return "DRAW";
-
-  const winningMoves = {
-    ROCK: "SCISSORS",
-    PAPER: "ROCK",
-    SCISSORS: "PAPER",
-  };
-
-  return winningMoves[playerMove as keyof typeof winningMoves] === houseMove
-    ? "WIN"
-    : "LOSE";
-}
-
-const GameContext = createContext<GameContextType | null>(null);
+const GameContext = createContext<GameContextValue | null>(null);
 
 export function GameProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(gameReducer, initialState);
+  const { address } = useAccount();
+  const { gameInfo, isLoading, createGame, joinGame, finalizeGame } =
+    useGameContract(state.gameId!);
+
+  // Handle contract game state changes
+  useEffect(() => {
+    if (gameInfo) {
+      if (gameInfo.finished && gameInfo.winner) {
+        // Determine result based on winner
+        const result =
+          gameInfo.winner === address
+            ? GameResult.WIN
+            : gameInfo.winner === gameInfo.playerB
+            ? GameResult.LOSE
+            : GameResult.DRAW;
+        dispatch({ type: "SET_RESULT", result });
+      }
+    }
+  }, [gameInfo, address]);
+
+  const contextValue: GameContextValue = {
+    ...state,
+    isLoading,
+    dispatch,
+    createGame,
+    joinGame,
+    finalizeGame,
+  };
 
   return (
-    <GameContext.Provider value={{ ...state, dispatch }}>
-      {children}
-    </GameContext.Provider>
+    <GameContext.Provider value={contextValue}>{children}</GameContext.Provider>
   );
 }
 
