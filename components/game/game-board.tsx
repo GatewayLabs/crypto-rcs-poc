@@ -2,11 +2,13 @@
 
 import React, { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { useGame, Move } from "@/context/game-context";
+import { useGame } from "@/context/game-context";
 import { motion, AnimatePresence } from "framer-motion";
 import { Spinner } from "@/components/ui/spinner";
-import { ToastContainer } from "@/components/ui/toast";
+import { Toast, ToastContainer } from "@/components/ui/toast";
 import { soundEffects } from "@/lib/sounds/sound-effects";
+import { Move } from "@/lib/crypto";
+import { useAccount } from "wagmi";
 
 interface GameToast {
   id: string;
@@ -15,11 +17,91 @@ interface GameToast {
 }
 
 export function GameBoard() {
-  const { playerMove, houseMove, gameState, result, score, error, dispatch } =
-    useGame();
+  const {
+    playerMove,
+    houseMove,
+    phase,
+    result,
+    score,
+    error,
+    gameId,
+    dispatch,
+    createGame,
+    joinGame,
+    isLoading,
+  } = useGame();
+
+  const { address } = useAccount();
   const [toasts, setToasts] = useState<GameToast[]>([]);
 
-  const getMoveEmoji = (move: Move) => {
+  useEffect(() => {
+    if (error) {
+      addToast(error, "error");
+      const timer = setTimeout(() => {
+        dispatch({ type: "RESET_GAME" });
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [error, dispatch]);
+
+  useEffect(() => {
+    if (phase === "FINISHED" && result) {
+      if (result === "WIN") soundEffects.win();
+      else if (result === "LOSE") soundEffects.lose();
+      else soundEffects.draw();
+    }
+  }, [phase, result]);
+
+  const addToast = (message: string, type: "success" | "error" | "info") => {
+    const id = Math.random().toString(36).substr(2, 9);
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      dismissToast(id);
+    }, 5000);
+  };
+
+  const dismissToast = (id: string) => {
+    setToasts((prev) => prev.filter((toast) => toast.id !== id));
+  };
+
+  const handleMove = async (move: Move) => {
+    if (phase !== "CHOOSING" || !address || isLoading) return;
+
+    try {
+      soundEffects.select();
+      dispatch({ type: "SELECT_MOVE", move });
+
+      // If there's no gameId, create a new game
+      if (!gameId) {
+        addToast("Creating new game...", "info");
+        await createGame(move);
+        addToast("Game created! Waiting for opponent...", "success");
+      } else {
+        // Join existing game
+        addToast("Joining game...", "info");
+        await joinGame(gameId, move);
+        addToast("Joined game!", "success");
+      }
+    } catch (error) {
+      addToast(
+        error instanceof Error ? error.message : "Failed to make move",
+        "error"
+      );
+      dispatch({ type: "RESET_GAME" });
+    }
+  };
+
+  const handlePlayAgain = () => {
+    soundEffects.click();
+    dispatch({ type: "RESET_GAME" });
+    addToast("Starting new game!", "info");
+  };
+
+  const handleHover = () => {
+    soundEffects.hover();
+  };
+
+  const getMoveEmoji = (move: Move | null) => {
     switch (move) {
       case "ROCK":
         return "🪨";
@@ -45,70 +127,15 @@ export function GameBoard() {
     }
   };
 
-  useEffect(() => {
-    if (error) {
-      addToast(error, "error");
-      const timer = setTimeout(() => {
-        dispatch({ type: "RESET_GAME" });
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [error, dispatch]);
-
-  useEffect(() => {
-    if (gameState === "SELECTED") {
-      const timer = setTimeout(() => {
-        dispatch({ type: "HOUSE_PICK" });
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-
-    if (gameState === "REVEALING") {
-      const timer = setTimeout(() => {
-        dispatch({ type: "REVEAL_RESULT" });
-      }, 1500);
-      return () => clearTimeout(timer);
-    }
-
-    // Play result sounds
-    if (gameState === "FINISHED" && result) {
-      if (result === "WIN") soundEffects.win();
-      else if (result === "LOSE") soundEffects.lose();
-      else soundEffects.draw();
-    }
-  }, [gameState, dispatch, result]);
-
-  const addToast = (message: string, type: "success" | "error" | "info") => {
-    const id = Math.random().toString(36).substr(2, 9);
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      dismissToast(id);
-    }, 5000);
-  };
-
-  const dismissToast = (id: string) => {
-    setToasts((prev) => prev.filter((toast) => toast.id !== id));
-  };
-
-  const handleMove = (move: Move) => {
-    if (gameState !== "CHOOSING" || !move) return;
-    try {
-      soundEffects.select();
-      dispatch({ type: "SELECT_MOVE", move });
-      addToast("Move selected!", "success");
-    } catch (e) {
-      addToast("Failed to select move", "error");
-    }
-  };
-
-  const handlePlayAgain = () => {
-    soundEffects.click();
-    dispatch({ type: "RESET_GAME" });
-    addToast("Starting new game!", "info");
-  };
-
-  const handleHover = () => {
-    soundEffects.hover();
+  const getStatusMessage = () => {
+    if (!address) return "Connect your wallet to play";
+    if (isLoading) return "Processing...";
+    if (gameId && phase === "CHOOSING") return "Join the game...";
+    if (!gameId && phase === "CHOOSING") return "Make your move...";
+    if (phase === "SELECTED") return "Waiting for opponent...";
+    if (phase === "WAITING") return "Opponent is playing...";
+    if (phase === "REVEALING") return "Revealing moves...";
+    return "";
   };
 
   return (
@@ -119,8 +146,14 @@ export function GameBoard() {
             <div className="text-xl text-purple-400">Score: {score}</div>
           </div>
 
+          {gameId && (
+            <div className="absolute top-4 left-4">
+              <div className="text-sm text-gray-400">Game #{gameId}</div>
+            </div>
+          )}
+
           <AnimatePresence mode="wait">
-            {gameState === "CHOOSING" && (
+            {phase === "CHOOSING" && (
               <motion.div
                 key="choosing"
                 initial={{ opacity: 0, y: 20 }}
@@ -135,13 +168,15 @@ export function GameBoard() {
                     onMouseEnter={handleHover}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
+                    disabled={!address || isLoading}
                     className={cn(
                       "p-6 rounded-lg border-2 transition-all duration-300",
                       "hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500",
                       "bg-black bg-opacity-50",
                       playerMove === move
                         ? "border-blue-500"
-                        : "border-gray-600"
+                        : "border-gray-600",
+                      (!address || isLoading) && "opacity-50 cursor-not-allowed"
                     )}
                   >
                     <div className="text-6xl mb-2 text-center">
@@ -160,10 +195,10 @@ export function GameBoard() {
               </motion.div>
             )}
 
-            {(gameState === "SELECTED" ||
-              gameState === "HOUSE_PICKING" ||
-              gameState === "REVEALING" ||
-              gameState === "FINISHED") && (
+            {(phase === "SELECTED" ||
+              phase === "WAITING" ||
+              phase === "REVEALING" ||
+              phase === "FINISHED") && (
               <motion.div
                 key="playing"
                 initial={{ opacity: 0 }}
@@ -184,16 +219,16 @@ export function GameBoard() {
 
                 <div className="text-center">
                   <div className="text-xl mb-4 text-pink-400">
-                    {gameState === "SELECTED" ? (
+                    {phase === "SELECTED" || phase === "WAITING" ? (
                       <span className="flex items-center justify-center gap-2">
-                        House picking <Spinner size="sm" />
+                        Opponent's Move <Spinner size="sm" />
                       </span>
-                    ) : gameState === "REVEALING" ? (
+                    ) : phase === "REVEALING" ? (
                       <span className="flex items-center justify-center gap-2">
                         Revealing <Spinner size="sm" />
                       </span>
                     ) : (
-                      "House Move"
+                      "Opponent's Move"
                     )}
                   </div>
                   <motion.div
@@ -201,7 +236,7 @@ export function GameBoard() {
                     animate={{ scale: 1 }}
                     className="text-8xl"
                   >
-                    {gameState === "FINISHED" ? (
+                    {phase === "FINISHED" ? (
                       getMoveEmoji(houseMove)
                     ) : (
                       <motion.div
@@ -221,7 +256,7 @@ export function GameBoard() {
               </motion.div>
             )}
 
-            {gameState === "FINISHED" && (
+            {phase === "FINISHED" && (
               <motion.div
                 key="finished"
                 initial={{ opacity: 0, y: 20 }}
@@ -246,6 +281,10 @@ export function GameBoard() {
                 </motion.button>
               </motion.div>
             )}
+
+            <div className="mt-4 text-center text-gray-400">
+              {getStatusMessage()}
+            </div>
           </AnimatePresence>
         </div>
       </div>

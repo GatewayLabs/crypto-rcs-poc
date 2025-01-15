@@ -1,8 +1,17 @@
+"use client";
+
 import { GameBoard } from "@/components/game/game-board";
+import { HousePanel } from "@/components/game/house-panel";
 import { StatsPanel } from "@/components/game/stats-panel";
 import { WalletConnect } from "@/components/wallet-connect";
+import { useAccount } from 'wagmi';
+
+const HOUSE_ADDRESS = "0x..."; // Add the house wallet address
 
 export default function Home() {
+  const { address } = useAccount();
+  const isHouse = address?.toLowerCase() === HOUSE_ADDRESS.toLowerCase();
+
   return (
     <main className="min-h-screen py-12 px-4">
       <WalletConnect />
@@ -12,7 +21,14 @@ export default function Home() {
           Crypto Rock Paper Scissors
         </h1>
 
-        <GameBoard />
+        {isHouse ? (
+          <div className="mb-12">
+            <HousePanel />
+          </div>
+        ) : (
+          <GameBoard />
+        )}
+
         <StatsPanel />
 
         <footer className="mt-12 text-center text-sm text-gray-400">
