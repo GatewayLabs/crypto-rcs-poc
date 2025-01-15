@@ -138,6 +138,8 @@ function gameReducer(state: GameStateData, action: GameAction): GameStateData {
           houseMove: inferredHouseMove,
           result: action.result,
           playerAddress: address,
+          gameId: state.gameId,
+          transactionHash: action.transactionHash,
         };
 
         newState.history = [gameHistory, ...state.history].slice(0, 10);
@@ -316,18 +318,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
       if (bothCommitted) {
         dispatch({ type: "SET_PHASE", phase: GamePhase.REVEALING });
       }
-
-      // Handle game completion
-      if (finished && winner) {
-        // Determine result based on winner
-        const result =
-          winner === address
-            ? GameResult.WIN
-            : winner === playerB
-            ? GameResult.LOSE
-            : GameResult.DRAW;
-        dispatch({ type: "SET_RESULT", result });
-      }
     }
   }, [gameInfo, address]);
 
@@ -337,22 +327,32 @@ export function GameProvider({ children }: { children: ReactNode }) {
     dispatch,
     createGame: async (move: Move) => {
       try {
-        // Create game and wait for gameId from event
         const gameId = await createGame(move);
         dispatch({ type: "SET_GAME_ID", gameId });
         dispatch({ type: "SET_PHASE", phase: GamePhase.SELECTED });
 
-        // After game is created, trigger house move
         const houseResult = await playHouseMove(gameId);
         if (!houseResult.success) {
           throw new Error(houseResult.error);
         }
 
-        // After house moves, trigger game resolution
         const resolveResult = await resolveGame(gameId);
         if (!resolveResult.success) {
           throw new Error(resolveResult.error);
         }
+
+        const gameResult =
+          resolveResult.result === 0
+            ? GameResult.DRAW
+            : resolveResult.result === 1
+            ? GameResult.WIN
+            : GameResult.LOSE;
+
+        dispatch({
+          type: "SET_RESULT",
+          result: gameResult,
+          transactionHash: resolveResult.hash,
+        });
       } catch (error) {
         dispatch({
           type: "SET_ERROR",

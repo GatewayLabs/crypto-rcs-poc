@@ -23,6 +23,8 @@ export interface GameHistory {
   houseMove: Move;
   result: GameResult;
   playerAddress: string;
+  transactionHash?: string;
+  gameId: number | null;
 }
 
 export interface LeaderboardEntry {
@@ -49,7 +51,7 @@ export interface GameStateData {
 export type GameAction =
   | { type: "SELECT_MOVE"; move: Move }
   | { type: "SET_HOUSE_MOVE"; move: Move }
-  | { type: "SET_RESULT"; result: GameResult }
+  | { type: "SET_RESULT"; result: GameResult; transactionHash?: string }
   | { type: "RESET_GAME" }
   | { type: "SET_ERROR"; error: string }
   | { type: "SET_PHASE"; phase: GamePhase }

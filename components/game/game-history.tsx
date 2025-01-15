@@ -1,19 +1,22 @@
 "use client";
 
-import { useGame } from '@/context/game-context';
-import { motion } from 'framer-motion';
-import { cn } from '@/lib/utils';
+import { useGame } from "@/context/game-context";
+import { motion } from "framer-motion";
+import { cn } from "@/lib/utils";
+import { ExternalLink } from "lucide-react";
 
 export function GameHistory() {
   const { history } = useGame();
 
   if (history.length === 0) {
     return (
-      <div className="p-4 text-center text-gray-400">
-        No games played yet
-      </div>
+      <div className="p-4 text-center text-gray-400">No games played yet</div>
     );
   }
+
+  const getExplorerUrl = (txHash: string) => {
+    return `https://gateway-shield-testnet.explorer.caldera.xyz/tx/${txHash}`;
+  };
 
   return (
     <div className="max-h-96 overflow-y-auto">
@@ -24,6 +27,7 @@ export function GameHistory() {
             <th className="p-2 text-blue-400">Player Move</th>
             <th className="p-2 text-blue-400">House Move</th>
             <th className="p-2 text-blue-400">Result</th>
+            <th className="p-2 text-blue-400">TX</th>
           </tr>
         </thead>
         <tbody>
@@ -38,22 +42,36 @@ export function GameHistory() {
                 {new Date(game.timestamp).toLocaleTimeString()}
               </td>
               <td className="p-2 text-2xl">
-                {game.playerMove === 'ROCK' && '🪨'}
-                {game.playerMove === 'PAPER' && '📜'}
-                {game.playerMove === 'SCISSORS' && '✂️'}
+                {game.playerMove === "ROCK" && "🪨"}
+                {game.playerMove === "PAPER" && "📜"}
+                {game.playerMove === "SCISSORS" && "✂️"}
               </td>
               <td className="p-2 text-2xl">
-                {game.houseMove === 'ROCK' && '🪨'}
-                {game.houseMove === 'PAPER' && '📜'}
-                {game.houseMove === 'SCISSORS' && '✂️'}
+                {game.houseMove === "ROCK" && "🪨"}
+                {game.houseMove === "PAPER" && "📜"}
+                {game.houseMove === "SCISSORS" && "✂️"}
               </td>
-              <td className={cn(
-                "p-2 font-semibold",
-                game.result === 'WIN' && "text-green-500",
-                game.result === 'LOSE' && "text-red-500",
-                game.result === 'DRAW' && "text-yellow-500"
-              )}>
+              <td
+                className={cn(
+                  "p-2 font-semibold",
+                  game.result === "WIN" && "text-green-500",
+                  game.result === "LOSE" && "text-red-500",
+                  game.result === "DRAW" && "text-yellow-500"
+                )}
+              >
                 {game.result}
+              </td>
+              <td className="p-2">
+                {game.transactionHash && (
+                  <a
+                    href={getExplorerUrl(game.transactionHash)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-400 hover:text-blue-300 transition-colors"
+                  >
+                    <ExternalLink size={16} />
+                  </a>
+                )}
               </td>
             </motion.tr>
           ))}
