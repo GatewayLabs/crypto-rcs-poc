@@ -37,7 +37,6 @@ export function useGameContract(gameId?: number) {
     data: txHash,
   } = useWriteContract();
 
-  // High-level actions that handle encryption and contract calls
   const createGame = useCallback(
     async (move: Move) => {
       try {

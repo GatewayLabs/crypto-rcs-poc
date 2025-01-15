@@ -18,6 +18,8 @@ import {
   GameAction,
   GameStateData,
 } from "@/types/game";
+import { getErrorMessage } from "@/lib/errors";
+import { usePersistentGame } from "@/hooks/use-persistent-game";
 
 interface GameContextValue extends GameStateData {
   isLoading: boolean;
@@ -155,6 +157,31 @@ function gameReducer(state: GameStateData, action: GameAction): GameStateData {
         error: action.error,
       };
 
+    case "RESTORE_STATE":
+      if (state.phase !== GamePhase.CHOOSING || state.playerMove !== null) {
+        return state;
+      }
+      return {
+        ...state,
+        ...action.state,
+        history: state.history,
+        leaderboard: state.leaderboard,
+      };
+
+    case "HANDLE_ERROR":
+      return {
+        ...state,
+        phase: GamePhase.ERROR,
+        error: getErrorMessage(action.error),
+        ...(action.error.recoverable
+          ? {}
+          : {
+              playerMove: null,
+              houseMove: null,
+              gameId: null,
+            }),
+      };
+
     default:
       return state;
   }
@@ -167,6 +194,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const { address } = useAccount();
   const { gameInfo, isLoading, createGame, joinGame, finalizeGame } =
     useGameContract(state.gameId!);
+
+  usePersistentGame(dispatch, {
+    playerMove: state.playerMove,
+    houseMove: state.houseMove,
+    phase: state.phase,
+    result: state.result,
+    score: state.score,
+    gameId: state.gameId,
+    timestamp: Date.now(),
+  });
 
   // Handle contract game state changes
   useEffect(() => {
