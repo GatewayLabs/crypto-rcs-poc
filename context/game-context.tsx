@@ -22,12 +22,27 @@ import { getErrorMessage } from "@/lib/errors";
 import { usePersistentGame } from "@/hooks/use-persistent-game";
 import { playHouseMove, resolveGame } from "@/app/actions/house";
 
+function inferHouseMove(playerMove: Move, result: GameResult): Move {
+  if (result === "DRAW") {
+    return playerMove;
+  }
+
+  const moveRelations = {
+    ROCK: { wins: "SCISSORS", loses: "PAPER" },
+    PAPER: { wins: "ROCK", loses: "SCISSORS" },
+    SCISSORS: { wins: "PAPER", loses: "ROCK" },
+  };
+
+  return result === "WIN"
+    ? (moveRelations[playerMove].wins as Move)
+    : (moveRelations[playerMove].loses as Move);
+}
+
 interface GameContextValue extends GameStateData {
   isLoading: boolean;
   dispatch: React.Dispatch<GameAction>;
   createGame: (move: Move) => Promise<void>;
   joinGame: (gameId: number, move: Move) => Promise<void>;
-  finalizeGame: (gameId: number, diffMod3: number) => Promise<void>;
 }
 
 const initialState: GameStateData = {
@@ -96,10 +111,16 @@ function gameReducer(state: GameStateData, action: GameAction): GameStateData {
       };
 
     case "SET_RESULT": {
+      const inferredHouseMove = inferHouseMove(
+        state.playerMove!,
+        action.result
+      );
+
       const newState = {
         ...state,
         result: action.result,
-        phase: "FINISHED",
+        phase: GamePhase.FINISHED,
+        houseMove: inferredHouseMove,
         error: null,
         score:
           state.score +
@@ -107,12 +128,12 @@ function gameReducer(state: GameStateData, action: GameAction): GameStateData {
       };
 
       const address = localStorage.getItem("playerAddress");
-      if (address && state.playerMove && state.houseMove) {
+      if (address && state.playerMove) {
         const gameHistory: GameHistory = {
           id: Math.random().toString(36).substr(2, 9),
           timestamp: Date.now(),
           playerMove: state.playerMove,
-          houseMove: state.houseMove,
+          houseMove: inferredHouseMove,
           result: action.result,
           playerAddress: address,
         };
@@ -197,6 +218,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
     useGameContract(state.gameId!);
 
   useEffect(() => {
+    localStorage.setItem("playerAddress", address as string);
+
     if (gameInfo) {
       const [
         playerA,
