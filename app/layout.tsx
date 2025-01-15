@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { GameProvider } from "@/context/game-context";
+import '@rainbow-me/rainbowkit/styles.css';
+import { Providers } from "./providers";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Crypto Rock Paper Scissors",
-  description: "A decentralized Rock Paper Scissors game with cryptographic commitments",
+  description: "A decentralized Rock Paper Scissors game using Paillier encryption",
 };
 
 export default function RootLayout({
@@ -18,11 +19,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <div className="min-h-screen bg-gradient-to-b from-gray-900 via-purple-900 to-violet-900">
-          <GameProvider>
+        <Providers>
+          <div className="min-h-screen bg-gray-900 text-gray-100">
             {children}
-          </GameProvider>
-        </div>
+          </div>
+        </Providers>
       </body>
     </html>
   );
