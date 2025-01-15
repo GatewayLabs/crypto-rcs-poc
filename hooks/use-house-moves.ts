@@ -1,69 +1,66 @@
 "use client";
 
-import { useEffect } from "react";
-import { usePublicClient, useWaitForTransaction } from "wagmi";
+import { useWatchContractEvent } from "wagmi";
 import { gameContractConfig } from "@/config/contracts";
 import { playHouseMove, resolveGame } from "@/app/actions/house";
+import { GamePhase } from "@/types/game";
 
-export function useHouseMoves(gameId: number | null, isActive: boolean) {
-  const publicClient = usePublicClient();
+export function useHouseMoves(gameId: number | null, phase: GamePhase) {
+  useWatchContractEvent({
+    ...gameContractConfig,
+    eventName: "GameCreated",
+    onLogs: async (logs) => {
+      alert("Game created");
 
-  // Watch for game creation events
-  useEffect(() => {
-    if (!isActive || !gameId) return;
-
-    const unwatch = publicClient.watchContractEvent({
-      ...gameContractConfig,
-      eventName: "GameCreated",
-      onLogs: async (logs) => {
-        // Check if this is our game
-        const eventGameId = logs[0]?.args?.gameId;
-        if (eventGameId && Number(eventGameId) === gameId) {
-          // Automatically play house move
-          const result = await playHouseMove(gameId);
-          if (!result.success) {
-            console.error("House move failed:", result.error);
+      for (const log of logs) {
+        const eventGameId = Number(log.args.gameId);
+        if (eventGameId === gameId && phase === GamePhase.SELECTED) {
+          try {
+            const result = await playHouseMove(gameId);
+            if (!result.success) {
+              console.error("House move failed:", result.error);
+            }
+          } catch (error) {
+            console.error("Error playing house move:", error);
           }
         }
-      },
-    });
+      }
+    },
+  });
 
-    return () => {
-      unwatch();
-    };
-  }, [gameId, isActive, publicClient]);
-
-  // Watch for both moves being submitted
-  useEffect(() => {
-    if (!isActive || !gameId) return;
-
-    const unwatch = publicClient.watchContractEvent({
-      ...gameContractConfig,
-      eventName: "MovesSubmitted",
-      onLogs: async (logs) => {
-        // Check if this is our game
-        const eventGameId = logs[0]?.args?.gameId;
-        if (eventGameId && Number(eventGameId) === gameId) {
-          // Get game info to verify both moves are committed
-          const gameInfo = await publicClient.readContract({
-            ...gameContractConfig,
-            functionName: "getGameInfo",
-            args: [BigInt(gameId)],
-          });
-
-          if (gameInfo.bothCommitted) {
-            // Resolve the game
+  useWatchContractEvent({
+    ...gameContractConfig,
+    eventName: "GameJoined",
+    onLogs: async (logs) => {
+      for (const log of logs) {
+        const eventGameId = Number(log.args.gameId);
+        if (eventGameId === gameId && phase === GamePhase.WAITING) {
+          try {
             const result = await resolveGame(gameId);
             if (!result.success) {
               console.error("Game resolution failed:", result.error);
             }
+          } catch (error) {
+            console.error("Error resolving game:", error);
           }
         }
-      },
-    });
+      }
+    },
+  });
 
-    return () => {
-      unwatch();
-    };
-  }, [gameId, isActive, publicClient]);
+  useWatchContractEvent({
+    ...gameContractConfig,
+    eventName: "GameResolved",
+    onLogs: (logs) => {
+      for (const log of logs) {
+        const eventGameId = Number(log.args.gameId);
+        if (eventGameId === gameId) {
+          console.log("Game resolved:", {
+            winner: log.args.winner,
+            diffMod3: Number(log.args.diffMod3),
+          });
+        }
+      }
+    },
+  });
 }

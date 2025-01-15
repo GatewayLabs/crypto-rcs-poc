@@ -20,6 +20,7 @@ import {
 } from "@/types/game";
 import { getErrorMessage } from "@/lib/errors";
 import { usePersistentGame } from "@/hooks/use-persistent-game";
+import { playHouseMove, resolveGame } from "@/app/actions/house";
 
 interface GameContextValue extends GameStateData {
   isLoading: boolean;
@@ -195,25 +196,37 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const { gameInfo, isLoading, createGame, joinGame, finalizeGame } =
     useGameContract(state.gameId!);
 
-  usePersistentGame(dispatch, {
-    playerMove: state.playerMove,
-    houseMove: state.houseMove,
-    phase: state.phase,
-    result: state.result,
-    score: state.score,
-    gameId: state.gameId,
-    timestamp: Date.now(),
-  });
-
-  // Handle contract game state changes
   useEffect(() => {
     if (gameInfo) {
-      if (gameInfo.finished && gameInfo.winner) {
+      const [
+        playerA,
+        playerB,
+        winner,
+        finished,
+        bothCommitted,
+        encA,
+        encB,
+        differenceCipher,
+        revealedDiff,
+      ] = gameInfo;
+
+      // Update phase when player B joins
+      if (playerB !== "0x0000000000000000000000000000000000000000") {
+        dispatch({ type: "SET_PHASE", phase: GamePhase.WAITING });
+      }
+
+      // Update phase when both moves are committed
+      if (bothCommitted) {
+        dispatch({ type: "SET_PHASE", phase: GamePhase.REVEALING });
+      }
+
+      // Handle game completion
+      if (finished && winner) {
         // Determine result based on winner
         const result =
-          gameInfo.winner === address
+          winner === address
             ? GameResult.WIN
-            : gameInfo.winner === gameInfo.playerB
+            : winner === playerB
             ? GameResult.LOSE
             : GameResult.DRAW;
         dispatch({ type: "SET_RESULT", result });
@@ -225,9 +238,49 @@ export function GameProvider({ children }: { children: ReactNode }) {
     ...state,
     isLoading,
     dispatch,
-    createGame,
-    joinGame,
-    finalizeGame,
+    createGame: async (move: Move) => {
+      try {
+        // Create game and wait for gameId from event
+        const gameId = await createGame(move);
+        dispatch({ type: "SET_GAME_ID", gameId });
+        dispatch({ type: "SET_PHASE", phase: GamePhase.SELECTED });
+
+        // After game is created, trigger house move
+        const houseResult = await playHouseMove(gameId);
+        if (!houseResult.success) {
+          throw new Error(houseResult.error);
+        }
+
+        // After house moves, trigger game resolution
+        const resolveResult = await resolveGame(gameId);
+        if (!resolveResult.success) {
+          throw new Error(resolveResult.error);
+        }
+      } catch (error) {
+        dispatch({
+          type: "SET_ERROR",
+          error:
+            error instanceof Error ? error.message : "Failed to create game",
+        });
+      }
+    },
+    joinGame: async (gameId: number, move: Move) => {
+      try {
+        await joinGame(gameId, move);
+        dispatch({ type: "SET_PHASE", phase: GamePhase.WAITING });
+
+        // After joining, trigger game resolution
+        const resolveResult = await resolveGame(gameId);
+        if (!resolveResult.success) {
+          throw new Error(resolveResult.error);
+        }
+      } catch (error) {
+        dispatch({
+          type: "SET_ERROR",
+          error: error instanceof Error ? error.message : "Failed to join game",
+        });
+      }
+    },
   };
 
   return (

@@ -4,14 +4,17 @@ import { Move, encryptMove } from "@/lib/crypto";
 import { gameContractConfig } from "@/config/contracts";
 import {
   useAccount,
+  usePublicClient,
   useReadContract,
   useWatchContractEvent,
   useWriteContract,
 } from "wagmi";
 import { useCallback } from "react";
+import { parseEventLogs } from "viem";
 
 export function useGameContract(gameId?: number) {
   const { address } = useAccount();
+  const publicClient = usePublicClient();
 
   // Read game info
   const { data: gameInfo, refetch: refetchGameInfo } = useReadContract({
@@ -31,7 +34,7 @@ export function useGameContract(gameId?: number) {
 
   // Write hooks
   const {
-    writeContract,
+    writeContractAsync: writeContract,
     isPending,
     isSuccess,
     data: txHash,
@@ -41,17 +44,31 @@ export function useGameContract(gameId?: number) {
     async (move: Move) => {
       try {
         const encryptedMove = await encryptMove(move);
-        await writeContract({
+
+        // Get transaction hash
+        const hash = await writeContract({
           ...gameContractConfig,
           functionName: "createGame",
           args: [encryptedMove as `0x${string}`],
         });
+
+        // Wait for transaction receipt
+        const receipt = await publicClient!.waitForTransactionReceipt({ hash });
+        const events = parseEventLogs({
+          logs: receipt.logs,
+          abi: gameContractConfig.abi,
+        });
+
+        // Get game ID
+        const result = events[0]?.args?.gameId;
+
+        return Number(result);
       } catch (error) {
         console.error("Error creating game:", error);
         throw error;
       }
     },
-    [writeContract]
+    [writeContract, publicClient]
   );
 
   const joinGame = useCallback(
