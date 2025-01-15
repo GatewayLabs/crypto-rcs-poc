@@ -130,12 +130,20 @@ export function GameBoard() {
   const getStatusMessage = () => {
     if (!address) return "Connect your wallet to play";
     if (isLoading) return "Processing...";
-    if (gameId && phase === "CHOOSING") return "Join the game...";
-    if (!gameId && phase === "CHOOSING") return "Make your move...";
-    if (phase === "SELECTED") return "Waiting for opponent...";
-    if (phase === "WAITING") return "Opponent is playing...";
-    if (phase === "REVEALING") return "Revealing moves...";
-    return "";
+    switch (phase) {
+      case "CHOOSING":
+        return gameId ? "Join the game..." : "Make your move...";
+      case "SELECTED":
+        return "Waiting for house move...";
+      case "WAITING":
+        return "Game joined! Resolving...";
+      case "REVEALING":
+        return "Revealing moves...";
+      case "FINISHED":
+        return result ? `Game Over - You ${result}!` : "Game Finished";
+      default:
+        return "";
+    }
   };
 
   return (
