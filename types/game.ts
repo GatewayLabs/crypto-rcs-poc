@@ -65,6 +65,8 @@ export interface SerializedGameState {
   score: number;
   gameId: number | null;
   timestamp: number;
+  history: GameHistory[];
+  leaderboard: LeaderboardEntry[];
 }
 
 export function isValidGamePhase(phase: any): phase is GamePhase {

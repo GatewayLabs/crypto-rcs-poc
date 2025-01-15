@@ -17,9 +17,11 @@ import {
   LeaderboardEntry,
   GameAction,
   GameStateData,
+  SerializedGameState,
+  isValidGameState,
 } from "@/types/game";
 import { getErrorMessage } from "@/lib/errors";
-import { usePersistentGame } from "@/hooks/use-persistent-game";
+import { STORAGE_KEY, usePersistentGame } from "@/hooks/use-persistent-game";
 import { playHouseMove, resolveGame } from "@/app/actions/house";
 
 function inferHouseMove(playerMove: Move, result: GameResult): Move {
@@ -179,16 +181,44 @@ function gameReducer(state: GameStateData, action: GameAction): GameStateData {
         error: action.error,
       };
 
-    case "RESTORE_STATE":
-      if (state.phase !== GamePhase.CHOOSING || state.playerMove !== null) {
+    case "RESTORE_STATE": {
+      // Don't restore if we're in the middle of a game
+      if (
+        state.phase !== GamePhase.CHOOSING &&
+        state.phase !== GamePhase.FINISHED
+      ) {
+        console.log("Not restoring - game in progress");
         return state;
       }
-      return {
+
+      // Don't restore if the saved state is clean/empty
+      if (
+        action.state.phase === GamePhase.CHOOSING &&
+        !action.state.playerMove &&
+        !action.state.result
+      ) {
+        return {
+          ...state,
+          history: action.state.history || state.history,
+          score: action.state.score || state.score,
+        };
+      }
+
+      const restoredState = {
         ...state,
-        ...action.state,
-        history: state.history,
+        playerMove: action.state.playerMove,
+        houseMove: action.state.houseMove,
+        phase: action.state.phase,
+        result: action.state.result,
+        score: action.state.score,
+        gameId: action.state.gameId,
+        history: action.state.history || state.history,
         leaderboard: state.leaderboard,
+        error: null,
       };
+
+      return restoredState;
+    }
 
     case "HANDLE_ERROR":
       return {
@@ -212,14 +242,58 @@ function gameReducer(state: GameStateData, action: GameAction): GameStateData {
 const GameContext = createContext<GameContextValue | null>(null);
 
 export function GameProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(gameReducer, initialState);
+  const getInitialState = () => {
+    try {
+      const address = localStorage.getItem("playerAddress");
+      if (address) {
+        const saved = localStorage.getItem(`${STORAGE_KEY}-${address}`);
+        if (saved) {
+          const parsedState = JSON.parse(saved);
+          if (isValidGameState(parsedState)) {
+            return {
+              ...initialState,
+              history: parsedState.history || [],
+              score: parsedState.score || 0,
+            };
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error loading initial state:", error);
+    }
+    return initialState;
+  };
+
+  const [state, dispatch] = useReducer(gameReducer, getInitialState());
   const { address } = useAccount();
-  const { gameInfo, isLoading, createGame, joinGame, finalizeGame } =
-    useGameContract(state.gameId!);
+  const { gameInfo, isLoading, createGame, joinGame } = useGameContract(
+    state.gameId!
+  );
 
   useEffect(() => {
-    localStorage.setItem("playerAddress", address as string);
+    if (address) {
+      localStorage.setItem("playerAddress", address);
+    } else {
+      localStorage.removeItem("playerAddress");
+    }
+  }, [address]);
 
+  const serializedState: SerializedGameState = {
+    playerMove: state.playerMove,
+    houseMove: state.houseMove,
+    phase: state.phase,
+    result: state.result,
+    gameId: state.gameId,
+    score: state.score,
+    history: state.history,
+    leaderboard: state.leaderboard,
+    timestamp: Date.now(),
+  };
+
+  console.log("Current serialized state:", serializedState);
+  usePersistentGame(dispatch, serializedState);
+
+  useEffect(() => {
     if (gameInfo) {
       const [
         playerA,
