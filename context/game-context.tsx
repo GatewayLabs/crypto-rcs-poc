@@ -194,11 +194,7 @@ function gameReducer(state: GameStateData, action: GameAction): GameStateData {
       }
 
       // Don't restore if the saved state is clean/empty
-      if (
-        action.state.phase === GamePhase.CHOOSING &&
-        !action.state.playerMove &&
-        !action.state.result
-      ) {
+      if (!action.state.playerMove && !action.state.result) {
         return {
           ...state,
           history: action.state.history || state.history,
@@ -210,7 +206,6 @@ function gameReducer(state: GameStateData, action: GameAction): GameStateData {
         ...state,
         playerMove: action.state.playerMove,
         houseMove: action.state.houseMove,
-        phase: action.state.phase,
         result: action.state.result,
         score: action.state.score,
         gameId: action.state.gameId,
@@ -283,7 +278,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const serializedState: SerializedGameState = {
     playerMove: state.playerMove,
     houseMove: state.houseMove,
-    phase: state.phase,
     result: state.result,
     gameId: state.gameId,
     score: state.score,
@@ -292,7 +286,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
     timestamp: Date.now(),
   };
 
-  console.log("Current serialized state:", serializedState);
   usePersistentGame(dispatch, serializedState);
 
   useEffect(() => {

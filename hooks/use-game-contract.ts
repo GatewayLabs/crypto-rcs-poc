@@ -3,7 +3,6 @@
 import { Move, encryptMove } from "@/lib/crypto";
 import { gameContractConfig } from "@/config/contracts";
 import {
-  useAccount,
   usePublicClient,
   useReadContract,
   useWatchContractEvent,
@@ -13,7 +12,6 @@ import { useCallback } from "react";
 import { parseEventLogs } from "viem";
 
 export function useGameContract(gameId?: number) {
-  const { address } = useAccount();
   const publicClient = usePublicClient();
 
   // Read game info
@@ -22,14 +20,6 @@ export function useGameContract(gameId?: number) {
     functionName: "getGameInfo",
     args: gameId ? [BigInt(gameId)] : undefined,
     query: { enabled: Boolean(gameId) },
-  });
-
-  // Read player stats
-  const { data: playerStats } = useReadContract({
-    ...gameContractConfig,
-    functionName: "getPlayerStats",
-    args: address ? [address] : undefined,
-    query: { enabled: Boolean(address) },
   });
 
   // Write hooks
@@ -167,7 +157,6 @@ export function useGameContract(gameId?: number) {
   return {
     // Read data
     gameInfo,
-    playerStats,
     refetchGameInfo,
 
     // Actions

@@ -62,7 +62,6 @@ export type GameAction =
 export interface SerializedGameState {
   playerMove: Move | null;
   houseMove: Move | null;
-  phase: GamePhase;
   result: GameResult | null;
   score: number;
   gameId: number | null;
