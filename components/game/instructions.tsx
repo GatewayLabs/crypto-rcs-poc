@@ -1,9 +1,15 @@
 "use client";
 
-import React, { useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { cn } from '@/lib/utils';
-import { ChevronDown, ChevronUp, LockKeyhole, Dice, Trophy } from 'lucide-react';
+import React, { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { cn } from "@/lib/utils";
+import {
+  ChevronDown,
+  ChevronUp,
+  LockKeyhole,
+  Trophy,
+  Dice1 as Dice,
+} from "lucide-react";
 
 export function Instructions() {
   const [isOpen, setIsOpen] = useState(false);
@@ -12,18 +18,21 @@ export function Instructions() {
     {
       icon: <LockKeyhole className="w-6 h-6 text-blue-400" />,
       title: "Secure Move Commitment",
-      description: "Your move is encrypted using the Paillier cryptosystem before being sent to the blockchain, ensuring complete privacy."
+      description:
+        "Your move is encrypted using the Paillier cryptosystem before being sent to the blockchain, ensuring complete privacy.",
     },
     {
       icon: <Dice className="w-6 h-6 text-pink-400" />,
       title: "Fair House Play",
-      description: "The house must commit to its move before seeing yours. Both moves are revealed simultaneously to ensure fairness."
+      description:
+        "The house must commit to its move before seeing yours. Both moves are revealed simultaneously to ensure fairness.",
     },
     {
       icon: <Trophy className="w-6 h-6 text-yellow-400" />,
       title: "Verifiable Results",
-      description: "Game results are computed and verified on-chain using zero-knowledge proofs, making it impossible to cheat."
-    }
+      description:
+        "Game results are computed and verified on-chain using zero-knowledge proofs, making it impossible to cheat.",
+    },
   ];
 
   return (
@@ -51,7 +60,7 @@ export function Instructions() {
         {isOpen && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
+            animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.3 }}
             className="overflow-hidden"
@@ -90,7 +99,7 @@ export function Instructions() {
 
               <div className="mt-6 text-sm text-gray-500">
                 <p>
-                  All game logic is handled by a smart contract at{' '}
+                  All game logic is handled by a smart contract at{" "}
                   <code className="px-2 py-1 rounded bg-gray-900">
                     {process.env.NEXT_PUBLIC_GAME_CONTRACT_ADDRESS}
                   </code>

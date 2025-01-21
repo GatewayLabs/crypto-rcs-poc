@@ -35,7 +35,6 @@ export function usePersistentGame(
 
   useEffect(() => {
     if (!address) return;
-    if (currentState.phase === "ERROR") return;
 
     const storageKey = `${STORAGE_KEY}-${address}`;
     const stateToSave: SerializedGameState = {

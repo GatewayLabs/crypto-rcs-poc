@@ -2,8 +2,8 @@ export const GAME_CONTRACT_ADDRESS =
   "0x208DA3405b058A88a5979ED1Fc10F30167FECf17";
 
 export const PAILLIER_PUBLIC_KEY = {
-  n: process.env.NEXT_PUBLIC_PAILLIER_N,
-  g: process.env.NEXT_PUBLIC_PAILLIER_G,
+  n: process.env.NEXT_PUBLIC_PAILLIER_N!,
+  g: process.env.NEXT_PUBLIC_PAILLIER_G!,
 } as const;
 
 export const gameContractConfig = {
