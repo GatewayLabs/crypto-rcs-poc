@@ -64,14 +64,17 @@ const config: Config = {
           to: { height: "0" },
         },
         neonPulse: {
-          '0%, 100%': { opacity: '1' },
-          '50%': { opacity: '0.5' },
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.5" },
         },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "neon-pulse": "neonPulse 2s ease-in-out infinite",
+      },
+      fontFamily: {
+        mono: ["Departure Mono", "monospace"],
       },
     },
   },
