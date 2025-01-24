@@ -1,5 +1,5 @@
 import { GameDescription } from "@/components/landing/game-description";
-import { Footer } from "@/components/footer";
+import Footer from "@/components/footer";
 import { GameHeader } from "@/components/landing/game-header";
 
 export default function Landing() {
