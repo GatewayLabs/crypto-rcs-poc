@@ -1,5 +1,5 @@
 import { GameDescription } from "@/components/landing/game-description";
-import { GameFooter } from "@/components/landing/game-footer";
+import { Footer } from "@/components/footer";
 import { GameHeader } from "@/components/landing/game-header";
 
 export default function Landing() {
@@ -14,7 +14,7 @@ export default function Landing() {
           <img src="/landing-circle.png" className="h-full absolute" />
         </section>
       </section>
-      <GameFooter />
+      <Footer />
     </main>
   );
 }
