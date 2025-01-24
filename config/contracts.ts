@@ -1,5 +1,4 @@
-export const GAME_CONTRACT_ADDRESS =
-  "0x208DA3405b058A88a5979ED1Fc10F30167FECf17";
+export const GAME_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS!;
 
 export const PAILLIER_PUBLIC_KEY = {
   n: process.env.NEXT_PUBLIC_PAILLIER_N!,
@@ -7,7 +6,7 @@ export const PAILLIER_PUBLIC_KEY = {
 } as const;
 
 export const gameContractConfig = {
-  address: GAME_CONTRACT_ADDRESS,
+  address: GAME_CONTRACT_ADDRESS as `0x${string}`,
   abi: [
     {
       inputs: [
@@ -49,9 +48,9 @@ export const gameContractConfig = {
           type: "uint256",
         },
         {
-          internalType: "int256",
-          name: "diffMod3",
-          type: "int256",
+          internalType: "uint256",
+          name: "decryptedDiff",
+          type: "uint256",
         },
       ],
       name: "finalizeGame",
@@ -63,7 +62,7 @@ export const gameContractConfig = {
       inputs: [
         {
           internalType: "address",
-          name: "paillierAddress",
+          name: "_paillierAddress",
           type: "address",
         },
         {
@@ -97,7 +96,7 @@ export const gameContractConfig = {
         {
           indexed: false,
           internalType: "bytes",
-          name: "differenceCipher",
+          name: "differenceCiphertext",
           type: "bytes",
         },
       ],
@@ -159,9 +158,9 @@ export const gameContractConfig = {
         },
         {
           indexed: false,
-          internalType: "int256",
-          name: "diffMod3",
-          type: "int256",
+          internalType: "uint256",
+          name: "decryptedDiff",
+          type: "uint256",
         },
       ],
       name: "GameResolved",
@@ -264,12 +263,12 @@ export const gameContractConfig = {
         },
         {
           internalType: "bytes",
-          name: "encryptedChoiceA",
+          name: "encChoiceA",
           type: "bytes",
         },
         {
           internalType: "bytes",
-          name: "encryptedChoiceB",
+          name: "encChoiceB",
           type: "bytes",
         },
         {
@@ -283,9 +282,9 @@ export const gameContractConfig = {
           type: "bytes",
         },
         {
-          internalType: "int256",
+          internalType: "uint256",
           name: "revealedDifference",
-          type: "int256",
+          type: "uint256",
         },
         {
           internalType: "address",
@@ -348,13 +347,13 @@ export const gameContractConfig = {
         },
         {
           internalType: "bytes",
-          name: "differenceCipher",
+          name: "diffCipher",
           type: "bytes",
         },
         {
-          internalType: "int256",
+          internalType: "uint256",
           name: "revealedDiff",
-          type: "int256",
+          type: "uint256",
         },
       ],
       stateMutability: "view",
