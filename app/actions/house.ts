@@ -109,7 +109,7 @@ export async function resolveGame(gameId: number) {
     });
 
     // Get difference cipher
-    const result = events[0]?.args?.differenceCipher;
+    const result = events[0]?.args?.differenceCiphertext;
     console.log("Difference cipher:", result);
 
     // Finalize game
@@ -128,13 +128,12 @@ export async function resolveGame(gameId: number) {
     );
 
     const decryptedDifference = privateKey.decrypt(BigInt(result));
-    console.log("Decrypted difference:", decryptedDifference);
-    const diffMod3 = Number(decryptedDifference) % 3;
+    const diffMod3 = decryptedDifference % 3n;
 
     const { request: finalizeRequest } = await publicClient.simulateContract({
       ...gameContractConfig,
       functionName: "finalizeGame",
-      args: [BigInt(gameId), BigInt(diffMod3)],
+      args: [BigInt(gameId), diffMod3],
       account: walletClient.account,
     });
 
@@ -146,7 +145,7 @@ export async function resolveGame(gameId: number) {
     return {
       success: true,
       hash: finalizationReceipt.transactionHash,
-      result: diffMod3,
+      result: Number(diffMod3),
     };
   } catch (error) {
     console.error("Error resolving game:", error);
