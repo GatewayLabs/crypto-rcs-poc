@@ -1,14 +1,12 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
-import '@rainbow-me/rainbowkit/styles.css';
+import "@rainbow-me/rainbowkit/styles.css";
 import { Providers } from "./providers";
-
-const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Crypto Rock Paper Scissors",
-  description: "A decentralized Rock Paper Scissors game using Paillier encryption",
+  description:
+    "A decentralized Rock Paper Scissors game using Paillier encryption",
 };
 
 export default function RootLayout({
@@ -18,12 +16,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={inter.className}>
-        <Providers>
-          <div className="min-h-screen bg-gray-900 text-gray-100">
-            {children}
-          </div>
-        </Providers>
+      <head>
+        <link
+          href="https://fonts.cdnfonts.com/css/departure-mono"
+          rel="stylesheet"
+        />
+      </head>
+      <body>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
