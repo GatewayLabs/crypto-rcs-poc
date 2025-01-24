@@ -1,5 +1,5 @@
 import { PAILLIER_PUBLIC_KEY } from "@/config/contracts";
-import { ethers } from "ethers";
+import * as paillier from "paillier-bigint";
 
 export type Move = "ROCK" | "PAPER" | "SCISSORS";
 
@@ -9,41 +9,16 @@ const moveToNumber = {
   SCISSORS: 2,
 } as const;
 
-// BigInteger utility functions
-function modPow(base: bigint, exponent: bigint, modulus: bigint): bigint {
-  if (modulus === 1n) return 0n;
-
-  let result = 1n;
-  base = base % modulus;
-
-  while (exponent > 0n) {
-    if (exponent % 2n === 1n) {
-      result = (result * base) % modulus;
-    }
-    base = (base * base) % modulus;
-    exponent = exponent >> 1n;
-  }
-
-  return result;
-}
-
 // Encrypt a move using Paillier cryptosystem
 export async function encryptMove(move: Move): Promise<string> {
   const n = BigInt("0x" + PAILLIER_PUBLIC_KEY.n);
   const g = BigInt("0x" + PAILLIER_PUBLIC_KEY.g);
-  const moveNum = BigInt(moveToNumber[move]);
+  const publicKey = new paillier.PublicKey(n, g);
 
-  // Generate a random r < n
-  const randomBytes = ethers.randomBytes(32);
-  const r = BigInt("0x" + Buffer.from(randomBytes).toString("hex")) % n;
+  const moveNum = BigInt(moveToNumber[move] + 10);
 
-  // Compute c = g^m * r^n mod n^2
-  const nSquared = n * n;
-  const gm = modPow(g, moveNum, nSquared);
-  const rn = modPow(r, n, nSquared);
-  const c = (gm * rn) % nSquared;
+  const c = publicKey.encrypt(moveNum);
 
-  // Convert to hex string with 0x prefix
   return "0x" + c.toString(16);
 }
 
