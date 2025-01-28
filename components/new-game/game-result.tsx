@@ -1,5 +1,11 @@
 import { Move } from "@/lib/crypto";
 
+const MOVE_IMAGES = {
+  ROCK: "/icons/rock-result.png",
+  PAPER: "/icons/paper-result.png",
+  SCISSORS: "/icons/scissors-result.png",
+};
+
 interface GameResultProps {
   playerMove: Move;
   houseMove: Move;
@@ -15,78 +21,127 @@ export default function GameResult({
   gameId,
   onPlayAgain,
 }: GameResultProps) {
+  // Color schemes based on result
+  const colorSchemes = {
+    player:
+      result === "DRAW"
+        ? {
+            bg: "bg-[#FD9800]",
+            border: "border-[#FD9800]",
+            text: "text-[#FD9800]",
+            hover:
+              "transition-all duration-300 hover:shadow-[0_0_30px_rgba(253,152,0,0.5)] hover:-translate-y-2 group-hover:opacity-50 hover:!opacity-100 hover:scale-[1.02]",
+          }
+        : {
+            bg: "bg-[#AEF342]",
+            border: "border-[#AEF342]",
+            text: "text-[#AEF342]",
+            hover:
+              "transition-all duration-300 hover:shadow-[0_0_30px_rgba(174,243,66,0.5)] hover:-translate-y-2 group-hover:opacity-50 hover:!opacity-100 hover:scale-[1.02]",
+          },
+    house:
+      result === "DRAW"
+        ? {
+            bg: "bg-[#FD9800]",
+            border: "border-[#FD9800]",
+            text: "text-[#FD9800]",
+            hover:
+              "transition-all duration-300 hover:shadow-[0_0_30px_rgba(253,152,0,0.5)] hover:-translate-y-2 group-hover:opacity-50 hover:!opacity-100 hover:scale-[1.02]",
+          }
+        : {
+            bg: "bg-[#FF666B]",
+            border: "border-[#FF666B]",
+            text: "text-[#FF666B]",
+            hover:
+              "transition-all duration-300 hover:shadow-[0_0_30px_rgba(255,102,107,0.5)] hover:-translate-y-2 group-hover:opacity-50 hover:!opacity-100 hover:scale-[1.02]",
+          },
+  };
+
   return (
-    <div className="w-full max-w-4xl mx-auto">
-      <div className="flex flex-col items-center gap-6">
+    <div className="max-md:max-w-full">
+      <div className="flex flex-col items-center px-6 py-8 font-mono">
         {/* Game ID and Result */}
-        <div className="w-full flex justify-between items-center text-zinc-400">
+        <div className="w-full flex justify-between items-center text-zinc-400 mb-2">
           <span>Game #{gameId}</span>
           <div className="flex items-center gap-2">
             <button
               onClick={onPlayAgain}
-              className="flex items-center gap-2 text-sm bg-[rgba(20,9,31,1)] px-4 py-2 rounded-lg border border-[rgba(141,12,255,1)] hover:shadow-[0_0_30px_rgba(141,12,255,0.5)] transition-all duration-300"
+              className="flex items-center gap-2 text-sm bg-white text-black px-4 py-2 rounded-sm"
             >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M12 4V2M12 4C7.58172 4 4 7.58172 4 12M12 4C16.4183 4 20 7.58172 20 12M12 20V22M12 20C7.58172 20 4 16.4183 4 12M12 20C16.4183 20 20 16.4183 20 12M2 12H4M20 12H22"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
+              <img src="/icons/reload.svg" alt="Reload" className="w-4 h-4" />
               Play again
             </button>
           </div>
         </div>
 
         {/* Result Text */}
-        <h1 className="text-[#BFFF00] text-6xl font-bold">
+        <h1
+          className={`text-6xl font-bold self-start mb-6 ${
+            result === "DRAW"
+              ? "text-[#FD9800]"
+              : result === "WIN"
+              ? "text-[#AEF342]"
+              : "text-[#FF666B]"
+          }`}
+        >
           {result === "WIN" && "You win!"}
           {result === "LOSE" && "You lose!"}
           {result === "DRAW" && "It's a draw!"}
         </h1>
 
         {/* Game Cards */}
-        <div className="flex items-center gap-16">
+        <div className="flex items-center gap-16 font-mono group">
           {/* Player Move */}
-          <div className="relative">
-            <div className="w-[240px] h-[320px] bg-[#0F1F00] rounded-lg border border-[#BFFF00] p-6 flex flex-col items-center justify-between">
-              <div className="text-[#BFFF00] text-sm uppercase tracking-wider">
-                YOUR MOVE
-              </div>
-              <div className="text-[#BFFF00] text-6xl">
-                {playerMove === "ROCK" && "🪨"}
-                {playerMove === "PAPER" && "📜"}
-                {playerMove === "SCISSORS" && "✂️"}
-              </div>
-              <div className="text-[#BFFF00] text-lg uppercase">
-                {playerMove}
+          <div className="relative flex-1">
+            <div
+              className={`min-h-[356px] w-full ${colorSchemes.player.bg} bg-opacity-10 rounded-lg border ${colorSchemes.player.border} p-6 flex flex-col items-center ${colorSchemes.player.hover}`}
+            >
+              <img
+                loading="lazy"
+                srcSet={MOVE_IMAGES[playerMove]}
+                className="aspect-[1.27] object-contain w-[162px] flex-grow transition-transform duration-300 group-hover:scale-95 hover:!scale-100"
+                alt={playerMove}
+              />
+              <div className="flex flex-col items-center gap-1 mt-4">
+                <div
+                  className={`text-xl uppercase tracking-wider opacity-60 ${colorSchemes.player.text}`}
+                >
+                  YOUR MOVE
+                </div>
+                <div
+                  className={`text-2xl font-normal leading-none text-center uppercase ${colorSchemes.player.text}`}
+                >
+                  {playerMove}
+                </div>
               </div>
             </div>
           </div>
 
           {/* VS Symbol */}
-          <div className="text-2xl text-zinc-600">✕</div>
+          <img src="/icons/close.svg" alt="Close" className="w-10 h-10" />
 
           {/* House Move */}
-          <div className="relative">
-            <div className="w-[240px] h-[320px] bg-[#1F0000] rounded-lg border border-[#FF0000] p-6 flex flex-col items-center justify-between">
-              <div className="text-[#FF0000] text-sm uppercase tracking-wider">
-                HOUSE MOVE
-              </div>
-              <div className="text-[#FF0000] text-6xl">
-                {houseMove === "ROCK" && "🪨"}
-                {houseMove === "PAPER" && "📜"}
-                {houseMove === "SCISSORS" && "✂️"}
-              </div>
-              <div className="text-[#FF0000] text-lg uppercase">
-                {houseMove}
+          <div className="relative flex-1">
+            <div
+              className={`min-h-[356px] w-full ${colorSchemes.house.bg} bg-opacity-10 rounded-lg border ${colorSchemes.house.border} p-6 flex flex-col items-center ${colorSchemes.house.hover}`}
+            >
+              <img
+                loading="lazy"
+                srcSet={MOVE_IMAGES[houseMove]}
+                className="aspect-[1.27] object-contain w-[162px] flex-grow transition-transform duration-300 group-hover:scale-95 hover:!scale-100"
+                alt={houseMove}
+              />
+              <div className="flex flex-col items-center gap-1 mt-4">
+                <div
+                  className={`text-xl uppercase tracking-wider opacity-60 ${colorSchemes.house.text}`}
+                >
+                  HOUSE MOVE
+                </div>
+                <div
+                  className={`text-2xl font-normal leading-none text-center uppercase ${colorSchemes.house.text}`}
+                >
+                  {houseMove}
+                </div>
               </div>
             </div>
           </div>
