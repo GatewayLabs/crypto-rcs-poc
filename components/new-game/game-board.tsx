@@ -9,6 +9,7 @@ import GameButton from "./game-button";
 import GameResult from "./game-result";
 import TransactionModal from "./transaction-modal";
 import { Toast, ToastContainer } from "@/components/ui/toast";
+import ErrorDialog from "./error-dialog";
 
 interface GameToast {
   id: string;
@@ -57,16 +58,6 @@ export default function GameBoard() {
   >("approve");
 
   useEffect(() => {
-    if (error) {
-      addToast(error, "error");
-      const timer = setTimeout(() => {
-        dispatch({ type: "RESET_GAME" });
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [error, dispatch]);
-
-  useEffect(() => {
     if (phase === "FINISHED" && result) {
       if (result === "WIN") soundEffects.win();
       else if (result === "LOSE") soundEffects.lose();
@@ -87,7 +78,7 @@ export default function GameBoard() {
     }
   }, [phase]);
 
-  const addToast = (message: string, type: "success" | "error" | "info") => {
+  const addToast = (message: string, type: "success" | "info") => {
     const id = Math.random().toString(36).substr(2, 9);
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {
@@ -116,11 +107,10 @@ export default function GameBoard() {
         addToast("Joined game!", "success");
       }
     } catch (error) {
-      addToast(
-        error instanceof Error ? error.message : "Failed to make move",
-        "error"
-      );
-      dispatch({ type: "RESET_GAME" });
+      dispatch({
+        type: "SET_ERROR",
+        error: error instanceof Error ? error.message : "Failed to make move",
+      });
     }
   };
 
@@ -136,7 +126,7 @@ export default function GameBoard() {
         playerMove={playerMove}
         houseMove={houseMove}
         result={result}
-        gameId={gameId}
+        gameId={gameId.toString()}
         onPlayAgain={handlePlayAgain}
       />
     );
@@ -179,8 +169,15 @@ export default function GameBoard() {
       </div>
 
       <TransactionModal isOpen={showTransactionModal} type={transactionType} />
-
-      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+      <ErrorDialog
+        isOpen={!!error}
+        onClose={() => dispatch({ type: "RESET_GAME" })}
+        error={error || ""}
+      />
+      <ToastContainer
+        toasts={toasts.filter((t) => t.type !== "error")}
+        onDismiss={dismissToast}
+      />
     </>
   );
 }
