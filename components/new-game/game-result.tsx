@@ -6,6 +6,42 @@ const MOVE_IMAGES = {
   SCISSORS: "/icons/scissors-result.png",
 };
 
+// Custom keyframes for animations
+const customStyles = `
+  @keyframes slideInFromLeft {
+    0% {
+      transform: translateX(-100%);
+      opacity: 0;
+    }
+    100% {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideInFromRight {
+    0% {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    100% {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+
+  @keyframes growIn {
+    0% {
+      transform: scale(0);
+      opacity: 0;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+`;
+
 interface GameResultProps {
   playerMove: Move;
   houseMove: Move;
@@ -59,6 +95,7 @@ export default function GameResult({
 
   return (
     <div className="max-md:max-w-full">
+      <style>{customStyles}</style>
       <div className="flex flex-col items-center px-6 py-8 font-mono">
         {/* Game ID and Result */}
         <div className="w-full flex justify-between items-center text-zinc-400 mb-2">
@@ -92,7 +129,10 @@ export default function GameResult({
         {/* Game Cards */}
         <div className="flex items-center gap-16 font-mono group">
           {/* Player Move */}
-          <div className="relative flex-1">
+          <div
+            className="relative flex-1"
+            style={{ animation: "slideInFromLeft 0.6s ease-out forwards" }}
+          >
             <div
               className={`min-h-[356px] w-full ${colorSchemes.player.bg} bg-opacity-10 rounded-lg border ${colorSchemes.player.border} p-6 flex flex-col items-center ${colorSchemes.player.hover}`}
             >
@@ -118,10 +158,18 @@ export default function GameResult({
           </div>
 
           {/* VS Symbol */}
-          <img src="/icons/close.svg" alt="Close" className="w-10 h-10" />
+          <img
+            src="/icons/close.svg"
+            alt="Close"
+            className="w-10 h-10"
+            style={{ animation: "growIn 0.4s ease-out 0.3s both" }}
+          />
 
           {/* House Move */}
-          <div className="relative flex-1">
+          <div
+            className="relative flex-1"
+            style={{ animation: "slideInFromRight 0.6s ease-out forwards" }}
+          >
             <div
               className={`min-h-[356px] w-full ${colorSchemes.house.bg} bg-opacity-10 rounded-lg border ${colorSchemes.house.border} p-6 flex flex-col items-center ${colorSchemes.house.hover}`}
             >
