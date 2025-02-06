@@ -1,14 +1,15 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { cn } from "@/lib/utils";
+import { useEffect, useState } from "react";
 import { useGame } from "@/context/game-context";
-import { motion, AnimatePresence } from "framer-motion";
-import { Spinner } from "@/components/ui/spinner";
-import { Toast, ToastContainer } from "@/components/ui/toast";
-import { soundEffects } from "@/lib/sounds/sound-effects";
-import { Move } from "@/lib/crypto";
 import { useAccount } from "wagmi";
+import { Move } from "@/lib/crypto";
+import { soundEffects } from "@/lib/sounds/sound-effects";
+import GameButton from "./game-button";
+import GameResult from "./game-result";
+import TransactionModal from "./transaction-modal";
+import { Toast, ToastContainer } from "@/components/ui/toast";
+import ErrorDialog from "./error-dialog";
 
 interface GameToast {
   id: string;
@@ -16,7 +17,22 @@ interface GameToast {
   type: "success" | "error" | "info";
 }
 
-export function GameBoard() {
+const GAME_BUTTONS = [
+  {
+    label: "ROCK",
+    imageSrc: "/images/rock.png",
+  },
+  {
+    label: "PAPER",
+    imageSrc: "/images/paper.png",
+  },
+  {
+    label: "SCISSORS",
+    imageSrc: "/images/scissors.png",
+  },
+];
+
+export default function GameBoard() {
   const {
     playerMove,
     houseMove,
@@ -33,16 +49,10 @@ export function GameBoard() {
 
   const { address } = useAccount();
   const [toasts, setToasts] = useState<GameToast[]>([]);
-
-  useEffect(() => {
-    if (error) {
-      addToast(error, "error");
-      const timer = setTimeout(() => {
-        dispatch({ type: "RESET_GAME" });
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [error, dispatch]);
+  const [showTransactionModal, setShowTransactionModal] = useState(false);
+  const [transactionType, setTransactionType] = useState<
+    "approve" | "validate"
+  >("approve");
 
   useEffect(() => {
     if (phase === "FINISHED" && result) {
@@ -52,7 +62,20 @@ export function GameBoard() {
     }
   }, [phase, result]);
 
-  const addToast = (message: string, type: "success" | "error" | "info") => {
+  useEffect(() => {
+    // Show transaction modal based on phase
+    if (phase === "SELECTED") {
+      setTransactionType("approve");
+      setShowTransactionModal(true);
+    } else if (phase === "WAITING" || phase === "REVEALING") {
+      setTransactionType("validate");
+      setShowTransactionModal(true);
+    } else {
+      setShowTransactionModal(false);
+    }
+  }, [phase]);
+
+  const addToast = (message: string, type: "success" | "info") => {
     const id = Math.random().toString(36).substr(2, 9);
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {
@@ -71,23 +94,20 @@ export function GameBoard() {
       soundEffects.select();
       dispatch({ type: "SELECT_MOVE", move });
 
-      // If there's no gameId, create a new game
       if (!gameId) {
         addToast("Creating new game...", "info");
         await createGame(move);
         addToast("Game created! Waiting for opponent...", "success");
       } else {
-        // Join existing game
         addToast("Joining game...", "info");
         await joinGame(gameId, move);
         addToast("Joined game!", "success");
       }
     } catch (error) {
-      addToast(
-        error instanceof Error ? error.message : "Failed to make move",
-        "error"
-      );
-      dispatch({ type: "RESET_GAME" });
+      dispatch({
+        type: "SET_ERROR",
+        error: error instanceof Error ? error.message : "Failed to make move",
+      });
     }
   };
 
@@ -97,207 +117,64 @@ export function GameBoard() {
     addToast("Starting new game!", "info");
   };
 
-  const handleHover = () => {
-    soundEffects.hover();
-  };
-
-  const getMoveEmoji = (move: Move | null) => {
-    switch (move) {
-      case "ROCK":
-        return "🪨";
-      case "PAPER":
-        return "📜";
-      case "SCISSORS":
-        return "✂️";
-      default:
-        return "❓";
-    }
-  };
-
-  const getResultColor = () => {
-    switch (result) {
-      case "WIN":
-        return "text-blue-400";
-      case "LOSE":
-        return "text-red-500";
-      case "DRAW":
-        return "text-yellow-500";
-      default:
-        return "";
-    }
-  };
-
-  const getStatusMessage = () => {
-    if (!address) return "Connect your wallet to play";
-    if (isLoading) return "Processing...";
-    switch (phase) {
-      case "CHOOSING":
-        return gameId ? "Join the game..." : "Make your move...";
-      case "SELECTED":
-        return "Waiting for house move...";
-      case "WAITING":
-        return "Game joined! Resolving...";
-      case "REVEALING":
-        return "Revealing moves...";
-      case "FINISHED":
-        return result ? `Game Over - You ${result}!` : "Game Finished";
-      default:
-        return "";
-    }
-  };
+  if (phase === "FINISHED" && playerMove && houseMove && result && gameId) {
+    return (
+      <GameResult
+        playerMove={playerMove}
+        houseMove={houseMove}
+        result={result}
+        gameId={gameId.toString()}
+        onPlayAgain={handlePlayAgain}
+      />
+    );
+  }
 
   return (
     <>
-      <div className="w-full max-w-4xl mx-auto p-6">
-        <div className="relative rounded-lg bg-black bg-opacity-70 p-8 border border-blue-500 overflow-hidden">
-          <div className="absolute top-4 right-4">
-            <div className="text-xl text-purple-400">Score: {score}</div>
+      <div className="px-6 py-8 max-md:max-w-full font-normal">
+        <div className="max-w-full">
+          <div className="text-zinc-400 text-sm leading-none max-md:max-w-full">
+            {!address
+              ? "Connect your wallet to play"
+              : phase === "CHOOSING"
+              ? gameId
+                ? "Join the game..."
+                : "Make your move to start the match"
+              : "Processing your move..."}
           </div>
-
-          {gameId && (
-            <div className="absolute top-4 left-4">
-              <div className="text-sm text-gray-400">Game #{gameId}</div>
+          <div className="text-white text-5xl font-bold leading-none tracking-[-1.2px] mt-3 max-md:max-w-full max-md:text-[40px]">
+            Let&apos;s rock on-chain
+          </div>
+          {score > 0 && (
+            <div className="text-[rgba(141,12,255,1)] text-xl mt-2">
+              Score: {score.toString()}
             </div>
           )}
-
-          <AnimatePresence mode="wait">
-            {phase === "CHOOSING" && (
-              <motion.div
-                key="choosing"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="grid grid-cols-3 gap-6 mt-8"
-              >
-                {(["ROCK", "PAPER", "SCISSORS"] as const).map((move) => (
-                  <motion.button
-                    key={move}
-                    onClick={() => handleMove(move)}
-                    onMouseEnter={handleHover}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    disabled={!address || isLoading}
-                    className={cn(
-                      "p-6 rounded-lg border-2 transition-all duration-300",
-                      "hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500",
-                      "bg-black bg-opacity-50",
-                      playerMove === move
-                        ? "border-blue-500"
-                        : "border-gray-600",
-                      (!address || isLoading) && "opacity-50 cursor-not-allowed"
-                    )}
-                  >
-                    <div className="text-6xl mb-2 text-center">
-                      {getMoveEmoji(move)}
-                    </div>
-                    <div
-                      className={cn(
-                        "text-center text-lg font-semibold",
-                        playerMove === move ? "text-blue-400" : "text-gray-300"
-                      )}
-                    >
-                      {move}
-                    </div>
-                  </motion.button>
-                ))}
-              </motion.div>
-            )}
-
-            {(phase === "SELECTED" ||
-              phase === "WAITING" ||
-              phase === "REVEALING" ||
-              phase === "FINISHED") && (
-              <motion.div
-                key="playing"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex justify-center items-center gap-16 mt-8"
-              >
-                <div className="text-center">
-                  <div className="text-xl mb-4 text-blue-400">Your Move</div>
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    className="text-8xl"
-                  >
-                    {getMoveEmoji(playerMove)}
-                  </motion.div>
-                </div>
-
-                <div className="text-center">
-                  <div className="text-xl mb-4 text-pink-400">
-                    {phase === "SELECTED" || phase === "WAITING" ? (
-                      <span className="flex items-center justify-center gap-2">
-                        Opponent's Move <Spinner size="sm" />
-                      </span>
-                    ) : phase === "REVEALING" ? (
-                      <span className="flex items-center justify-center gap-2">
-                        Revealing <Spinner size="sm" />
-                      </span>
-                    ) : (
-                      "Opponent's Move"
-                    )}
-                  </div>
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    className="text-8xl"
-                  >
-                    {phase === "FINISHED" ? (
-                      getMoveEmoji(houseMove)
-                    ) : (
-                      <motion.div
-                        animate={{ rotateY: 360 }}
-                        transition={{
-                          duration: 1.5,
-                          ease: "easeInOut",
-                          repeat: Infinity,
-                          repeatType: "reverse",
-                        }}
-                      >
-                        ❓
-                      </motion.div>
-                    )}
-                  </motion.div>
-                </div>
-              </motion.div>
-            )}
-
-            {phase === "FINISHED" && (
-              <motion.div
-                key="finished"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mt-8 text-center"
-              >
-                <div
-                  className={cn("text-3xl font-bold mb-4", getResultColor())}
-                >
-                  {result === "WIN" && "You Win! 🎉"}
-                  {result === "LOSE" && "You Lose! 😢"}
-                  {result === "DRAW" && "It's a Draw! 🤝"}
-                </div>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={handlePlayAgain}
-                  onMouseEnter={handleHover}
-                  className="px-6 py-3 rounded-lg bg-black bg-opacity-50 border-2 border-blue-500 text-lg font-semibold text-blue-400"
-                >
-                  Play Again
-                </motion.button>
-              </motion.div>
-            )}
-
-            <div className="mt-4 text-center text-gray-400">
-              {getStatusMessage()}
-            </div>
-          </AnimatePresence>
+        </div>
+        <div className="flex w-full items-center gap-4 flex-wrap mt-8 max-md:max-w-full group max-md:flex-col">
+          {GAME_BUTTONS.map((button) => (
+            <GameButton
+              key={button.label}
+              label={button.label}
+              imageSrc={button.imageSrc}
+              onClick={() => handleMove(button.label as Move)}
+              disabled={!address || isLoading || phase !== "CHOOSING"}
+              aria-selected={playerMove === button.label}
+            />
+          ))}
         </div>
       </div>
 
-      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+      <TransactionModal isOpen={showTransactionModal} type={transactionType} />
+      <ErrorDialog
+        isOpen={!!error}
+        onClose={() => dispatch({ type: "RESET_GAME" })}
+        error={error || ""}
+      />
+      <ToastContainer
+        toasts={toasts.filter((t) => t.type !== "error")}
+        onDismiss={dismissToast}
+      />
     </>
   );
 }

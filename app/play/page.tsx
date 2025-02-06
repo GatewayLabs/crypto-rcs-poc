@@ -1,8 +1,8 @@
 import Footer from "@/components/footer";
-import Leaderboard from "@/components/new-game/leaderboard";
-import GameBoard from "@/components/new-game/game-board";
-import Header from "@/components/new-game/game-header";
-import MatchHistory from "@/components/new-game/match-history";
+import Leaderboard from "@/components/game/leaderboard";
+import GameBoard from "@/components/game/game-board";
+import Header from "@/components/game/game-header";
+import MatchHistory from "@/components/game/match-history";
 
 export default function Play() {
   return (

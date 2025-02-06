@@ -2,6 +2,7 @@
   "name": "crypto-rps",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -33,6 +34,7 @@
     "autoprefixer": "^10.4.17",
     "eslint": "^8.56.0",
     "eslint-config-next": "^14.1.0",
+    "pino-pretty": "^13.0.0",
     "postcss": "^8.4.33",
     "typescript": "^5.3.3"
   }
