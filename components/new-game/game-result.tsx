@@ -1,9 +1,21 @@
 import { Move } from "@/lib/crypto";
 
 const MOVE_IMAGES = {
-  ROCK: "/icons/rock-result.png",
-  PAPER: "/icons/paper-result.png",
-  SCISSORS: "/icons/scissors-result.png",
+  ROCK: {
+    WIN: "/images/rock-win.png",
+    LOSE: "/images/rock-loss.png",
+    DRAW: "/images/rock-draw.png",
+  },
+  PAPER: {
+    WIN: "/images/paper-win.png",
+    LOSE: "/images/paper-loss.png",
+    DRAW: "/images/paper-draw.png",
+  },
+  SCISSORS: {
+    WIN: "/images/scissors-win.png",
+    LOSE: "/images/scissors-loss.png",
+    DRAW: "/images/scissors-draw.png",
+  },
 };
 
 // Custom keyframes for animations
@@ -59,39 +71,32 @@ export default function GameResult({
 }: GameResultProps) {
   // Color schemes based on result
   const colorSchemes = {
-    player:
-      result === "DRAW"
-        ? {
-            bg: "bg-[#FD9800]",
-            border: "border-[#FD9800]",
-            text: "text-[#FD9800]",
-            hover:
-              "transition-all duration-300 hover:shadow-[0_0_30px_rgba(253,152,0,0.5)] hover:-translate-y-2 group-hover:opacity-50 hover:!opacity-100 hover:scale-[1.02]",
-          }
-        : {
-            bg: "bg-[#AEF342]",
-            border: "border-[#AEF342]",
-            text: "text-[#AEF342]",
-            hover:
-              "transition-all duration-300 hover:shadow-[0_0_30px_rgba(174,243,66,0.5)] hover:-translate-y-2 group-hover:opacity-50 hover:!opacity-100 hover:scale-[1.02]",
-          },
-    house:
-      result === "DRAW"
-        ? {
-            bg: "bg-[#FD9800]",
-            border: "border-[#FD9800]",
-            text: "text-[#FD9800]",
-            hover:
-              "transition-all duration-300 hover:shadow-[0_0_30px_rgba(253,152,0,0.5)] hover:-translate-y-2 group-hover:opacity-50 hover:!opacity-100 hover:scale-[1.02]",
-          }
-        : {
-            bg: "bg-[#FF666B]",
-            border: "border-[#FF666B]",
-            text: "text-[#FF666B]",
-            hover:
-              "transition-all duration-300 hover:shadow-[0_0_30px_rgba(255,102,107,0.5)] hover:-translate-y-2 group-hover:opacity-50 hover:!opacity-100 hover:scale-[1.02]",
-          },
+    DRAW: {
+      bg: "bg-[#FD9800]",
+      border: "border-[#FD9800]",
+      text: "text-[#FD9800]",
+      hover:
+        "transition-all duration-300 hover:shadow-[0_0_30px_rgba(253,152,0,0.5)] hover:-translate-y-2 group-hover:opacity-50 hover:!opacity-100 hover:scale-[1.02]",
+    },
+    LOSE: {
+      bg: "bg-[#FF666B]",
+      border: "border-[#FF666B]",
+      text: "text-[#FF666B]",
+      hover:
+        "transition-all duration-300 hover:shadow-[0_0_30px_rgba(255,102,107,0.5)] hover:-translate-y-2 group-hover:opacity-50 hover:!opacity-100 hover:scale-[1.02]",
+    },
+    WIN: {
+      bg: "bg-[#AEF342]",
+      border: "border-[#AEF342]",
+      text: "text-[#AEF342]",
+      hover:
+        "transition-all duration-300 hover:shadow-[0_0_30px_rgba(174,243,66,0.5)] hover:-translate-y-2 group-hover:opacity-50 hover:!opacity-100 hover:scale-[1.02]",
+    },
   };
+
+  const playerResult = result;
+  const houseResult =
+    result === "DRAW" ? "DRAW" : result === "WIN" ? "LOSE" : "WIN";
 
   return (
     <div className="max-md:max-w-full">
@@ -134,22 +139,22 @@ export default function GameResult({
             style={{ animation: "slideInFromLeft 0.6s ease-out forwards" }}
           >
             <div
-              className={`min-h-[356px] w-full ${colorSchemes.player.bg} bg-opacity-10 rounded-lg border ${colorSchemes.player.border} p-6 flex flex-col items-center ${colorSchemes.player.hover}`}
+              className={`min-h-[356px] w-full ${colorSchemes[playerResult].bg} bg-opacity-10 rounded-lg border ${colorSchemes[playerResult].border} p-6 flex flex-col items-center ${colorSchemes[playerResult].hover}`}
             >
               <img
                 loading="lazy"
-                srcSet={MOVE_IMAGES[playerMove]}
+                srcSet={MOVE_IMAGES[playerMove][result]}
                 className="aspect-[1.27] object-contain w-[162px] flex-grow transition-transform duration-300 group-hover:scale-95 hover:!scale-100"
                 alt={playerMove}
               />
               <div className="flex flex-col items-center gap-1 mt-4">
                 <div
-                  className={`text-xl uppercase tracking-wider opacity-60 ${colorSchemes.player.text}`}
+                  className={`text-xl uppercase tracking-wider opacity-60 ${colorSchemes[playerResult].text}`}
                 >
                   YOUR MOVE
                 </div>
                 <div
-                  className={`text-2xl font-normal leading-none text-center uppercase ${colorSchemes.player.text}`}
+                  className={`text-2xl font-normal leading-none text-center uppercase ${colorSchemes[playerResult].text}`}
                 >
                   {playerMove}
                 </div>
@@ -171,22 +176,22 @@ export default function GameResult({
             style={{ animation: "slideInFromRight 0.6s ease-out forwards" }}
           >
             <div
-              className={`min-h-[356px] w-full ${colorSchemes.house.bg} bg-opacity-10 rounded-lg border ${colorSchemes.house.border} p-6 flex flex-col items-center ${colorSchemes.house.hover}`}
+              className={`min-h-[356px] w-full ${colorSchemes[houseResult].bg} bg-opacity-10 rounded-lg border ${colorSchemes[houseResult].border} p-6 flex flex-col items-center ${colorSchemes[houseResult].hover}`}
             >
               <img
                 loading="lazy"
-                srcSet={MOVE_IMAGES[houseMove]}
+                srcSet={MOVE_IMAGES[houseMove][houseResult]}
                 className="aspect-[1.27] object-contain w-[162px] flex-grow transition-transform duration-300 group-hover:scale-95 hover:!scale-100"
                 alt={houseMove}
               />
               <div className="flex flex-col items-center gap-1 mt-4">
                 <div
-                  className={`text-xl uppercase tracking-wider opacity-60 ${colorSchemes.house.text}`}
+                  className={`text-xl uppercase tracking-wider opacity-60 ${colorSchemes[houseResult].text}`}
                 >
                   HOUSE MOVE
                 </div>
                 <div
-                  className={`text-2xl font-normal leading-none text-center uppercase ${colorSchemes.house.text}`}
+                  className={`text-2xl font-normal leading-none text-center uppercase ${colorSchemes[houseResult].text}`}
                 >
                   {houseMove}
                 </div>

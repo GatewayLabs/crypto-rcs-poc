@@ -20,18 +20,15 @@ interface GameToast {
 const GAME_BUTTONS = [
   {
     label: "ROCK",
-    imageSrc:
-      "https://cdn.builder.io/api/v1/image/assets/7e9fda62d1fd4d2cb4b968860ae91a02/fad23edd96718056c79683f402049d6279f95f63fd7c4f992f978247401b6d45?placeholderIfAbsent=true&width=100 100w, https://cdn.builder.io/api/v1/image/assets/7e9fda62d1fd4d2cb4b968860ae91a02/fad23edd96718056c79683f402049d6279f95f63fd7c4f992f978247401b6d45?placeholderIfAbsent=true&width=200 200w",
+    imageSrc: "/images/rock.png",
   },
   {
     label: "PAPER",
-    imageSrc:
-      "https://cdn.builder.io/api/v1/image/assets/7e9fda62d1fd4d2cb4b968860ae91a02/4c73db1f1936c8d9ae671765fb9d4e8e201ebc46b1dfece697f026223efd9482?placeholderIfAbsent=true&width=100 100w, https://cdn.builder.io/api/v1/image/assets/7e9fda62d1fd4d2cb4b968860ae91a02/4c73db1f1936c8d9ae671765fb9d4e8e201ebc46b1dfece697f026223efd9482?placeholderIfAbsent=true&width=200 200w",
+    imageSrc: "/images/paper.png",
   },
   {
     label: "SCISSORS",
-    imageSrc:
-      "https://cdn.builder.io/api/v1/image/assets/7e9fda62d1fd4d2cb4b968860ae91a02/39d857d212930e8856ed7b62c92bdac67a072193ddd31f5264d94ab8b91c573d?placeholderIfAbsent=true&width=100 100w, https://cdn.builder.io/api/v1/image/assets/7e9fda62d1fd4d2cb4b968860ae91a02/39d857d212930e8856ed7b62c92bdac67a072193ddd31f5264d94ab8b91c573d?placeholderIfAbsent=true&width=200 200w",
+    imageSrc: "/images/scissors.png",
   },
 ];
 

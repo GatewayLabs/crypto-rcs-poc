@@ -12,11 +12,9 @@ export default function MatchHistory() {
 
   const getMoveImage = (move: "ROCK" | "PAPER" | "SCISSORS") => {
     const images = {
-      ROCK: "https://cdn.builder.io/api/v1/image/assets/7e9fda62d1fd4d2cb4b968860ae91a02/7f760ca5326064867e8c736b73e7871118b443937ffb5a62a0540931501e2320",
-      PAPER:
-        "https://cdn.builder.io/api/v1/image/assets/7e9fda62d1fd4d2cb4b968860ae91a02/82ab092aca7744805f0d1711b8babf09210656a81e0325b50d8a61f44670c673",
-      SCISSORS:
-        "https://cdn.builder.io/api/v1/image/assets/7e9fda62d1fd4d2cb4b968860ae91a02/135be3ad478bd77c05cb499df1f8b80078e07244c9179330ff5182fbaca975d2",
+      ROCK: "/icons/rock.svg",
+      PAPER: "/icons/paper.svg",
+      SCISSORS: "/icons/scissors.svg",
     };
     return images[move];
   };
