@@ -65,31 +65,7 @@ The purpose of this PRD is to outline the requirements for a decentralized Rock-
    - The final step (winner determination) must happen on-chain to ensure trust.  
    - Decryption and final comparison \((m_A - m_B) \bmod 3\) are validated by the contract before awarding a winner.
 
----
-
-## 4. Non-Functional Requirements
-
-1. **Performance**  
-   - Paillier-based operations can be gas-intensive.  
-   - The solution should optimize for minimal exponentiations and large integer operations on-chain.
-
-2. **Security**  
-   - The private key must remain off-chain.  
-   - The Paillier cryptosystem must be properly implemented to avoid side-channel leaks or incorrect usage (e.g., random nonce generation off-chain).
-
-3. **Reliability**  
-   - The system should gracefully handle partial submissions (e.g., if a player fails to submit an encrypted move or the house doesn’t decrypt the result).  
-   - Provide timeouts or refunds if necessary (optional for MVP).
-
-4. **Maintainability**  
-   - Code must be modular and well-documented:  
-     - Paillier library for encryption/homomorphic ops.  
-     - RPS logic for game state transitions.  
-   - Potential for reusability in other homomorphic dApps.
-
----
-
-## 5. User Stories & Use Cases
+## 4. User Stories & Use Cases
 
 1. **Player Encrypts Move**  
    - *As a player (A or B), I want to choose Rock/Paper/Scissors and encrypt it with Paillier so that no one else knows my choice.*  
@@ -108,14 +84,14 @@ The purpose of this PRD is to outline the requirements for a decentralized Rock-
 
 ---
 
-## 6. Technical Design Choices
+## 5. Technical Design Choices
 
-### 6.1 Front-End: Next.js 14
+### 5.1 Front-End: Next.js 14
 - **Reasons**:
   - Next.js 14 offers SSR/SSG, giving fast load times and potential for better SEO.  
   - Eases integration with Web3 libraries like `ethers.js`, and supports modern React patterns.
 
-### 6.2 Smart Contract (Solidity)
+### 5.2 Smart Contract (Solidity)
 - **Key Components**:
   - **Paillier Library**: Manages encryption, decryption, and homomorphic operations.  
   - **Game State**: Tracks each RPS game, storing:
@@ -129,7 +105,7 @@ The purpose of this PRD is to outline the requirements for a decentralized Rock-
     - `computeDifference(gameId)`: Contract calculates `Enc(mA - mB)`.  
     - `decryptAndResolveGame(gameId, skPartial)`: House decrypts final difference and sets winner.
 
-### 6.3 Paillier Cryptography
+### 5.3 Paillier Cryptography
 - **Public Key** \((n, g)\):
   - Stored in the contract.  
   - Allows on-chain multiplication/modular exponentiation for homomorphic operations.
@@ -149,12 +125,12 @@ The purpose of this PRD is to outline the requirements for a decentralized Rock-
     \text{Dec}(\text{Enc}(d)) = d \quad \text{where } d = (m_A - m_B) \mod n.
   \]
 
-### 6.4 Wallet Integration
+### 5.4 Wallet Integration
 - **Libraries**:
   - `ethers.js` or `wagmi` for web3 interaction.  
   - Provide standard MetaMask, WalletConnect integration.
 
-### 6.5 UI/UX
+### 5.5 UI/UX
 - **Design**: Casino-like style (dark backgrounds, neon highlights, playful animations).  
 - **Steps**:
   1. Connect wallet.  
@@ -167,41 +143,7 @@ The purpose of this PRD is to outline the requirements for a decentralized Rock-
 
 ---
 
-## 7. System Architecture
-
-```
-        +------------------------+
-        |    Next.js 14 (UI)    |
-        |  1. Connect Wallet    |
-        |  2. Encrypt (Paillier)|
-        |  3. Submit Ciphertext |
-        +----------+------------+
-                   |
-                   | JSON-RPC
-                   v
-           +---------------------+
-           | EVM Smart Contract |
-           | - Stores ciphers   |
-           | - sub(Enc(A),Enc(B))|
-           | - difference ciph  |
-           | - decryptAndResolve|
-           +---------+----------+
-                     |
-                     | House/Private Key
-                     v
-           +---------------------+
-           | Off-chain Key       |
-           | - Decrypts diff     |
-           +---------------------+
-```
-
-1. **Front-End** handles encryption of moves using the **public key**.  
-2. **Smart Contract** receives ciphertexts, computes homomorphic difference, then stores the result.  
-3. **House** calls a function with partial decryption info, enabling the contract to finalize the game result.
-
----
-
-## 8. Testing & Validation
+## 6. Testing & Validation
 
 1. **Smart Contract Tests**  
    - **Paillier Integration**: Ensure encryption/decryption matches expected results.  
@@ -222,7 +164,7 @@ The purpose of this PRD is to outline the requirements for a decentralized Rock-
 
 ---
 
-## 9. Risk & Mitigation
+## 7. Risk & Mitigation
 
 1. **Private Key Exposure**  
    - *Risk*: House’s private key on-chain makes it public.  
