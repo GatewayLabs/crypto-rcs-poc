@@ -151,7 +151,7 @@ export default function GameBoard() {
             </div>
           )}
         </div>
-        <div className="flex w-full items-center gap-4 flex-wrap mt-8 max-md:max-w-full group">
+        <div className="flex w-full items-center gap-4 flex-wrap mt-8 max-md:max-w-full group max-md:flex-col">
           {GAME_BUTTONS.map((button) => (
             <GameButton
               key={button.label}

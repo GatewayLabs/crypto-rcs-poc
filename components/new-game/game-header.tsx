@@ -19,7 +19,7 @@ export default function Header() {
           <div className="bg-zinc-800 overflow-hidden text-sm whitespace-nowrap leading-none my-auto p-3 rounded-sm">
             10xp
           </div>
-          <ConnectButton />
+          <ConnectButton showBalance={false} />
         </div>
       </div>
     </div>
