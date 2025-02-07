@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import dynamic from "next/dynamic";
 
-const ClientLayout = dynamic(() => import("./client-layout"), {
+const Providers = dynamic(() => import("./providers"), {
   ssr: false,
 });
 
@@ -20,7 +20,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <ClientLayout>{children}</ClientLayout>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
