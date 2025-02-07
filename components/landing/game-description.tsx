@@ -1,7 +1,9 @@
-import React from "react";
-import { PlayButton } from "./play-button";
+"use client";
 
-export const GameDescription: React.FC = () => {
+import React from "react";
+import PlayButton from "@/components/landing/play-button";
+
+export default function GameDescription() {
   return (
     <div className="bg-zinc-950 border self-stretch flex min-w-60 min-h-56 items-center gap-[34px] overflow-hidden text-md font-normal leading-6 flex-wrap flex-1 shrink basis-12 my-auto p-6 rounded-3xl border-white border-solid max-md:max-w-full max-md:px-5">
       <img
@@ -19,4 +21,4 @@ export const GameDescription: React.FC = () => {
       <PlayButton />
     </div>
   );
-};
+}

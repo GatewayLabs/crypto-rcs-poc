@@ -1,6 +1,8 @@
+"use client";
+
 import React from "react";
 
-export const GameHeader: React.FC = () => {
+export default function GameHeader() {
   return (
     <div
       className="bg-zinc-950 border self-stretch relative flex min-w-60 min-h-56 flex-col justify-center w-[461px] my-auto px-12 py-[47px] rounded-3xl border-white border-solid max-md:max-w-full max-md:px-5"
@@ -20,4 +22,4 @@ export const GameHeader: React.FC = () => {
       />
     </div>
   );
-};
+}

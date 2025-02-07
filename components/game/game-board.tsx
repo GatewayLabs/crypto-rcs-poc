@@ -5,11 +5,11 @@ import { useGame } from "@/context/game-context";
 import { useAccount } from "wagmi";
 import { Move } from "@/lib/crypto";
 import { soundEffects } from "@/lib/sounds/sound-effects";
-import GameButton from "./game-button";
-import GameResult from "./game-result";
-import TransactionModal from "./transaction-modal";
-import { Toast, ToastContainer } from "@/components/ui/toast";
-import ErrorDialog from "./error-dialog";
+import GameButton from "@/components/game/game-button";
+import GameResult from "@/components/game/game-result";
+import TransactionModal from "@/components/game/transaction-modal";
+import { ToastContainer } from "@/components/ui/toast";
+import ErrorDialog from "@/components/game/error-dialog";
 
 interface GameToast {
   id: string;

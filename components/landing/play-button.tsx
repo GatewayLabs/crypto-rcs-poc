@@ -1,7 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import React from "react";
 
-export const PlayButton = () => {
+export default function PlayButton() {
   return (
     <Link href="/play">
       <button
@@ -18,4 +20,4 @@ export const PlayButton = () => {
       </button>
     </Link>
   );
-};
+}

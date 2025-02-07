@@ -1,3 +1,5 @@
+"use client";
+
 import Footer from "@/components/footer";
 import Leaderboard from "@/components/game/leaderboard";
 import GameBoard from "@/components/game/game-board";

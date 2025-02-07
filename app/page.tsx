@@ -1,6 +1,8 @@
-import { GameDescription } from "@/components/landing/game-description";
+"use client";
+
+import GameHeader from "@/components/landing/game-header";
 import Footer from "@/components/footer";
-import { GameHeader } from "@/components/landing/game-header";
+import GameDescription from "@/components/landing/game-description";
 
 export default function Landing() {
   return (

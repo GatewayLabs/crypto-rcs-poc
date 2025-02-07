@@ -1,10 +1,11 @@
 import { getDefaultConfig } from "@rainbow-me/rainbowkit";
 import { shield } from "./chains";
 
-// Only used for client-side configuration
+const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "";
+
 export const config = getDefaultConfig({
   appName: "Crypto Rock Paper Scissors",
-  projectId: "YOUR_PROJECT_ID",
+  projectId,
   chains: [shield],
-  ssr: true,
+  ssr: false,
 });

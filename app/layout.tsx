@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import "@rainbow-me/rainbowkit/styles.css";
-import { Providers } from "./providers";
+import dynamic from "next/dynamic";
+
+const ClientLayout = dynamic(() => import("./client-layout"), {
+  ssr: false,
+});
 
 export const metadata: Metadata = {
   title: "Crypto Rock Paper Scissors",
@@ -11,13 +14,13 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="en">
       <body>
-        <Providers>{children}</Providers>
+        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   );
