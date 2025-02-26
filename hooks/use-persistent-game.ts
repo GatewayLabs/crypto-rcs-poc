@@ -18,8 +18,8 @@ export function usePersistentGame(
 
     const hasRestoredKey = `${STORAGE_KEY}-restored-${address}`;
     const hasRestored = sessionStorage.getItem(hasRestoredKey);
-    
-    if (hasRestored === 'true') {
+
+    if (hasRestored === "true") {
       return;
     }
 
@@ -32,11 +32,11 @@ export function usePersistentGame(
         if (isValidGameState(parsedState)) {
           const stateToRestore = {
             ...parsedState,
-            phase: GamePhase.FINISHED
+            phase: GamePhase.FINISHED,
           };
 
           dispatch({ type: "RESTORE_STATE", state: stateToRestore });
-          sessionStorage.setItem(hasRestoredKey, 'true');
+          sessionStorage.setItem(hasRestoredKey, "true");
         } else {
           localStorage.removeItem(storageKey);
         }
@@ -48,10 +48,10 @@ export function usePersistentGame(
 
   useEffect(() => {
     if (!address) return;
-    
+
     if (
-      !currentState.playerMove && 
-      !currentState.result && 
+      !currentState.playerMove &&
+      !currentState.result &&
       currentState.history.length === 0
     ) {
       return;
@@ -65,10 +65,10 @@ export function usePersistentGame(
 
     try {
       localStorage.setItem(storageKey, JSON.stringify(stateToSave));
-      
+
       if (currentState.playerMove || currentState.result) {
         const hasRestoredKey = `${STORAGE_KEY}-restored-${address}`;
-        sessionStorage.setItem(hasRestoredKey, 'true');
+        sessionStorage.setItem(hasRestoredKey, "true");
       }
     } catch (error) {
       console.error("Failed to save game state:", error);
