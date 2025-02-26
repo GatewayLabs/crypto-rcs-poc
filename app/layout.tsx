@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import "./globals.css";
 import dynamic from "next/dynamic";
+import "./globals.css";
 
 const Providers = dynamic(() => import("./providers"), {
   ssr: false,
