@@ -1,8 +1,8 @@
+import { gameContractConfig } from "@/config/contracts";
+import { Move } from "@/lib/crypto";
+import { GameHistory, GameResult } from "@/types/game";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAccount, usePublicClient } from "wagmi";
-import { GameHistory, GameResult } from "@/types/game";
-import { Move } from "@/lib/crypto";
-import { gameContractConfig } from "@/config/contracts";
 
 export function useMatches() {
   const { address } = useAccount();
@@ -161,28 +161,28 @@ export function useMatches() {
               drawMoves[Math.floor(Math.random() * drawMoves.length)];
             playerMove = randomDrawMove;
             houseMove = randomDrawMove;
-            result = "DRAW";
+            result = GameResult.DRAW;
           } else if (diffMod3Value === 1) {
             // Player A wins
             if (isPlayerA) {
               playerMove = "ROCK";
               houseMove = "SCISSORS";
-              result = "WIN";
+              result = GameResult.WIN;
             } else {
               playerMove = "SCISSORS";
               houseMove = "ROCK";
-              result = "LOSE";
+              result = GameResult.LOSE;
             }
           } else {
             // Player B wins
             if (isPlayerB) {
               playerMove = "ROCK";
               houseMove = "SCISSORS";
-              result = "WIN";
+              result = GameResult.WIN;
             } else {
               playerMove = "SCISSORS";
               houseMove = "ROCK";
-              result = "LOSE";
+              result = GameResult.LOSE;
             }
           }
 
