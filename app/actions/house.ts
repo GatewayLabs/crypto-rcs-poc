@@ -24,25 +24,21 @@ export async function playHouseMove(
   betAmount = DEFAULT_BET_AMOUNT_WEI
 ) {
   try {
-    // Ensure we have a valid gameId and betAmount
     if (gameId === undefined || gameId === null || isNaN(gameId)) {
       throw new Error("Invalid game ID");
     }
 
-    // Ensure betAmount is a valid BigInt
     const validBetAmount =
       betAmount && !isNaN(Number(betAmount))
         ? betAmount
         : DEFAULT_BET_AMOUNT_WEI;
 
-    // First check if the game exists and needs a house move
     const gameData = await publicClient.readContract({
       ...gameContractConfig,
       functionName: "getGameInfo",
       args: [BigInt(gameId)],
     });
 
-    // If game doesn't exist or already has a second player, return
     if (
       !gameData ||
       gameData[1] !== "0x0000000000000000000000000000000000000000"
@@ -50,7 +46,6 @@ export async function playHouseMove(
       throw new Error("Game is not available for house move");
     }
 
-    // Generate and encrypt house move
     const houseMove = generateHouseMove();
     const encryptedMove = (await encryptMove(houseMove)) as `0x${string}`;
 
@@ -126,7 +121,6 @@ export async function resolveGame(gameId: number) {
 
     // Get difference cipher
     const result = events[0]?.args?.differenceCipher;
-    console.log("Difference cipher:", result);
 
     // Finalize game
     const publicKeyN = BigInt("0x" + process.env.NEXT_PUBLIC_PAILLIER_N);

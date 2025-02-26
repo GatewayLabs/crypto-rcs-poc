@@ -19,7 +19,6 @@ export function useMatches() {
       if (!publicClient || !address) return [] as GameHistory[];
 
       try {
-        // Get all GameResolved events
         const resolvedEvents = await publicClient.getLogs({
           address: gameContractConfig.address,
           event: {
@@ -120,7 +119,7 @@ export function useMatches() {
           const isPlayerB = game.playerB === normalizedAddress;
 
           if (!isPlayerA && !isPlayerB) continue;
-          if (!game.resolvedBlock || !game.diffMod3) continue;
+          if (!game.resolvedBlock || game.diffMod3 === undefined) continue;
 
           let timestamp = Date.now();
           try {
@@ -144,36 +143,43 @@ export function useMatches() {
           // Infer moves from diffMod3
           // This is approximate since we can't know the exact moves without decryption
           // We're reconstructing probable moves based on the game rules
-          const diffMod3Value = Number(game.diffMod3 % 3n);
+          // Handle potential negative values by ensuring we get a positive modulo
+          let diffMod3Value: number;
+          if (game.diffMod3 !== undefined) {
+            const mod = game.diffMod3 % 3n;
+            diffMod3Value = Number(mod < 0n ? mod + 3n : mod);
+          } else {
+            diffMod3Value = 1; // Default to non-draw if undefined
+          }
 
           if (diffMod3Value === 0) {
             // It's a tie, so both players chose the same move
-            playerMove = "ROCK";
-            houseMove = "ROCK";
+            // For visualization variety, randomly pick one of the three moves for draws
+            // In a real draw, both players must have played the same move
+            const drawMoves: Move[] = ["ROCK", "PAPER", "SCISSORS"];
+            const randomDrawMove =
+              drawMoves[Math.floor(Math.random() * drawMoves.length)];
+            playerMove = randomDrawMove;
+            houseMove = randomDrawMove;
             result = "DRAW";
           } else if (diffMod3Value === 1) {
             // Player A wins
             if (isPlayerA) {
-              // Current user is player A and won
               playerMove = "ROCK";
               houseMove = "SCISSORS";
               result = "WIN";
             } else {
-              // Current user is player B and lost
               playerMove = "SCISSORS";
               houseMove = "ROCK";
               result = "LOSE";
             }
           } else {
-            // diffMod3Value === 2
             // Player B wins
             if (isPlayerB) {
-              // Current user is player B and won
               playerMove = "ROCK";
               houseMove = "SCISSORS";
               result = "WIN";
             } else {
-              // Current user is player A and lost
               playerMove = "SCISSORS";
               houseMove = "ROCK";
               result = "LOSE";
