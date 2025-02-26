@@ -8,7 +8,7 @@ interface GameBetProps {
 
 export default function GameBet({ onBet, value, maxValue }: GameBetProps) {
   return (
-    <div className="border flex px-4 py-4 mt-4 rounded-lg border-zinc-700 border justify-between items-center">
+    <div className="border flex flex-col sm:flex-row px-4 py-4 mt-4 rounded-lg border-zinc-700 justify-between items-center gap-4">
       <div className="flex flex-grow-1">
         <input
           className="bg-transparent border-transparent text-[rgb(255,255,255)] text-md font-normal leading-none text-center uppercase flex-grow-0 w-32"
