@@ -3,14 +3,12 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { Move } from "@/lib/crypto";
 import { GamePhase, GameResult } from "@/types/game";
 
-// Interface for toast notifications
 export interface GameToast {
   id: string;
   message: string;
   type: "success" | "error" | "info";
 }
 
-// Main UI state interface with store actions
 interface GameUIState {
   // UI State
   playerMove: Move | null;
@@ -49,13 +47,11 @@ interface GameUIState {
   updateGameState: (updates: Partial<GameUIState>) => void;
 }
 
-// Define which parts of the state should be persisted
 type PersistentState = Pick<
   GameUIState,
   "playerMove" | "houseMove" | "phase" | "result" | "gameId" | "transactionHash"
 >;
 
-// Create the store with persist middleware
 export const useGameUIStore = create<GameUIState>()(
   persist(
     (set) => ({
@@ -133,7 +129,6 @@ export const useGameUIStore = create<GameUIState>()(
     {
       name: "crypto-rps-game-state",
       storage: createJSONStorage(() => localStorage),
-      // Only persist specific fields
       partialize: (state) => ({
         playerMove: state.playerMove,
         houseMove: state.houseMove,

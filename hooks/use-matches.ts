@@ -2,12 +2,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
 import { GameHistory, GameResult } from "@/types/game";
 import { Move } from "@/lib/crypto";
+import { useEffect } from "react";
+import { useGameUIStore } from "@/stores/game-ui-store";
 
 export function useMatches() {
   const { address } = useAccount();
   const queryClient = useQueryClient();
+  const gameUIState = useGameUIStore();
 
-  // Fetch user's match history
   const { data: matches = [], isLoading } = useQuery({
     queryKey: ["matches", address],
     queryFn: async () => {
@@ -16,7 +18,6 @@ export function useMatches() {
     enabled: !!address,
   });
 
-  // Add a new match to history
   const addMatchMutation = useMutation({
     mutationFn: async ({
       playerMove,
@@ -34,7 +35,7 @@ export function useMatches() {
       if (!address) throw new Error("User address is required");
 
       const newMatch: GameHistory = {
-        id: Math.random().toString(36).substr(2, 9), // Generate a random ID
+        id: Math.random().toString(36).substr(2, 9),
         timestamp: Date.now(),
         playerMove,
         houseMove,
@@ -49,8 +50,7 @@ export function useMatches() {
           []),
       ];
 
-      // Add new match to the beginning of the array
-      return [newMatch, ...currentMatches].slice(0, 10); // Keep only 10 most recent
+      return [newMatch, ...currentMatches];
     },
     onSuccess: (updatedMatches) => {
       if (address) {
@@ -59,7 +59,39 @@ export function useMatches() {
     },
   });
 
-  // Clear match history
+  useEffect(() => {
+    if (
+      gameUIState.phase === "FINISHED" &&
+      gameUIState.result &&
+      gameUIState.playerMove &&
+      gameUIState.houseMove
+    ) {
+      const existingMatch = matches.find(
+        (match) => match.gameId === gameUIState.gameId
+      );
+
+      if (!existingMatch) {
+        addMatchMutation.mutate({
+          playerMove: gameUIState.playerMove,
+          houseMove: gameUIState.houseMove,
+          result: gameUIState.result,
+          gameId: gameUIState.gameId,
+          transactionHash: gameUIState.transactionHash || undefined,
+        });
+      }
+    }
+  }, [
+    gameUIState.phase,
+    gameUIState.result,
+    gameUIState.playerMove,
+    gameUIState.houseMove,
+    gameUIState.gameId,
+    gameUIState.transactionHash,
+    matches,
+    addMatchMutation,
+    address,
+  ]);
+
   const clearHistoryMutation = useMutation({
     mutationFn: async () => {
       return [] as GameHistory[];

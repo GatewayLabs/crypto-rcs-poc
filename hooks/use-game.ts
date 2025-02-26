@@ -1,21 +1,33 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAccount } from "wagmi";
+import { useMutation } from "@tanstack/react-query";
 import { useGameContract } from "./use-game-contract";
 import { Move } from "@/lib/crypto";
-import { GamePhase } from "@/types/game";
+import { GamePhase, GameResult } from "@/types/game";
+import { useEffect, useCallback } from "react";
+import { playHouseMove, resolveGame } from "@/app/actions/house";
+import { useGameUIStore } from "@/stores/game-ui-store";
 
 export function useGame() {
-  const { address } = useAccount();
-  const queryClient = useQueryClient();
   const {
     createGame: contractCreateGame,
     joinGame: contractJoinGame,
     submitMoves,
     computeDifference,
     finalizeGame,
+    gameInfo,
   } = useGameContract();
 
-  // Helper to determine game phase based on contract data
+  const gameUIState = useGameUIStore();
+  const {
+    setPlayerMove,
+    setHouseMove,
+    setPhase,
+    setResult,
+    setError,
+    setGameId,
+    setTransactionHash,
+    resetGameState,
+  } = useGameUIStore();
+
   function determineGamePhase(gameInfo: any) {
     if (!gameInfo) return GamePhase.CHOOSING;
 
@@ -36,120 +48,125 @@ export function useGame() {
     return GamePhase.SELECTED;
   }
 
-  // Fetch current game state
-  const { data: gameState, isLoading } = useQuery({
-    queryKey: ["gameState", address],
-    queryFn: async () => {
-      // Default state
-      const defaultState = {
-        playerMove: null,
-        houseMove: null,
-        phase: GamePhase.CHOOSING,
-        result: null,
-        error: null,
-        gameId: null,
-      };
-
-      return defaultState;
-    },
-    enabled: !!address,
-  });
-
-  // Create game mutation
   const createGameMutation = useMutation({
     mutationFn: async (move: Move) => {
       try {
+        setPlayerMove(move);
+        setPhase(GamePhase.SELECTED);
+
         const gameId = await contractCreateGame(move);
+        setGameId(gameId);
+
+        const houseResult = await playHouseMove(gameId);
+        if (!houseResult.success) {
+          throw new Error(houseResult.error);
+        }
+
+        if (houseResult.move) {
+          setHouseMove(houseResult.move);
+        }
+
+        setPhase(GamePhase.REVEALING);
+        const resolveResult = await resolveGame(gameId);
+        if (!resolveResult.success) {
+          throw new Error(resolveResult.error);
+        }
+
+        const gameResult =
+          resolveResult.result === 0
+            ? GameResult.DRAW
+            : resolveResult.result === 1
+            ? GameResult.WIN
+            : GameResult.LOSE;
+
+        setResult(gameResult);
+        setPhase(GamePhase.FINISHED);
+
+        if (resolveResult.hash) {
+          setTransactionHash(resolveResult.hash);
+        }
 
         return {
           gameId,
           playerMove: move,
-          phase: GamePhase.SELECTED,
+          phase: GamePhase.FINISHED,
+          result: gameResult,
+          transactionHash: resolveResult.hash,
+          houseMove: houseResult.move,
         };
       } catch (error) {
+        if (error instanceof Error) {
+          setError(error.message);
+        } else {
+          setError("Failed to create game");
+        }
+        setPhase(GamePhase.ERROR);
         throw error;
       }
     },
-    onSuccess: (data) => {
-      // Update game state on success
-      const newState = {
-        ...gameState,
-        gameId: data.gameId,
-        playerMove: data.playerMove,
-        phase: data.phase,
-      };
-
-      queryClient.setQueryData(["gameState", address], newState);
-    },
-    onError: (error) => {
-      const newState = {
-        ...gameState,
-        phase: GamePhase.ERROR,
-        error: error instanceof Error ? error.message : "Failed to create game",
-      };
-
-      queryClient.setQueryData(["gameState", address], newState);
-    },
   });
 
-  // Join game mutation
   const joinGameMutation = useMutation({
     mutationFn: async ({ gameId, move }: { gameId: number; move: Move }) => {
       try {
+        setPlayerMove(move);
+        setPhase(GamePhase.WAITING);
+
         await contractJoinGame(gameId, move);
+
+        const resolveResult = await resolveGame(gameId);
+        if (!resolveResult.success) {
+          throw new Error(resolveResult.error);
+        }
+
+        const gameResult =
+          resolveResult.result === 0
+            ? GameResult.DRAW
+            : resolveResult.result === 1
+            ? GameResult.WIN
+            : GameResult.LOSE;
+
+        setResult(gameResult);
+        setPhase(GamePhase.FINISHED);
+
+        if (resolveResult.hash) {
+          setTransactionHash(resolveResult.hash);
+        }
+
         return {
           gameId,
           playerMove: move,
-          phase: GamePhase.WAITING,
+          phase: GamePhase.FINISHED,
+          result: gameResult,
+          transactionHash: resolveResult.hash,
         };
       } catch (error) {
+        if (error instanceof Error) {
+          setError(error.message);
+        } else {
+          setError("Failed to join game");
+        }
+        setPhase(GamePhase.ERROR);
         throw error;
       }
     },
-    onSuccess: (data) => {
-      const newState = {
-        ...gameState,
-        gameId: data.gameId,
-        playerMove: data.playerMove,
-        phase: data.phase,
-      };
-
-      queryClient.setQueryData(["gameState", address], newState);
-    },
-    onError: (error) => {
-      const newState = {
-        ...gameState,
-        phase: GamePhase.ERROR,
-        error: error instanceof Error ? error.message : "Failed to join game",
-      };
-
-      queryClient.setQueryData(["gameState", address], newState);
-    },
   });
 
-  // Reveal game (submit moves) mutation
   const revealGameMutation = useMutation({
     mutationFn: async (gameId: number) => {
+      setPhase(GamePhase.REVEALING);
       await submitMoves(gameId);
       return { gameId };
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["gameState", address] });
-    },
   });
 
-  // Compute difference mutation
   const computeDifferenceMutation = useMutation({
     mutationFn: async (gameId: number) => {
       await computeDifference(gameId);
       return { gameId };
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["gameState", address] });
-    },
   });
 
-  // Finalize game mutation
   const finalizeGameMutation = useMutation({
     mutationFn: async ({
       gameId,
@@ -161,30 +178,46 @@ export function useGame() {
       await finalizeGame(gameId, diffMod3);
       return { gameId, diffMod3 };
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["gameState", address] });
-    },
   });
 
-  // Reset the game state
-  const resetGame = () => {
-    const newState = {
-      ...gameState,
-      playerMove: null,
-      houseMove: null,
-      phase: GamePhase.CHOOSING,
-      result: null,
-      error: null,
-      gameId: null,
+  const resetGame = useCallback(() => {
+    resetGameState();
+  }, [resetGameState]);
+
+  useEffect(() => {
+    if (!gameInfo || !gameUIState.gameId) return;
+
+    const currentPhase = determineGamePhase(gameInfo);
+
+    if (currentPhase !== gameUIState.phase) {
+      setPhase(currentPhase);
+    }
+  }, [gameInfo, gameUIState.gameId, gameUIState.phase, setPhase]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible" && gameUIState.gameId) {
+        if (
+          gameUIState.phase === GamePhase.REVEALING ||
+          gameUIState.phase === GamePhase.WAITING
+        ) {
+          if (gameUIState.result) {
+            setPhase(GamePhase.FINISHED);
+          }
+        }
+      }
     };
 
-    queryClient.setQueryData(["gameState", address], newState);
-  };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [gameUIState.gameId, gameUIState.phase, gameUIState.result, setPhase]);
 
   return {
-    gameState,
-    isLoading,
-    phase: determineGamePhase(gameState),
+    gameState: gameUIState,
+    phase: gameUIState.phase,
     createGame: (move: Move) => createGameMutation.mutate(move),
     joinGame: (gameId: number, move: Move) =>
       joinGameMutation.mutate({ gameId, move }),

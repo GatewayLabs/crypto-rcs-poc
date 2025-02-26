@@ -1,10 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { LeaderboardEntry, GameResult } from "@/types/game";
+import { useEffect } from "react";
+import { useGameUIStore } from "@/stores/game-ui-store";
 
 export function useLeaderboard() {
   const queryClient = useQueryClient();
+  const gameUIState = useGameUIStore();
 
-  // Fetch leaderboard
   const { data: leaderboard = [], isLoading } = useQuery({
     queryKey: ["leaderboard"],
     queryFn: async () => {
@@ -12,7 +14,6 @@ export function useLeaderboard() {
     },
   });
 
-  // Update leaderboard entry
   const updateLeaderboardMutation = useMutation({
     mutationFn: async ({
       address,
@@ -33,7 +34,34 @@ export function useLeaderboard() {
     },
   });
 
-  // Helper to update leaderboard
+  useEffect(() => {
+    if (
+      gameUIState.phase === "FINISHED" &&
+      gameUIState.result &&
+      gameUIState.playerMove
+    ) {
+      const lastUpdateTime = localStorage.getItem(
+        `leaderboard_update_${gameUIState.gameId}`
+      );
+
+      if (!lastUpdateTime && gameUIState.gameId) {
+        const userAddress = localStorage.getItem("userAddress") || "";
+
+        if (userAddress) {
+          updateLeaderboardMutation.mutate({
+            address: userAddress,
+            result: gameUIState.result,
+          });
+
+          localStorage.setItem(
+            `leaderboard_update_${gameUIState.gameId}`,
+            Date.now().toString()
+          );
+        }
+      }
+    }
+  }, [gameUIState, updateLeaderboardMutation]);
+
   function updateLeaderboard(
     leaderboard: LeaderboardEntry[],
     result: GameResult,
