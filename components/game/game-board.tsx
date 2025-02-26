@@ -80,15 +80,13 @@ export default function GameBoard() {
     try {
       soundEffects.select();
 
-      console.log("value", betValue);
-
       if (!gameId) {
         addToast("Creating new game...", "info");
-        await createGame(move);
+        await createGame(move, BigInt(betValue * 10 ** 18));
         addToast("Game created! Waiting for opponent...", "success");
       } else {
         addToast("Joining game...", "info");
-        await joinGame(gameId, move);
+        await joinGame(gameId, move, BigInt(betValue * 10 ** 18));
         addToast("Joined game!", "success");
       }
     } catch (error) {
