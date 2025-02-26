@@ -16,6 +16,19 @@ export const gameContractConfig = {
           type: "uint256",
         },
       ],
+      name: "cancelGame",
+      outputs: [],
+      stateMutability: "nonpayable",
+      type: "function",
+    },
+    {
+      inputs: [
+        {
+          internalType: "uint256",
+          name: "gameId",
+          type: "uint256",
+        },
+      ],
       name: "computeDifference",
       outputs: [],
       stateMutability: "nonpayable",
@@ -37,32 +50,14 @@ export const gameContractConfig = {
           type: "uint256",
         },
       ],
-      stateMutability: "nonpayable",
-      type: "function",
-    },
-    {
-      inputs: [
-        {
-          internalType: "uint256",
-          name: "gameId",
-          type: "uint256",
-        },
-        {
-          internalType: "uint256",
-          name: "decryptedDiff",
-          type: "uint256",
-        },
-      ],
-      name: "finalizeGame",
-      outputs: [],
-      stateMutability: "nonpayable",
+      stateMutability: "payable",
       type: "function",
     },
     {
       inputs: [
         {
           internalType: "address",
-          name: "_paillierAddress",
+          name: "paillierAddress",
           type: "address",
         },
         {
@@ -96,11 +91,42 @@ export const gameContractConfig = {
         {
           indexed: false,
           internalType: "bytes",
-          name: "differenceCiphertext",
+          name: "differenceCipher",
           type: "bytes",
         },
       ],
       name: "DifferenceComputed",
+      type: "event",
+    },
+    {
+      inputs: [
+        {
+          internalType: "uint256",
+          name: "gameId",
+          type: "uint256",
+        },
+        {
+          internalType: "int256",
+          name: "diffMod3",
+          type: "int256",
+        },
+      ],
+      name: "finalizeGame",
+      outputs: [],
+      stateMutability: "nonpayable",
+      type: "function",
+    },
+    {
+      anonymous: false,
+      inputs: [
+        {
+          indexed: true,
+          internalType: "uint256",
+          name: "gameId",
+          type: "uint256",
+        },
+      ],
+      name: "GameCancelled",
       type: "event",
     },
     {
@@ -158,9 +184,9 @@ export const gameContractConfig = {
         },
         {
           indexed: false,
-          internalType: "uint256",
-          name: "decryptedDiff",
-          type: "uint256",
+          internalType: "int256",
+          name: "diffMod3",
+          type: "int256",
         },
       ],
       name: "GameResolved",
@@ -181,7 +207,7 @@ export const gameContractConfig = {
       ],
       name: "joinGame",
       outputs: [],
-      stateMutability: "nonpayable",
+      stateMutability: "payable",
       type: "function",
     },
     {
@@ -263,12 +289,12 @@ export const gameContractConfig = {
         },
         {
           internalType: "bytes",
-          name: "encChoiceA",
+          name: "encryptedChoiceA",
           type: "bytes",
         },
         {
           internalType: "bytes",
-          name: "encChoiceB",
+          name: "encryptedChoiceB",
           type: "bytes",
         },
         {
@@ -282,9 +308,9 @@ export const gameContractConfig = {
           type: "bytes",
         },
         {
-          internalType: "uint256",
+          internalType: "int256",
           name: "revealedDifference",
-          type: "uint256",
+          type: "int256",
         },
         {
           internalType: "address",
@@ -295,6 +321,29 @@ export const gameContractConfig = {
           internalType: "bool",
           name: "finished",
           type: "bool",
+        },
+        {
+          internalType: "uint256",
+          name: "betAmount",
+          type: "uint256",
+        },
+        {
+          internalType: "bool",
+          name: "fundsDistributed",
+          type: "bool",
+        },
+      ],
+      stateMutability: "view",
+      type: "function",
+    },
+    {
+      inputs: [],
+      name: "getContractBalance",
+      outputs: [
+        {
+          internalType: "uint256",
+          name: "",
+          type: "uint256",
         },
       ],
       stateMutability: "view",
@@ -347,13 +396,13 @@ export const gameContractConfig = {
         },
         {
           internalType: "bytes",
-          name: "diffCipher",
+          name: "differenceCipher",
           type: "bytes",
         },
         {
-          internalType: "uint256",
+          internalType: "int256",
           name: "revealedDiff",
-          type: "uint256",
+          type: "int256",
         },
       ],
       stateMutability: "view",
