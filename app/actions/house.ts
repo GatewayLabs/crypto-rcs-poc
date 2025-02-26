@@ -5,6 +5,7 @@ import { gameContractConfig } from "@/config/contracts";
 import { publicClient, walletClient } from "@/config/server";
 import { parseEventLogs } from "viem";
 import * as paillier from "paillier-bigint";
+import { DEFAULT_BET_AMOUNT_WEI } from "@/hooks/use-game-contract";
 
 function generateHouseMove(): Move {
   const moves: Move[] = ["ROCK", "PAPER", "SCISSORS"];
@@ -18,16 +19,26 @@ function generateHouseMove(): Move {
   return "ROCK";
 }
 
-export async function playHouseMove(gameId: number) {
+export async function playHouseMove(
+  gameId: number,
+  betAmount = DEFAULT_BET_AMOUNT_WEI
+) {
   try {
-    // First check if the game exists and needs a house move
+    if (gameId === undefined || gameId === null || isNaN(gameId)) {
+      throw new Error("Invalid game ID");
+    }
+
+    const validBetAmount =
+      betAmount && !isNaN(Number(betAmount))
+        ? betAmount
+        : DEFAULT_BET_AMOUNT_WEI;
+
     const gameData = await publicClient.readContract({
       ...gameContractConfig,
       functionName: "getGameInfo",
       args: [BigInt(gameId)],
     });
 
-    // If game doesn't exist or already has a second player, return
     if (
       !gameData ||
       gameData[1] !== "0x0000000000000000000000000000000000000000"
@@ -35,7 +46,6 @@ export async function playHouseMove(gameId: number) {
       throw new Error("Game is not available for house move");
     }
 
-    // Generate and encrypt house move
     const houseMove = generateHouseMove();
     const encryptedMove = (await encryptMove(houseMove)) as `0x${string}`;
 
@@ -44,6 +54,7 @@ export async function playHouseMove(gameId: number) {
       functionName: "joinGame",
       args: [BigInt(gameId), encryptedMove],
       account: walletClient.account,
+      value: validBetAmount,
     });
 
     const hash = await walletClient.writeContract(request);
@@ -109,8 +120,7 @@ export async function resolveGame(gameId: number) {
     });
 
     // Get difference cipher
-    const result = events[0]?.args?.differenceCiphertext;
-    console.log("Difference cipher:", result);
+    const result = events[0]?.args?.differenceCipher;
 
     // Finalize game
     const publicKeyN = BigInt("0x" + process.env.NEXT_PUBLIC_PAILLIER_N);

@@ -1,10 +1,16 @@
 import { useMutation } from "@tanstack/react-query";
-import { useGameContract } from "./use-game-contract";
+import {
+  useGameContract,
+  DEFAULT_BET_AMOUNT,
+  DEFAULT_BET_AMOUNT_WEI,
+} from "./use-game-contract";
 import { Move } from "@/lib/crypto";
 import { GamePhase, GameResult } from "@/types/game";
 import { useEffect, useCallback } from "react";
 import { playHouseMove, resolveGame } from "@/app/actions/house";
 import { useGameUIStore } from "@/stores/game-ui-store";
+import { useLeaderboard } from "./use-leaderboard";
+import { useMatches } from "./use-matches";
 
 export function useGame() {
   const {
@@ -15,6 +21,9 @@ export function useGame() {
     finalizeGame,
     gameInfo,
   } = useGameContract();
+
+  const { updateLeaderboard } = useLeaderboard();
+  const { addMatch } = useMatches();
 
   const gameUIState = useGameUIStore();
   const {
@@ -27,6 +36,16 @@ export function useGame() {
     setTransactionHash,
     resetGameState,
   } = useGameUIStore();
+
+  const updateStats = useCallback(async () => {
+    console.log("Updating game stats...");
+    try {
+      await Promise.all([updateLeaderboard(), addMatch()]);
+      console.log("Game stats updated successfully");
+    } catch (error) {
+      console.error("Error updating game stats:", error);
+    }
+  }, [updateLeaderboard, addMatch]);
 
   function determineGamePhase(gameInfo: any) {
     if (!gameInfo) return GamePhase.CHOOSING;
@@ -49,15 +68,16 @@ export function useGame() {
   }
 
   const createGameMutation = useMutation({
-    mutationFn: async (move: Move) => {
+    mutationFn: async (params: { move: Move; betAmount?: bigint }) => {
+      const { move, betAmount = DEFAULT_BET_AMOUNT_WEI } = params;
       try {
         setPlayerMove(move);
         setPhase(GamePhase.SELECTED);
 
-        const gameId = await contractCreateGame(move);
+        const gameId = await contractCreateGame(move, betAmount);
         setGameId(gameId);
 
-        const houseResult = await playHouseMove(gameId);
+        const houseResult = await playHouseMove(gameId, betAmount);
         if (!houseResult.success) {
           throw new Error(houseResult.error);
         }
@@ -86,6 +106,8 @@ export function useGame() {
           setTransactionHash(resolveResult.hash);
         }
 
+        await updateStats();
+
         return {
           gameId,
           playerMove: move,
@@ -93,6 +115,7 @@ export function useGame() {
           result: gameResult,
           transactionHash: resolveResult.hash,
           houseMove: houseResult.move,
+          betAmount,
         };
       } catch (error) {
         if (error instanceof Error) {
@@ -107,12 +130,20 @@ export function useGame() {
   });
 
   const joinGameMutation = useMutation({
-    mutationFn: async ({ gameId, move }: { gameId: number; move: Move }) => {
+    mutationFn: async ({
+      gameId,
+      move,
+      betAmount = DEFAULT_BET_AMOUNT_WEI,
+    }: {
+      gameId: number;
+      move: Move;
+      betAmount?: bigint;
+    }) => {
       try {
         setPlayerMove(move);
         setPhase(GamePhase.WAITING);
 
-        await contractJoinGame(gameId, move);
+        await contractJoinGame(gameId, move, betAmount);
 
         const resolveResult = await resolveGame(gameId);
         if (!resolveResult.success) {
@@ -133,12 +164,15 @@ export function useGame() {
           setTransactionHash(resolveResult.hash);
         }
 
+        await updateStats();
+
         return {
           gameId,
           playerMove: move,
           phase: GamePhase.FINISHED,
           result: gameResult,
           transactionHash: resolveResult.hash,
+          betAmount,
         };
       } catch (error) {
         if (error instanceof Error) {
@@ -176,6 +210,7 @@ export function useGame() {
       diffMod3: number;
     }) => {
       await finalizeGame(gameId, diffMod3);
+      await updateStats();
       return { gameId, diffMod3 };
     },
   });
@@ -191,8 +226,16 @@ export function useGame() {
 
     if (currentPhase !== gameUIState.phase) {
       setPhase(currentPhase);
+
+      if (
+        currentPhase === GamePhase.FINISHED &&
+        gameUIState.phase !== GamePhase.FINISHED
+      ) {
+        // Game just finished according to contract data
+        updateStats();
+      }
     }
-  }, [gameInfo, gameUIState.gameId, gameUIState.phase, setPhase]);
+  }, [gameInfo, gameUIState.gameId, gameUIState.phase, setPhase, updateStats]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -203,6 +246,7 @@ export function useGame() {
         ) {
           if (gameUIState.result) {
             setPhase(GamePhase.FINISHED);
+            updateStats();
           }
         }
       }
@@ -213,24 +257,37 @@ export function useGame() {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [gameUIState.gameId, gameUIState.phase, gameUIState.result, setPhase]);
+  }, [
+    gameUIState.gameId,
+    gameUIState.phase,
+    gameUIState.result,
+    setPhase,
+    updateStats,
+  ]);
 
   return {
     gameState: gameUIState,
     phase: gameUIState.phase,
-    createGame: (move: Move) => createGameMutation.mutate(move),
-    joinGame: (gameId: number, move: Move) =>
-      joinGameMutation.mutate({ gameId, move }),
+    createGame: (move: Move, betAmount = DEFAULT_BET_AMOUNT_WEI) =>
+      createGameMutation.mutate({ move, betAmount }),
+    joinGame: (
+      gameId: number,
+      move: Move,
+      betAmount = DEFAULT_BET_AMOUNT_WEI
+    ) => joinGameMutation.mutate({ gameId, move, betAmount }),
     submitMoves: (gameId: number) => revealGameMutation.mutate(gameId),
     computeDifference: (gameId: number) =>
       computeDifferenceMutation.mutate(gameId),
     finalizeGame: (gameId: number, diffMod3: number) =>
       finalizeGameMutation.mutate({ gameId, diffMod3 }),
     resetGame,
+    defaultBetAmount: DEFAULT_BET_AMOUNT,
+    defaultBetAmountWei: DEFAULT_BET_AMOUNT_WEI,
     isCreatingGame: createGameMutation.isPending,
     isJoiningGame: joinGameMutation.isPending,
     isRevealingGame: revealGameMutation.isPending,
     isComputingDifference: computeDifferenceMutation.isPending,
     isFinalizingGame: finalizeGameMutation.isPending,
+    updateStats,
   };
 }

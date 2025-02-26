@@ -7,7 +7,7 @@ export default function MatchHistory() {
   const { matches } = useMatches();
 
   const getExplorerUrl = (txHash: string) => {
-    return `https://gateway-shield-testnet.explorer.caldera.xyz/tx/${txHash}`;
+    return `https://sepolia.basescan.org/tx/${txHash}`;
   };
 
   const getMoveImage = (move: "ROCK" | "PAPER" | "SCISSORS") => {
