@@ -161,7 +161,8 @@ export default function GameBoard() {
                 !address ||
                 isCreatingGame ||
                 isJoiningGame ||
-                phase !== GamePhase.CHOOSING
+                phase !== GamePhase.CHOOSING ||
+                betValue === 0
               }
               aria-selected={
                 typeof playerMove === "string" && playerMove === button.label
