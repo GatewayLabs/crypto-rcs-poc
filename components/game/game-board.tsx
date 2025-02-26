@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useGame } from "@/context/game-context";
+import { useEffect } from "react";
 import { useAccount } from "wagmi";
 import { Move } from "@/lib/crypto";
 import { soundEffects } from "@/lib/sounds/sound-effects";
@@ -10,12 +9,9 @@ import GameResult from "@/components/game/game-result";
 import TransactionModal from "@/components/game/transaction-modal";
 import { ToastContainer } from "@/components/ui/toast";
 import ErrorDialog from "@/components/game/error-dialog";
-
-interface GameToast {
-  id: string;
-  message: string;
-  type: "success" | "error" | "info";
-}
+import { useGame } from "@/hooks/use-game";
+import { GamePhase } from "@/types/game";
+import { useGameUIStore, GameToast } from "@/stores/game-ui-store";
 
 const GAME_BUTTONS = [
   {
@@ -33,29 +29,29 @@ const GAME_BUTTONS = [
 ];
 
 export default function GameBoard() {
+  const { createGame, joinGame, resetGame, isCreatingGame, isJoiningGame } =
+    useGame();
+
+  // Get UI state from Zustand
   const {
     playerMove,
     houseMove,
     phase,
     result,
-    score,
     error,
     gameId,
-    dispatch,
-    createGame,
-    joinGame,
-    isLoading,
-  } = useGame();
+    toasts,
+    isTransactionModalOpen,
+    transactionType,
+    addToast,
+    dismissToast,
+    setTransactionModal,
+  } = useGameUIStore();
 
   const { address } = useAccount();
-  const [toasts, setToasts] = useState<GameToast[]>([]);
-  const [showTransactionModal, setShowTransactionModal] = useState(false);
-  const [transactionType, setTransactionType] = useState<
-    "approve" | "validate"
-  >("approve");
 
   useEffect(() => {
-    if (phase === "FINISHED" && result) {
+    if (phase === GamePhase.FINISHED && result) {
       if (result === "WIN") soundEffects.win();
       else if (result === "LOSE") soundEffects.lose();
       else soundEffects.draw();
@@ -64,35 +60,20 @@ export default function GameBoard() {
 
   useEffect(() => {
     // Show transaction modal based on phase
-    if (phase === "SELECTED") {
-      setTransactionType("approve");
-      setShowTransactionModal(true);
-    } else if (phase === "WAITING" || phase === "REVEALING") {
-      setTransactionType("validate");
-      setShowTransactionModal(true);
+    if (phase === GamePhase.SELECTED) {
+      setTransactionModal(true, "approve");
+    } else if (phase === GamePhase.WAITING || phase === GamePhase.REVEALING) {
+      setTransactionModal(true, "validate");
     } else {
-      setShowTransactionModal(false);
+      setTransactionModal(false);
     }
-  }, [phase]);
-
-  const addToast = (message: string, type: "success" | "info") => {
-    const id = Math.random().toString(36).substr(2, 9);
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      dismissToast(id);
-    }, 5000);
-  };
-
-  const dismissToast = (id: string) => {
-    setToasts((prev) => prev.filter((toast) => toast.id !== id));
-  };
+  }, [phase, setTransactionModal]);
 
   const handleMove = async (move: Move) => {
-    if (phase !== "CHOOSING" || !address || isLoading) return;
+    if (phase !== GamePhase.CHOOSING || !address) return;
 
     try {
       soundEffects.select();
-      dispatch({ type: "SELECT_MOVE", move });
 
       if (!gameId) {
         addToast("Creating new game...", "info");
@@ -104,26 +85,31 @@ export default function GameBoard() {
         addToast("Joined game!", "success");
       }
     } catch (error) {
-      dispatch({
-        type: "SET_ERROR",
-        error: error instanceof Error ? error.message : "Failed to make move",
-      });
+      addToast("Error processing move", "info");
+      console.error("Error making move:", error);
     }
   };
 
   const handlePlayAgain = () => {
     soundEffects.click();
-    dispatch({ type: "RESET_GAME" });
+    resetGame();
     addToast("Starting new game!", "info");
   };
 
-  if (phase === "FINISHED" && playerMove && houseMove && result && gameId) {
+  if (
+    phase === GamePhase.FINISHED &&
+    playerMove &&
+    houseMove &&
+    result &&
+    gameId !== null &&
+    gameId !== undefined
+  ) {
     return (
       <GameResult
         playerMove={playerMove}
         houseMove={houseMove}
         result={result}
-        gameId={gameId.toString()}
+        gameId={String(gameId)}
         onPlayAgain={handlePlayAgain}
       />
     );
@@ -136,7 +122,7 @@ export default function GameBoard() {
           <div className="text-zinc-400 text-sm leading-none max-md:max-w-full">
             {!address
               ? "Connect your wallet to play"
-              : phase === "CHOOSING"
+              : phase === GamePhase.CHOOSING
               ? gameId
                 ? "Join the game..."
                 : "Make your move to start the match"
@@ -145,11 +131,6 @@ export default function GameBoard() {
           <div className="text-white text-5xl font-bold leading-none tracking-[-1.2px] mt-3 max-md:max-w-full max-md:text-[40px]">
             Let&apos;s rock on-chain
           </div>
-          {score > 0 && (
-            <div className="text-[rgba(141,12,255,1)] text-xl mt-2">
-              Score: {score.toString()}
-            </div>
-          )}
         </div>
         <div className="flex w-full items-center gap-4 flex-wrap mt-8 max-md:max-w-full group max-md:flex-col">
           {GAME_BUTTONS.map((button) => (
@@ -158,21 +139,27 @@ export default function GameBoard() {
               label={button.label}
               imageSrc={button.imageSrc}
               onClick={() => handleMove(button.label as Move)}
-              disabled={!address || isLoading || phase !== "CHOOSING"}
-              aria-selected={playerMove === button.label}
+              disabled={
+                !address ||
+                isCreatingGame ||
+                isJoiningGame ||
+                phase !== GamePhase.CHOOSING
+              }
+              aria-selected={
+                typeof playerMove === "string" && playerMove === button.label
+              }
             />
           ))}
         </div>
       </div>
 
-      <TransactionModal isOpen={showTransactionModal} type={transactionType} />
-      <ErrorDialog
-        isOpen={!!error}
-        onClose={() => dispatch({ type: "RESET_GAME" })}
-        error={error || ""}
+      <TransactionModal
+        isOpen={isTransactionModalOpen}
+        type={transactionType}
       />
+      <ErrorDialog isOpen={!!error} onClose={resetGame} error={error || ""} />
       <ToastContainer
-        toasts={toasts.filter((t) => t.type !== "error")}
+        toasts={toasts.filter((t: GameToast) => t.type !== "error")}
         onDismiss={dismissToast}
       />
     </>

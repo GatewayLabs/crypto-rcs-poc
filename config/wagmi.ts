@@ -7,5 +7,5 @@ export const config = getDefaultConfig({
   appName: "Crypto Rock Paper Scissors",
   projectId,
   chains: [shield],
-  ssr: false,
+  ssr: true,
 });

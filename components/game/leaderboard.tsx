@@ -1,9 +1,9 @@
 "use client";
 
-import { useGame } from "@/context/game-context";
+import { useLeaderboard } from "@/hooks/use-leaderboard";
 
 export default function Leaderboard() {
-  const { leaderboard } = useGame();
+  const { leaderboard } = useLeaderboard();
 
   const sortedLeaderboard = [...leaderboard].sort((a, b) => b.score - a.score);
 

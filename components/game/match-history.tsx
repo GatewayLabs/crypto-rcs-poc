@@ -1,10 +1,10 @@
 "use client";
 
-import { useGame } from "@/context/game-context";
+import { useMatches } from "@/hooks/use-matches";
 import { ExternalLink } from "lucide-react";
 
 export default function MatchHistory() {
-  const { history } = useGame();
+  const { matches } = useMatches();
 
   const getExplorerUrl = (txHash: string) => {
     return `https://gateway-shield-testnet.explorer.caldera.xyz/tx/${txHash}`;
@@ -48,14 +48,14 @@ export default function MatchHistory() {
                 </tr>
               </thead>
               <tbody>
-                {history.length === 0 ? (
+                {matches.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="text-center py-4 text-zinc-400">
                       No games played yet
                     </td>
                   </tr>
                 ) : (
-                  history.map((game) => (
+                  matches.map((game) => (
                     <tr key={game.id}>
                       <td className="px-4 min-h-14">
                         <div className="text-neutral-50 text-sm font-normal leading-none my-auto py-4">
@@ -117,7 +117,7 @@ export default function MatchHistory() {
         </div>
         <div className="flex w-full items-center gap-[40px_100px] text-sm leading-6 justify-between flex-wrap pt-4 max-md:max-w-full">
           <div className="text-[color:var(--muted-foreground)] font-normal self-stretch my-auto">
-            Showing {history.length} of {history.length} row(s)
+            Showing {matches.length} of {matches.length} row(s)
           </div>
           <div className="self-stretch flex items-center gap-2 text-[color:var(--primary)] font-medium whitespace-nowrap my-auto pl-2">
             <button
