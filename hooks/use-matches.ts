@@ -234,6 +234,11 @@ export function useMatches() {
     staleTime: 5000,
   });
 
+  // Calculate total earnings from all matches
+  const totalEarnings = matches.reduce((total, match) => {
+    return total + (match.betValue || 0);
+  }, 0);
+
   const addMatch = async () => {
     try {
       await refetch();
@@ -253,5 +258,6 @@ export function useMatches() {
     isLoading,
     addMatch,
     clearHistory: clearHistoryMutation,
+    totalEarnings,
   };
 }
