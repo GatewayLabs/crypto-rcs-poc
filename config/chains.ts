@@ -1,20 +1,20 @@
 import { Chain } from "wagmi/chains";
 
-export const shield = {
+export const monad = {
   id: 678746,
   rpcUrls: {
-    default: { http: ["https://gateway-shield-testnet.rpc.caldera.xyz/http"] },
+    default: { http: ["https://testnet-rpc.monad.xyz/"] },
   },
-  name: "Gateway Shield Testnet",
+  name: "Monad Testnet",
   nativeCurrency: {
-    name: "Gateway",
-    symbol: "OWN",
+    name: "Monad",
+    symbol: "MON",
     decimals: 18,
   },
   blockExplorers: {
     default: {
-      name: "Gateway Shield Explorer",
-      url: "https://gateway-shield-testnet.explorer.caldera.xyz/",
+      name: "Monad Explorer",
+      url: "https://testnet.monadexplorer.com/",
     },
   },
 } as const satisfies Chain;
