@@ -3,11 +3,20 @@
 import { useMatches } from "@/hooks/use-matches";
 import { ExternalLink } from "lucide-react";
 import MatchesSummary from "./matches-summary";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function MatchHistory() {
   const { matches } = useMatches();
   const [currentPage, setCurrentPage] = useState(1);
+  const [currentTime, setCurrentTime] = useState(Date.now());
+
+  // Update current time every minute to keep relative times fresh
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Pagination settings
   const rowsPerPage = 5;
@@ -29,6 +38,25 @@ export default function MatchHistory() {
     if (currentPage > 1) {
       setCurrentPage(currentPage - 1);
     }
+  };
+
+  const formatRelativeTime = (timestamp: number) => {
+    const now = currentTime;
+    const diffInSeconds = Math.floor((now - timestamp) / 1000);
+
+    if (diffInSeconds < 5) return "just now";
+    if (diffInSeconds < 60) return `${diffInSeconds}s ago`;
+
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 30) return `${diffInDays}d ago`;
+
+    return new Date(timestamp).toLocaleDateString();
   };
 
   const getExplorerUrl = (txHash: string) => {
@@ -76,10 +104,10 @@ export default function MatchHistory() {
                   <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3">
                     House move
                   </th>
-                  <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3 w-[108px]">
+                  <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3">
                     Result
                   </th>
-                  <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3 w-[80px]">
+                  <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3">
                     Value
                   </th>
                   <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3">
@@ -99,7 +127,7 @@ export default function MatchHistory() {
                     <tr key={game.id}>
                       <td className="px-4 min-h-14">
                         <div className="text-neutral-50 text-sm font-normal leading-none my-auto py-4">
-                          {new Date(game.timestamp).toLocaleTimeString()}
+                          {formatRelativeTime(game.timestamp)}
                         </div>
                       </td>
                       <td className="px-4 min-h-14">
@@ -128,7 +156,8 @@ export default function MatchHistory() {
                               : "text-yellow-500"
                           }`}
                         >
-                          {game.result}
+                          {game.result.slice(0, 1).toUpperCase() +
+                            game.result.slice(1).toLowerCase()}
                         </div>
                       </td>
                       <td className="px-4 min-h-14 w-[80px]">
@@ -143,11 +172,8 @@ export default function MatchHistory() {
                               href={getExplorerUrl(game.transactionHash)}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-neutral-50 hover:text-blue-400 transition-colors flex items-center gap-2"
+                              className="text-white transition-colors flex items-center gap-2"
                             >
-                              <span className="text-sm font-normal leading-none">
-                                {game.transactionHash.slice(0, 8)}
-                              </span>
                               <ExternalLink className="w-4 h-4" />
                             </a>
                           )}
