@@ -44,6 +44,15 @@ export default function MatchHistory() {
     return images[move];
   };
 
+  const formatBetValue = (value?: number) => {
+    if (value === undefined) return "0";
+    if (value === 0) return "0";
+    if (value > 0) {
+      return `+${value.toFixed(2)}`;
+    }
+    return value.toFixed(2);
+  };
+
   return (
     <div className="w-full px-6 py-8 max-md:max-w-full max-md:px-5 flex flex-col flex-grow">
       <div className="text-white text-2xl font-bold leading-none tracking-[-0.6px] max-md:max-w-full">
@@ -70,6 +79,9 @@ export default function MatchHistory() {
                   <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3 w-[108px]">
                     Result
                   </th>
+                  <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3 w-[80px]">
+                    Value
+                  </th>
                   <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3">
                     Tx
                   </th>
@@ -78,7 +90,7 @@ export default function MatchHistory() {
               <tbody>
                 {matches.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="text-center py-4 text-zinc-400">
+                    <td colSpan={6} className="text-center py-4 text-zinc-400">
                       No games played yet
                     </td>
                   </tr>
@@ -117,6 +129,11 @@ export default function MatchHistory() {
                           }`}
                         >
                           {game.result}
+                        </div>
+                      </td>
+                      <td className="px-4 min-h-14 w-[80px]">
+                        <div className="text-sm font-normal leading-none my-auto">
+                          {formatBetValue(game.betValue)}
                         </div>
                       </td>
                       <td className="px-4 min-h-14">

@@ -25,6 +25,7 @@ export interface GameHistory {
   playerAddress: string;
   transactionHash?: string;
   gameId: number | null;
+  betValue: number;
 }
 
 export interface LeaderboardEntry {
