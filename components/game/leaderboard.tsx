@@ -11,9 +11,14 @@ export default function Leaderboard() {
   const { setPlayerRank, setPlayerSummary } = useGameUIStore();
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Pagination settings
   const rowsPerPage = 20;
-  const sortedLeaderboard = [...leaderboard].sort((a, b) => b.score - a.score);
+  const sortedLeaderboard = [...leaderboard].sort((a, b) => {
+    if ("earnings" in a && "earnings" in b) {
+      return b.earnings - a.earnings;
+    }
+    return b.score - a.score;
+  });
+
   const totalPages = Math.ceil(sortedLeaderboard.length / rowsPerPage);
 
   // Get current page data
@@ -42,7 +47,13 @@ export default function Leaderboard() {
       return;
     }
 
-    const sorted = [...leaderboard].sort((a, b) => b.score - a.score);
+    const sorted = [...leaderboard].sort((a, b) => {
+      // Use earnings if available, otherwise fall back to score
+      if ("earnings" in a && "earnings" in b) {
+        return b.earnings - a.earnings;
+      }
+      return b.score - a.score;
+    });
 
     const playerIndex = sorted.findIndex(
       (player) => player.address.toLowerCase() === address.toLowerCase()
@@ -71,26 +82,15 @@ export default function Leaderboard() {
                   <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3">
                     Player
                   </th>
-                  <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3 w-[90px]">
-                    Score
-                  </th>
-                  <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3 w-[169px]">
-                    <div className="flex items-center gap-2">
-                      <span>W/L/D</span>
-                      <img
-                        loading="lazy"
-                        src="https://cdn.builder.io/api/v1/image/assets/7e9fda62d1fd4d2cb4b968860ae91a02/ec91eb3a85b7df1473a6bcef7fec44754c41379594879f16c2297377b3599fad?placeholderIfAbsent=true"
-                        className="aspect-[1] object-contain w-4"
-                        alt="Sort"
-                      />
-                    </div>
+                  <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3 w-[150px]">
+                    Earned (MON)
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {sortedLeaderboard.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="text-center py-4 text-zinc-400">
+                    <td colSpan={3} className="text-center py-4 text-zinc-400">
                       No players yet
                     </td>
                   </tr>
@@ -125,36 +125,13 @@ export default function Leaderboard() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 min-h-14 w-[90px]">
+                      <td className="px-4 min-h-14 w-[150px]">
                         <div className="flex items-center h-14">
-                          <div
-                            className={`text-sm font-normal leading-none ${
-                              player.score > 0
-                                ? "text-[rgba(174,243,66,1)]"
-                                : player.score < 0
-                                ? "text-red-500"
-                                : "text-neutral-50"
-                            }`}
-                          >
-                            {player.score > 0 ? "+" : ""}
-                            {player.score}xp
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 min-h-14 w-[169px]">
-                        <div className="flex items-center h-14">
-                          <div className="text-neutral-50 text-sm font-normal leading-none">
-                            <span className="text-[rgba(174,243,66,1)]">
-                              {player.wins}
-                            </span>
-                            {" / "}
-                            <span className="text-red-500">
-                              {player.losses}
-                            </span>
-                            {" / "}
-                            <span className="text-yellow-500">
-                              {player.draws}
-                            </span>
+                          <div className="text-sm font-normal leading-none">
+                            {"earnings" in player
+                              ? player.earnings.toFixed(2)
+                              : (player.score > 0 ? "+" : "") +
+                                player.score.toString()}
                           </div>
                         </div>
                       </td>

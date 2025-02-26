@@ -2,6 +2,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LeaderboardEntry } from "@/types/game";
 import { useAccount, usePublicClient } from "wagmi";
 import { gameContractConfig } from "@/config/contracts";
+import { DEFAULT_BET_AMOUNT_WEI } from "./use-game-contract";
+import { formatEther } from "viem";
 
 export function useLeaderboard() {
   const { address } = useAccount();
@@ -61,17 +63,26 @@ export function useLeaderboard() {
           toBlock: "latest",
         });
 
-        const gamePlayers: Record<
+        // Game information mapping
+        const gameData: Record<
           string,
-          { playerA: string; playerB: string }
+          {
+            playerA: string;
+            playerB: string;
+            betAmount: bigint;
+          }
         > = {};
 
         createdEvents.forEach((event) => {
           if (event.args && event.args.gameId && event.args.playerA) {
             const gameId = event.args.gameId.toString();
-            gamePlayers[gameId] = {
+
+            const betAmount = event.transactionValue || DEFAULT_BET_AMOUNT_WEI;
+
+            gameData[gameId] = {
               playerA: event.args.playerA.toLowerCase(),
               playerB: "",
+              betAmount: betAmount,
             };
           }
         });
@@ -79,8 +90,12 @@ export function useLeaderboard() {
         joinedEvents.forEach((event) => {
           if (event.args && event.args.gameId && event.args.playerB) {
             const gameId = event.args.gameId.toString();
-            if (gamePlayers[gameId]) {
-              gamePlayers[gameId].playerB = event.args.playerB.toLowerCase();
+            if (gameData[gameId]) {
+              gameData[gameId].playerB = event.args.playerB.toLowerCase();
+
+              if (event.transactionValue) {
+                gameData[gameId].betAmount = DEFAULT_BET_AMOUNT_WEI;
+              }
             }
           }
         });
@@ -93,8 +108,11 @@ export function useLeaderboard() {
           const { gameId, winner, diffMod3 } = event.args;
           if (!gameId) return;
 
-          const game = gamePlayers[gameId.toString()];
+          const game = gameData[gameId.toString()];
           if (!game) return;
+
+          const betAmount = game.betAmount;
+          const etherAmount = Number(formatEther(betAmount));
 
           const processPlayerResult = (
             playerAddr: string,
@@ -102,6 +120,7 @@ export function useLeaderboard() {
             drewGame: boolean
           ) => {
             const normalizedAddr = playerAddr.toLowerCase();
+
             if (!playerStats[normalizedAddr]) {
               playerStats[normalizedAddr] = {
                 address: normalizedAddr,
@@ -110,6 +129,7 @@ export function useLeaderboard() {
                 losses: 0,
                 draws: 0,
                 score: 0,
+                earnings: 0,
               };
             }
 
@@ -120,9 +140,11 @@ export function useLeaderboard() {
             } else if (wonGame) {
               playerStats[normalizedAddr].wins += 1;
               playerStats[normalizedAddr].score += 1;
+              playerStats[normalizedAddr].earnings += etherAmount;
             } else {
               playerStats[normalizedAddr].losses += 1;
               playerStats[normalizedAddr].score -= 1;
+              playerStats[normalizedAddr].earnings -= etherAmount;
             }
           };
 
@@ -136,7 +158,9 @@ export function useLeaderboard() {
           }
         });
 
-        return Object.values(playerStats).sort((a, b) => b.score - a.score);
+        return Object.values(playerStats).sort(
+          (a, b) => b.earnings - a.earnings
+        );
       } catch (error) {
         console.error("Error fetching leaderboard:", error);
         return [] as LeaderboardEntry[];
