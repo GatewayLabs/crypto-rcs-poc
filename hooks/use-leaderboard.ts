@@ -2,8 +2,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { LeaderboardEntry, GameResult } from "@/types/game";
 import { useEffect } from "react";
 import { useGameUIStore } from "@/stores/game-ui-store";
+import { useAccount } from "wagmi";
 
 export function useLeaderboard() {
+  const { address } = useAccount();
   const queryClient = useQueryClient();
   const gameUIState = useGameUIStore();
 
@@ -40,27 +42,20 @@ export function useLeaderboard() {
       gameUIState.result &&
       gameUIState.playerMove
     ) {
-      const lastUpdateTime = localStorage.getItem(
-        `leaderboard_update_${gameUIState.gameId}`
-      );
-
-      if (!lastUpdateTime && gameUIState.gameId) {
-        const userAddress = localStorage.getItem("userAddress") || "";
-
-        if (userAddress) {
-          updateLeaderboardMutation.mutate({
-            address: userAddress,
-            result: gameUIState.result,
-          });
-
-          localStorage.setItem(
-            `leaderboard_update_${gameUIState.gameId}`,
-            Date.now().toString()
-          );
-        }
+      if (address) {
+        updateLeaderboardMutation.mutate({
+          address: address,
+          result: gameUIState.result,
+        });
       }
     }
-  }, [gameUIState, updateLeaderboardMutation]);
+  }, [
+    gameUIState.phase,
+    gameUIState.result,
+    gameUIState.playerMove,
+    updateLeaderboardMutation,
+    address,
+  ]);
 
   function updateLeaderboard(
     leaderboard: LeaderboardEntry[],

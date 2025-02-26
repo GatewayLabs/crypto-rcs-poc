@@ -35,7 +35,7 @@ export function useMatches() {
       if (!address) throw new Error("User address is required");
 
       const newMatch: GameHistory = {
-        id: Math.random().toString(36).substr(2, 9),
+        id: Math.random().toString(36).substring(2, 9),
         timestamp: Date.now(),
         playerMove,
         houseMove,
@@ -45,12 +45,7 @@ export function useMatches() {
         transactionHash,
       };
 
-      const currentMatches = [
-        ...(queryClient.getQueryData<GameHistory[]>(["matches", address]) ||
-          []),
-      ];
-
-      return [newMatch, ...currentMatches];
+      return [newMatch, ...matches];
     },
     onSuccess: (updatedMatches) => {
       if (address) {
@@ -64,7 +59,8 @@ export function useMatches() {
       gameUIState.phase === "FINISHED" &&
       gameUIState.result &&
       gameUIState.playerMove &&
-      gameUIState.houseMove
+      gameUIState.houseMove &&
+      address
     ) {
       const existingMatch = matches.find(
         (match) => match.gameId === gameUIState.gameId
