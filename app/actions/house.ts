@@ -24,6 +24,17 @@ export async function playHouseMove(
   betAmount = DEFAULT_BET_AMOUNT_WEI
 ) {
   try {
+    // Ensure we have a valid gameId and betAmount
+    if (gameId === undefined || gameId === null || isNaN(gameId)) {
+      throw new Error("Invalid game ID");
+    }
+
+    // Ensure betAmount is a valid BigInt
+    const validBetAmount =
+      betAmount && !isNaN(Number(betAmount))
+        ? betAmount
+        : DEFAULT_BET_AMOUNT_WEI;
+
     // First check if the game exists and needs a house move
     const gameData = await publicClient.readContract({
       ...gameContractConfig,
@@ -48,7 +59,7 @@ export async function playHouseMove(
       functionName: "joinGame",
       args: [BigInt(gameId), encryptedMove],
       account: walletClient.account,
-      value: betAmount,
+      value: validBetAmount,
     });
 
     const hash = await walletClient.writeContract(request);
