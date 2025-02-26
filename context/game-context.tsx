@@ -187,7 +187,8 @@ function gameReducer(state: GameStateData, action: GameAction): GameStateData {
       // Don't restore if we're in the middle of a game
       if (
         state.phase !== GamePhase.CHOOSING &&
-        state.phase !== GamePhase.FINISHED
+        state.phase !== GamePhase.FINISHED &&
+        state.phase !== GamePhase.ERROR
       ) {
         console.log("Not restoring - game in progress");
         return state;
@@ -206,6 +207,7 @@ function gameReducer(state: GameStateData, action: GameAction): GameStateData {
         ...state,
         playerMove: action.state.playerMove,
         houseMove: action.state.houseMove,
+        phase: GamePhase.FINISHED,
         result: action.state.result,
         score: action.state.score,
         gameId: action.state.gameId,
@@ -289,30 +291,60 @@ export function GameProvider({ children }: { children: ReactNode }) {
   usePersistentGame(dispatch, serializedState);
 
   useEffect(() => {
-    if (gameInfo) {
-      const [
-        playerA,
-        playerB,
-        winner,
-        finished,
-        bothCommitted,
-        encA,
-        encB,
-        differenceCipher,
-        revealedDiff,
-      ] = gameInfo;
-
-      // Update phase when player B joins
-      if (playerB !== "0x0000000000000000000000000000000000000000") {
-        dispatch({ type: "SET_PHASE", phase: GamePhase.WAITING });
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        if (state.phase === GamePhase.REVEALING || state.phase === GamePhase.WAITING) {
+          if (state.result) {
+            dispatch({ type: "SET_PHASE", phase: GamePhase.FINISHED });
+          }
+        }
       }
+    };
 
-      // Update phase when both moves are committed
-      if (bothCommitted) {
-        dispatch({ type: "SET_PHASE", phase: GamePhase.REVEALING });
-      }
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [state.phase, state.result, dispatch]);
+
+  useEffect(() => {
+    if (!gameInfo || state.phase === GamePhase.FINISHED) {
+      return;
     }
-  }, [gameInfo, address]);
+
+    const hasRestoredKey = `${STORAGE_KEY}-restored-${address}`;
+    const hasRestored = sessionStorage.getItem(hasRestoredKey);
+
+    if (state.phase === GamePhase.CHOOSING && hasRestored === 'true') {
+      return;
+    }
+    
+    const [
+      playerA,
+      playerB,
+      winner,
+      finished,
+      bothCommitted,
+      encA,
+      encB,
+      differenceCipher,
+      revealedDiff,
+    ] = gameInfo;
+
+    if (finished) {
+      dispatch({ type: "SET_PHASE", phase: GamePhase.FINISHED });
+      return;
+    }
+
+    if (playerB !== "0x0000000000000000000000000000000000000000") {
+      dispatch({ type: "SET_PHASE", phase: GamePhase.WAITING });
+    }
+
+    if (bothCommitted) {
+      dispatch({ type: "SET_PHASE", phase: GamePhase.REVEALING });
+    }
+  }, [gameInfo, address, state.phase]);
 
   const contextValue: GameContextValue = {
     ...state,
