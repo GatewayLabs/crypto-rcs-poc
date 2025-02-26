@@ -9,6 +9,8 @@ import { GamePhase, GameResult } from "@/types/game";
 import { useEffect, useCallback } from "react";
 import { playHouseMove, resolveGame } from "@/app/actions/house";
 import { useGameUIStore } from "@/stores/game-ui-store";
+import { useLeaderboard } from "./use-leaderboard";
+import { useMatches } from "./use-matches";
 
 export function useGame() {
   const {
@@ -19,6 +21,9 @@ export function useGame() {
     finalizeGame,
     gameInfo,
   } = useGameContract();
+
+  const { updateLeaderboard } = useLeaderboard();
+  const { addMatch } = useMatches();
 
   const gameUIState = useGameUIStore();
   const {
@@ -31,6 +36,16 @@ export function useGame() {
     setTransactionHash,
     resetGameState,
   } = useGameUIStore();
+
+  const updateStats = useCallback(async () => {
+    console.log("Updating game stats...");
+    try {
+      await Promise.all([updateLeaderboard(), addMatch()]);
+      console.log("Game stats updated successfully");
+    } catch (error) {
+      console.error("Error updating game stats:", error);
+    }
+  }, [updateLeaderboard, addMatch]);
 
   function determineGamePhase(gameInfo: any) {
     if (!gameInfo) return GamePhase.CHOOSING;
@@ -91,6 +106,8 @@ export function useGame() {
           setTransactionHash(resolveResult.hash);
         }
 
+        await updateStats();
+
         return {
           gameId,
           playerMove: move,
@@ -147,6 +164,8 @@ export function useGame() {
           setTransactionHash(resolveResult.hash);
         }
 
+        await updateStats();
+
         return {
           gameId,
           playerMove: move,
@@ -191,6 +210,7 @@ export function useGame() {
       diffMod3: number;
     }) => {
       await finalizeGame(gameId, diffMod3);
+      await updateStats();
       return { gameId, diffMod3 };
     },
   });
@@ -206,8 +226,16 @@ export function useGame() {
 
     if (currentPhase !== gameUIState.phase) {
       setPhase(currentPhase);
+
+      if (
+        currentPhase === GamePhase.FINISHED &&
+        gameUIState.phase !== GamePhase.FINISHED
+      ) {
+        // Game just finished according to contract data
+        updateStats();
+      }
     }
-  }, [gameInfo, gameUIState.gameId, gameUIState.phase, setPhase]);
+  }, [gameInfo, gameUIState.gameId, gameUIState.phase, setPhase, updateStats]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -218,6 +246,7 @@ export function useGame() {
         ) {
           if (gameUIState.result) {
             setPhase(GamePhase.FINISHED);
+            updateStats();
           }
         }
       }
@@ -228,7 +257,13 @@ export function useGame() {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [gameUIState.gameId, gameUIState.phase, gameUIState.result, setPhase]);
+  }, [
+    gameUIState.gameId,
+    gameUIState.phase,
+    gameUIState.result,
+    setPhase,
+    updateStats,
+  ]);
 
   return {
     gameState: gameUIState,
@@ -253,5 +288,6 @@ export function useGame() {
     isRevealingGame: revealGameMutation.isPending,
     isComputingDifference: computeDifferenceMutation.isPending,
     isFinalizingGame: finalizeGameMutation.isPending,
+    updateStats,
   };
 }
