@@ -3,9 +3,33 @@
 import { useMatches } from "@/hooks/use-matches";
 import { ExternalLink } from "lucide-react";
 import MatchesSummary from "./matches-summary";
+import { useState } from "react";
 
 export default function MatchHistory() {
   const { matches } = useMatches();
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Pagination settings
+  const rowsPerPage = 10;
+  const totalPages = Math.ceil(matches.length / rowsPerPage);
+
+  // Get current page matches
+  const indexOfLastMatch = currentPage * rowsPerPage;
+  const indexOfFirstMatch = indexOfLastMatch - rowsPerPage;
+  const currentMatches = matches.slice(indexOfFirstMatch, indexOfLastMatch);
+
+  // Change page handlers
+  const goToNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const goToPreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
 
   const getExplorerUrl = (txHash: string) => {
     return `https://sepolia.basescan.org/tx/${txHash}`;
@@ -59,7 +83,7 @@ export default function MatchHistory() {
                     </td>
                   </tr>
                 ) : (
-                  matches.map((game) => (
+                  currentMatches.map((game) => (
                     <tr key={game.id}>
                       <td className="px-4 min-h-14">
                         <div className="text-neutral-50 text-sm font-normal leading-none my-auto py-4">
@@ -121,18 +145,31 @@ export default function MatchHistory() {
         </div>
         <div className="flex w-full items-center gap-[40px_100px] text-sm leading-6 justify-between flex-wrap pt-4 max-md:max-w-full">
           <div className="text-[color:var(--muted-foreground)] font-normal self-stretch my-auto">
-            Showing {matches.length} of {matches.length} row(s)
+            Showing{" "}
+            {currentMatches.length > 0
+              ? `${indexOfFirstMatch + 1}-${Math.min(
+                  indexOfLastMatch,
+                  matches.length
+                )}`
+              : "0"}{" "}
+            of {matches.length} row(s)
           </div>
           <div className="self-stretch flex items-center gap-2 text-[color:var(--primary)] font-medium whitespace-nowrap my-auto pl-2">
             <button
-              disabled
-              className="bg-zinc-950 border-zinc-700 border self-stretch flex min-w-16 items-center overflow-hidden justify-center my-auto px-2 py-1.5 rounded-md border-solid opacity-50"
+              onClick={goToPreviousPage}
+              disabled={currentPage === 1}
+              className={`bg-zinc-950 border-zinc-700 border self-stretch flex min-w-16 items-center overflow-hidden justify-center my-auto px-2 py-1.5 rounded-md border-solid ${
+                currentPage === 1 ? "opacity-50" : "hover:bg-zinc-900"
+              }`}
             >
               <div className="self-stretch my-auto px-1">Previous</div>
             </button>
             <button
-              disabled
-              className="bg-zinc-950 border-zinc-700 border self-stretch flex min-w-16 items-center overflow-hidden justify-center my-auto px-2 py-1.5 rounded-md border-solid opacity-50"
+              onClick={goToNextPage}
+              disabled={currentPage >= totalPages}
+              className={`bg-zinc-950 border-zinc-700 border self-stretch flex min-w-16 items-center overflow-hidden justify-center my-auto px-2 py-1.5 rounded-md border-solid ${
+                currentPage >= totalPages ? "opacity-50" : "hover:bg-zinc-900"
+              }`}
             >
               <div className="self-stretch my-auto px-1">Next</div>
             </button>
