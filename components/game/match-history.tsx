@@ -3,9 +3,61 @@
 import { useMatches } from "@/hooks/use-matches";
 import { ExternalLink } from "lucide-react";
 import MatchesSummary from "./matches-summary";
+import { useState, useEffect } from "react";
 
 export default function MatchHistory() {
   const { matches } = useMatches();
+  const [currentPage, setCurrentPage] = useState(1);
+  const [currentTime, setCurrentTime] = useState(Date.now());
+
+  // Update current time every minute to keep relative times fresh
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Pagination settings
+  const rowsPerPage = 5;
+  const totalPages = Math.ceil(matches.length / rowsPerPage);
+
+  // Get current page matches
+  const indexOfLastMatch = currentPage * rowsPerPage;
+  const indexOfFirstMatch = indexOfLastMatch - rowsPerPage;
+  const currentMatches = matches.slice(indexOfFirstMatch, indexOfLastMatch);
+
+  // Change page handlers
+  const goToNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const goToPreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const formatRelativeTime = (timestamp: number) => {
+    const now = currentTime;
+    const diffInSeconds = Math.floor((now - timestamp) / 1000);
+
+    if (diffInSeconds < 5) return "just now";
+    if (diffInSeconds < 60) return `${diffInSeconds}s ago`;
+
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 30) return `${diffInDays}d ago`;
+
+    return new Date(timestamp).toLocaleDateString();
+  };
 
   const getExplorerUrl = (txHash: string) => {
     return `https://sepolia.basescan.org/tx/${txHash}`;
@@ -18,6 +70,15 @@ export default function MatchHistory() {
       SCISSORS: "/icons/scissors.svg",
     };
     return images[move];
+  };
+
+  const formatBetValue = (value?: number) => {
+    if (value === undefined) return "0";
+    if (value === 0) return "0";
+    if (value > 0) {
+      return `+${value.toFixed(2)}`;
+    }
+    return value.toFixed(2);
   };
 
   return (
@@ -43,8 +104,11 @@ export default function MatchHistory() {
                   <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3">
                     House move
                   </th>
-                  <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3 w-[108px]">
+                  <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3">
                     Result
+                  </th>
+                  <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3">
+                    Value
                   </th>
                   <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3">
                     Tx
@@ -54,16 +118,16 @@ export default function MatchHistory() {
               <tbody>
                 {matches.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="text-center py-4 text-zinc-400">
+                    <td colSpan={6} className="text-center py-4 text-zinc-400">
                       No games played yet
                     </td>
                   </tr>
                 ) : (
-                  matches.map((game) => (
+                  currentMatches.map((game) => (
                     <tr key={game.id}>
                       <td className="px-4 min-h-14">
                         <div className="text-neutral-50 text-sm font-normal leading-none my-auto py-4">
-                          {new Date(game.timestamp).toLocaleTimeString()}
+                          {formatRelativeTime(game.timestamp)}
                         </div>
                       </td>
                       <td className="px-4 min-h-14">
@@ -92,7 +156,13 @@ export default function MatchHistory() {
                               : "text-yellow-500"
                           }`}
                         >
-                          {game.result}
+                          {game.result.slice(0, 1).toUpperCase() +
+                            game.result.slice(1).toLowerCase()}
+                        </div>
+                      </td>
+                      <td className="px-4 min-h-14 w-[80px]">
+                        <div className="text-sm font-normal leading-none my-auto">
+                          {formatBetValue(game.betValue)}
                         </div>
                       </td>
                       <td className="px-4 min-h-14">
@@ -102,11 +172,8 @@ export default function MatchHistory() {
                               href={getExplorerUrl(game.transactionHash)}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-neutral-50 hover:text-blue-400 transition-colors flex items-center gap-2"
+                              className="text-white transition-colors flex items-center gap-2"
                             >
-                              <span className="text-sm font-normal leading-none">
-                                {game.transactionHash.slice(0, 8)}
-                              </span>
                               <ExternalLink className="w-4 h-4" />
                             </a>
                           )}
@@ -121,18 +188,31 @@ export default function MatchHistory() {
         </div>
         <div className="flex w-full items-center gap-[40px_100px] text-sm leading-6 justify-between flex-wrap pt-4 max-md:max-w-full">
           <div className="text-[color:var(--muted-foreground)] font-normal self-stretch my-auto">
-            Showing {matches.length} of {matches.length} row(s)
+            Showing{" "}
+            {currentMatches.length > 0
+              ? `${indexOfFirstMatch + 1}-${Math.min(
+                  indexOfLastMatch,
+                  matches.length
+                )}`
+              : "0"}{" "}
+            of {matches.length} row(s)
           </div>
           <div className="self-stretch flex items-center gap-2 text-[color:var(--primary)] font-medium whitespace-nowrap my-auto pl-2">
             <button
-              disabled
-              className="bg-zinc-950 border-zinc-700 border self-stretch flex min-w-16 items-center overflow-hidden justify-center my-auto px-2 py-1.5 rounded-md border-solid opacity-50"
+              onClick={goToPreviousPage}
+              disabled={currentPage === 1}
+              className={`bg-zinc-950 border-zinc-700 border self-stretch flex min-w-16 items-center overflow-hidden justify-center my-auto px-2 py-1.5 rounded-md border-solid ${
+                currentPage === 1 ? "opacity-50" : "hover:bg-zinc-900"
+              }`}
             >
               <div className="self-stretch my-auto px-1">Previous</div>
             </button>
             <button
-              disabled
-              className="bg-zinc-950 border-zinc-700 border self-stretch flex min-w-16 items-center overflow-hidden justify-center my-auto px-2 py-1.5 rounded-md border-solid opacity-50"
+              onClick={goToNextPage}
+              disabled={currentPage >= totalPages}
+              className={`bg-zinc-950 border-zinc-700 border self-stretch flex min-w-16 items-center overflow-hidden justify-center my-auto px-2 py-1.5 rounded-md border-solid ${
+                currentPage >= totalPages ? "opacity-50" : "hover:bg-zinc-900"
+              }`}
             >
               <div className="self-stretch my-auto px-1">Next</div>
             </button>

@@ -3,6 +3,8 @@ import { Move } from "@/lib/crypto";
 import { GameHistory, GameResult } from "@/types/game";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAccount, usePublicClient } from "wagmi";
+import { DEFAULT_BET_AMOUNT_WEI } from "./use-game-contract";
+import { formatEther } from "viem";
 
 export function useMatches() {
   const { address } = useAccount();
@@ -72,17 +74,23 @@ export function useMatches() {
             winner?: string;
             diffMod3?: bigint;
             transactionHash?: string;
+            betAmount: bigint;
           }
         > = {};
 
         for (const event of createdEvents) {
           if (event.args && event.args.gameId && event.args.playerA) {
             const gameId = event.args.gameId.toString();
+
+            // Get bet amount from transaction value or use default
+            const betAmount = event.transactionValue || DEFAULT_BET_AMOUNT_WEI;
+
             gameData[gameId] = {
               ...gameData[gameId],
               playerA: event.args.playerA.toLowerCase(),
               playerB: "",
               createdBlock: event.blockNumber,
+              betAmount: betAmount,
             };
           }
         }
@@ -92,6 +100,12 @@ export function useMatches() {
             const gameId = event.args.gameId.toString();
             if (gameData[gameId]) {
               gameData[gameId].playerB = event.args.playerB.toLowerCase();
+
+              // If we have transaction value, update bet amount
+              if (event.transactionValue) {
+                // For simplicity, we'll use the default amount if exact amount not available
+                gameData[gameId].betAmount = DEFAULT_BET_AMOUNT_WEI;
+              }
             }
           }
         }
@@ -131,6 +145,10 @@ export function useMatches() {
             console.error("Error fetching block timestamp:", error);
           }
 
+          // Get bet amount in ETH
+          const betAmount = game.betAmount || DEFAULT_BET_AMOUNT_WEI;
+          const betValueEth = Number(formatEther(betAmount));
+
           // Determine the player's move and opponent's move
           // For Rock-Paper-Scissors with Paillier:
           // diffMod3 = 0 => tie
@@ -139,6 +157,7 @@ export function useMatches() {
           let playerMove: Move;
           let houseMove: Move;
           let result: GameResult;
+          let betValue: number = 0;
 
           // Infer moves from diffMod3
           // This is approximate since we can't know the exact moves without decryption
@@ -162,16 +181,19 @@ export function useMatches() {
             playerMove = randomDrawMove;
             houseMove = randomDrawMove;
             result = GameResult.DRAW;
+            betValue = 0;
           } else if (diffMod3Value === 1) {
             // Player A wins
             if (isPlayerA) {
               playerMove = "ROCK";
               houseMove = "SCISSORS";
               result = GameResult.WIN;
+              betValue = betValueEth;
             } else {
               playerMove = "SCISSORS";
               houseMove = "ROCK";
               result = GameResult.LOSE;
+              betValue = -betValueEth;
             }
           } else {
             // Player B wins
@@ -179,10 +201,12 @@ export function useMatches() {
               playerMove = "ROCK";
               houseMove = "SCISSORS";
               result = GameResult.WIN;
+              betValue = betValueEth;
             } else {
               playerMove = "SCISSORS";
               houseMove = "ROCK";
               result = GameResult.LOSE;
+              betValue = -betValueEth;
             }
           }
 
@@ -195,6 +219,7 @@ export function useMatches() {
             result,
             playerAddress: normalizedAddress,
             transactionHash: game.transactionHash,
+            betValue: betValue,
           });
         }
 
@@ -208,6 +233,11 @@ export function useMatches() {
     refetchInterval: 60000,
     staleTime: 5000,
   });
+
+  // Calculate total earnings from all matches
+  const totalEarnings = matches.reduce((total, match) => {
+    return total + (match.betValue || 0);
+  }, 0);
 
   const addMatch = async () => {
     try {
@@ -228,5 +258,6 @@ export function useMatches() {
     isLoading,
     addMatch,
     clearHistory: clearHistoryMutation,
+    totalEarnings,
   };
 }

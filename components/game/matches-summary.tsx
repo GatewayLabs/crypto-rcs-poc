@@ -1,9 +1,18 @@
 "use client";
 
 import { useGameUIStore } from "@/stores/game-ui-store";
+import { useMatches } from "@/hooks/use-matches";
 
 export default function MatchesSummary() {
   const { playerRank, playerSummary } = useGameUIStore();
+  const { totalEarnings } = useMatches();
+
+  const formattedEarnings =
+    totalEarnings !== undefined ? (
+      `${totalEarnings.toFixed(2)} MON`
+    ) : (
+      <div className="h-8 w-8 bg-zinc-700 rounded animate-pulse"></div>
+    );
 
   return (
     <div className="mt-6 w-full">
@@ -62,7 +71,7 @@ export default function MatchesSummary() {
 
         <div className="flex flex-col items-center justify-center p-4 flex-1">
           <span className="text-zinc-400 text-sm font-normal mb-2">Earned</span>
-          <span className="text-neutral-50 text-2xl font-medium">0.3 MON</span>
+          <span className="text-2xl font-medium">{formattedEarnings}</span>
         </div>
       </div>
     </div>
