@@ -1,6 +1,5 @@
 "use client";
 import { config } from "@/config/wagmi";
-import { GameProvider } from "@/context/game-context";
 import { darkTheme, RainbowKitProvider } from "@rainbow-me/rainbowkit";
 import "@rainbow-me/rainbowkit/styles.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -22,7 +21,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
             overlayBlur: "small",
           })}
         >
-          <GameProvider>{children}</GameProvider>
+          {children}
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>
