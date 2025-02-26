@@ -28,7 +28,7 @@ export default function MatchHistory() {
 
       <MatchesSummary />
 
-      <div className="w-full mt-6 max-md:max-w-full flex flex-col flex-grow">
+      <div className="w-full mt-4 max-md:max-w-full flex flex-col flex-grow">
         <div className="flex-grow">
           <div className="border-zinc-700 border w-full overflow-hidden rounded-lg border-solid max-md:max-w-full">
             <table className="w-full border-collapse">
