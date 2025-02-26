@@ -10,7 +10,7 @@ export default function MatchHistory() {
   const [currentPage, setCurrentPage] = useState(1);
 
   // Pagination settings
-  const rowsPerPage = 10;
+  const rowsPerPage = 5;
   const totalPages = Math.ceil(matches.length / rowsPerPage);
 
   // Get current page matches
