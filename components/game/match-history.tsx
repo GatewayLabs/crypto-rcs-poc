@@ -22,9 +22,9 @@ export default function MatchHistory() {
   return (
     <div className="w-full px-6 py-8 max-md:max-w-full max-md:px-5 flex flex-col flex-grow">
       <div className="text-white text-2xl font-bold leading-none tracking-[-0.6px] max-md:max-w-full">
-        Matches
+        Your matches
       </div>
-      <div className="w-full mt-8 max-md:max-w-full flex flex-col flex-grow">
+      <div className="w-full mt-6 max-md:max-w-full flex flex-col flex-grow">
         <div className="flex-grow">
           <div className="border-zinc-700 border w-full overflow-hidden rounded-lg border-solid max-md:max-w-full">
             <table className="w-full border-collapse">

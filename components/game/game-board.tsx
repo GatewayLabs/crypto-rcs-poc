@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect } from "react";
-import { useAccount } from "wagmi";
-import { Move } from "@/lib/crypto";
-import { soundEffects } from "@/lib/sounds/sound-effects";
+import ErrorDialog from "@/components/game/error-dialog";
 import GameButton from "@/components/game/game-button";
 import GameResult from "@/components/game/game-result";
 import TransactionModal from "@/components/game/transaction-modal";
 import { ToastContainer } from "@/components/ui/toast";
-import ErrorDialog from "@/components/game/error-dialog";
 import { useGame } from "@/hooks/use-game";
+import { Move } from "@/lib/crypto";
+import { soundEffects } from "@/lib/sounds/sound-effects";
+import { GameToast, useGameUIStore } from "@/stores/game-ui-store";
 import { GamePhase } from "@/types/game";
-import { useGameUIStore, GameToast } from "@/stores/game-ui-store";
+import { useEffect, useState } from "react";
+import { useAccount } from "wagmi";
+import GameBet from "./game-bet";
 
 const GAME_BUTTONS = [
   {
@@ -28,9 +29,13 @@ const GAME_BUTTONS = [
   },
 ];
 
+const MAX_BET_VALUE = 10;
+
 export default function GameBoard() {
   const { createGame, joinGame, resetGame, isCreatingGame, isJoiningGame } =
     useGame();
+
+  const [betValue, setBetValue] = useState(0);
 
   // Get UI state from Zustand
   const {
@@ -74,6 +79,8 @@ export default function GameBoard() {
 
     try {
       soundEffects.select();
+
+      console.log("value", betValue);
 
       if (!gameId) {
         addToast("Creating new game...", "info");
@@ -132,7 +139,18 @@ export default function GameBoard() {
             Let&apos;s rock on-chain
           </div>
         </div>
-        <div className="flex w-full items-center gap-4 flex-wrap mt-8 max-md:max-w-full group max-md:flex-col">
+        <div className="text-white mt-8 text-2xl font-bold leading-none tracking-[-0.6px] max-md:max-w-full">
+          Add your bet
+        </div>
+        <GameBet
+          value={betValue}
+          maxValue={MAX_BET_VALUE}
+          onBet={(value) => setBetValue(value)}
+        />
+        <div className="text-white text-2xl mt-8 font-bold leading-none tracking-[-0.6px] max-md:max-w-full">
+          Make your move
+        </div>
+        <div className="flex w-full items-center gap-4 flex-wrap mt-4 max-md:max-w-full group max-md:flex-col">
           {GAME_BUTTONS.map((button) => (
             <GameButton
               key={button.label}
