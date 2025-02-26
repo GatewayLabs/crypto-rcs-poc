@@ -292,8 +292,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        if (state.phase === GamePhase.REVEALING || state.phase === GamePhase.WAITING) {
+      if (document.visibilityState === "visible") {
+        if (
+          state.phase === GamePhase.REVEALING ||
+          state.phase === GamePhase.WAITING
+        ) {
           if (state.result) {
             dispatch({ type: "SET_PHASE", phase: GamePhase.FINISHED });
           }
@@ -301,10 +304,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [state.phase, state.result, dispatch]);
 
@@ -316,10 +319,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const hasRestoredKey = `${STORAGE_KEY}-restored-${address}`;
     const hasRestored = sessionStorage.getItem(hasRestoredKey);
 
-    if (state.phase === GamePhase.CHOOSING && hasRestored === 'true') {
+    if (state.phase === GamePhase.CHOOSING && hasRestored === "true") {
       return;
     }
-    
+
     const [
       playerA,
       playerB,
