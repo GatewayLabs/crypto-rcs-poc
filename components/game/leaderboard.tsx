@@ -1,9 +1,31 @@
 "use client";
 
 import { useLeaderboard } from "@/hooks/use-leaderboard";
+import { useGameUIStore } from "@/stores/game-ui-store";
+import { useEffect } from "react";
+import { useAccount } from "wagmi";
 
 export default function Leaderboard() {
   const { leaderboard } = useLeaderboard();
+  const { address } = useAccount();
+  const { setPlayerRank, setPlayerSummary } = useGameUIStore();
+
+  useEffect(() => {
+    if (!Array.isArray(leaderboard) || leaderboard.length === 0 || !address) {
+      return;
+    }
+
+    const sorted = [...leaderboard].sort((a, b) => b.score - a.score);
+
+    const playerIndex = sorted.findIndex(
+      (player) => player.address.toLowerCase() === address.toLowerCase()
+    );
+
+    const playerSummary = playerIndex !== -1 ? sorted[playerIndex] : null;
+
+    setPlayerRank(playerIndex !== -1 ? playerIndex + 1 : 0);
+    setPlayerSummary(playerSummary);
+  }, [address, leaderboard, setPlayerRank, setPlayerSummary]);
 
   const sortedLeaderboard = [...leaderboard].sort((a, b) => b.score - a.score);
 

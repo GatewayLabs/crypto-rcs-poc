@@ -2,6 +2,7 @@
 
 import { useMatches } from "@/hooks/use-matches";
 import { ExternalLink } from "lucide-react";
+import MatchesSummary from "./matches-summary";
 
 export default function MatchHistory() {
   const { matches } = useMatches();
@@ -24,6 +25,9 @@ export default function MatchHistory() {
       <div className="text-white text-2xl font-bold leading-none tracking-[-0.6px] max-md:max-w-full">
         Your matches
       </div>
+
+      <MatchesSummary />
+
       <div className="w-full mt-6 max-md:max-w-full flex flex-col flex-grow">
         <div className="flex-grow">
           <div className="border-zinc-700 border w-full overflow-hidden rounded-lg border-solid max-md:max-w-full">

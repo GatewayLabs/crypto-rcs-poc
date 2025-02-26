@@ -1,6 +1,6 @@
-import { create } from "zustand";
 import { Move } from "@/lib/crypto";
-import { GamePhase, GameResult } from "@/types/game";
+import { GamePhase, GameResult, LeaderboardEntry } from "@/types/game";
+import { create } from "zustand";
 
 export interface GameToast {
   id: string;
@@ -17,6 +17,8 @@ interface GameUIState {
   error: string | null;
   gameId: number | null;
   transactionHash: string | null;
+  playerRank: number | null;
+  playerSummary: LeaderboardEntry | null;
 
   // Transaction modal state
   isTransactionModalOpen: boolean;
@@ -32,6 +34,8 @@ interface GameUIState {
   setResult: (result: GameResult | null) => void;
   setError: (error: string | null) => void;
   setGameId: (id: number | null) => void;
+  setPlayerRank: (rank: number | null) => void;
+  setPlayerSummary: (summary: LeaderboardEntry | null) => void;
   setTransactionHash: (hash: string | null) => void;
 
   // Transaction modal actions
@@ -55,6 +59,8 @@ export const useGameUIStore = create<GameUIState>((set) => ({
   error: null,
   gameId: null,
   transactionHash: null,
+  playerRank: null,
+  playerSummary: null,
 
   // Transaction modal initial state
   isTransactionModalOpen: false,
@@ -71,6 +77,9 @@ export const useGameUIStore = create<GameUIState>((set) => ({
   setError: (error: string | null) => set({ error }),
   setGameId: (id: number | null) => set({ gameId: id }),
   setTransactionHash: (hash: string | null) => set({ transactionHash: hash }),
+  setPlayerRank: (rank: number | null) => set({ playerRank: rank }),
+  setPlayerSummary: (summary: LeaderboardEntry | null) =>
+    set({ playerSummary: summary }),
 
   // Transaction modal actions
   setTransactionModal: (
