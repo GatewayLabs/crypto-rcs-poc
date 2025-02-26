@@ -11,6 +11,10 @@ import {
 import { useCallback } from "react";
 import { parseEventLogs } from "viem";
 
+// Default bet amount in ETH
+export const DEFAULT_BET_AMOUNT = 0.01;
+export const DEFAULT_BET_AMOUNT_WEI = BigInt(DEFAULT_BET_AMOUNT * 10 ** 18);
+
 export function useGameContract(gameId?: number) {
   const publicClient = usePublicClient();
 
@@ -31,7 +35,7 @@ export function useGameContract(gameId?: number) {
   } = useWriteContract();
 
   const createGame = useCallback(
-    async (move: Move) => {
+    async (move: Move, betAmount = DEFAULT_BET_AMOUNT_WEI) => {
       try {
         const encryptedMove = await encryptMove(move);
 
@@ -40,6 +44,7 @@ export function useGameContract(gameId?: number) {
           ...gameContractConfig,
           functionName: "createGame",
           args: [encryptedMove as `0x${string}`],
+          value: betAmount, // Add bet amount
         });
 
         // Wait for transaction receipt
@@ -62,13 +67,14 @@ export function useGameContract(gameId?: number) {
   );
 
   const joinGame = useCallback(
-    async (gameId: number, move: Move) => {
+    async (gameId: number, move: Move, betAmount = DEFAULT_BET_AMOUNT_WEI) => {
       try {
         const encryptedMove = await encryptMove(move);
         await writeContract({
           ...gameContractConfig,
           functionName: "joinGame",
           args: [BigInt(gameId), encryptedMove as `0x${string}`],
+          value: betAmount, // Add bet amount
         });
       } catch (error) {
         console.error("Error joining game:", error);
