@@ -2,7 +2,7 @@
 
 import ErrorDialog from "@/components/game/error-dialog";
 import GameButton from "@/components/game/game-button";
-import GameResult from "@/components/game/game-result";
+import GameResultView from "@/components/game/game-result";
 import TransactionModal from "@/components/game/transaction-modal";
 import { ToastContainer } from "@/components/ui/toast";
 import { useGame } from "@/hooks/use-game";
@@ -110,12 +110,13 @@ export default function GameBoard() {
     gameId !== undefined
   ) {
     return (
-      <GameResult
+      <GameResultView
         playerMove={playerMove}
         houseMove={houseMove}
         result={result}
         gameId={String(gameId)}
         onPlayAgain={handlePlayAgain}
+        value={betValue}
       />
     );
   }

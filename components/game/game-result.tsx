@@ -1,4 +1,6 @@
 import { Move } from "@/lib/crypto";
+import { GameResult } from "@/types/game";
+import GameBetResult from "./game-bet-result";
 
 const MOVE_IMAGES = {
   ROCK: {
@@ -54,21 +56,23 @@ const customStyles = `
   }
 `;
 
-interface GameResultProps {
+interface GameResultViewProps {
   playerMove: Move;
   houseMove: Move;
-  result: "WIN" | "LOSE" | "DRAW";
+  result: GameResult;
   gameId: string;
   onPlayAgain: () => void;
+  value: number;
 }
 
-export default function GameResult({
+export default function GameResultView({
   playerMove,
   houseMove,
   result,
   gameId,
   onPlayAgain,
-}: GameResultProps) {
+  value,
+}: GameResultViewProps) {
   // Color schemes based on result
   const colorSchemes = {
     DRAW: {
@@ -96,7 +100,11 @@ export default function GameResult({
 
   const playerResult = result;
   const houseResult =
-    result === "DRAW" ? "DRAW" : result === "WIN" ? "LOSE" : "WIN";
+    result === GameResult.DRAW
+      ? "DRAW"
+      : result === GameResult.WIN
+      ? "LOSE"
+      : "WIN";
 
   return (
     <div className="max-md:max-w-full">
@@ -105,15 +113,6 @@ export default function GameResult({
         {/* Game ID and Result */}
         <div className="w-full flex justify-between items-center text-zinc-400 mb-2">
           <span>Game #{gameId}</span>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onPlayAgain}
-              className="flex items-center gap-2 text-sm bg-white text-black px-4 py-2 rounded-sm"
-            >
-              <img src="/icons/reload.svg" alt="Reload" className="w-4 h-4" />
-              Play again
-            </button>
-          </div>
         </div>
 
         {/* Result Text */}
@@ -126,10 +125,12 @@ export default function GameResult({
               : "text-[#FF666B]"
           }`}
         >
-          {result === "WIN" && "You win!"}
-          {result === "LOSE" && "You lose!"}
-          {result === "DRAW" && "It's a draw!"}
+          {result === GameResult.WIN && "You win!"}
+          {result === GameResult.LOSE && "You lose!"}
+          {result === GameResult.DRAW && "It's a draw!"}
         </h1>
+
+        <GameBetResult gameResult={result!} value={value} />
 
         {/* Game Cards */}
         <div className="flex items-center gap-16 font-mono group max-md:gap-6 max-md:flex-col max-md:w-full">
@@ -198,6 +199,16 @@ export default function GameResult({
               </div>
             </div>
           </div>
+        </div>
+
+        <div className="flex items-center gap-2 mt-8 w-full max-md:w-full">
+          <button
+            onClick={onPlayAgain}
+            className="flex items-center gap-2 text-md bg-white text-black px-4 py-4 rounded-sm w-full justify-center"
+          >
+            <img src="/icons/reload.svg" alt="Reload" className="w-6 h-6" />
+            Play again
+          </button>
         </div>
       </div>
     </div>
