@@ -63,42 +63,65 @@ export function useLeaderboard() {
           toBlock: "latest",
         });
 
-        // Game information mapping
         const gameData: Record<
           string,
           {
             playerA: string;
             playerB: string;
             betAmount: bigint;
+            transactionHash?: string;
           }
         > = {};
 
-        createdEvents.forEach((event) => {
+        for (const event of createdEvents) {
           if (event.args && event.args.gameId && event.args.playerA) {
             const gameId = event.args.gameId.toString();
+            let betAmount = DEFAULT_BET_AMOUNT_WEI;
 
-            const betAmount = event.transactionValue || DEFAULT_BET_AMOUNT_WEI;
+            // Try to get transaction value
+            if (event.transactionHash) {
+              try {
+                const tx = await publicClient.getTransaction({
+                  hash: event.transactionHash,
+                });
+                if (tx && tx.value > 0n) {
+                  betAmount = tx.value;
+                }
+              } catch (error) {
+                console.error("Error fetching transaction:", error);
+              }
+            }
 
             gameData[gameId] = {
               playerA: event.args.playerA.toLowerCase(),
               playerB: "",
               betAmount: betAmount,
+              transactionHash: event.transactionHash,
             };
           }
-        });
+        }
 
-        joinedEvents.forEach((event) => {
+        for (const event of joinedEvents) {
           if (event.args && event.args.gameId && event.args.playerB) {
             const gameId = event.args.gameId.toString();
             if (gameData[gameId]) {
               gameData[gameId].playerB = event.args.playerB.toLowerCase();
 
-              if (event.transactionValue) {
-                gameData[gameId].betAmount = DEFAULT_BET_AMOUNT_WEI;
+              if (event.transactionHash) {
+                try {
+                  const tx = await publicClient.getTransaction({
+                    hash: event.transactionHash,
+                  });
+                  if (tx && tx.value > 0n) {
+                    gameData[gameId].betAmount = tx.value;
+                  }
+                } catch (error) {
+                  console.error("Error fetching transaction:", error);
+                }
               }
             }
           }
-        });
+        }
 
         const playerStats: Record<string, LeaderboardEntry> = {};
 
@@ -140,11 +163,11 @@ export function useLeaderboard() {
             } else if (wonGame) {
               playerStats[normalizedAddr].wins += 1;
               playerStats[normalizedAddr].score += 1;
-              playerStats[normalizedAddr].earnings += etherAmount;
+              playerStats[normalizedAddr].earnings! += etherAmount;
             } else {
               playerStats[normalizedAddr].losses += 1;
               playerStats[normalizedAddr].score -= 1;
-              playerStats[normalizedAddr].earnings -= etherAmount;
+              playerStats[normalizedAddr].earnings! -= etherAmount;
             }
           };
 
@@ -159,7 +182,7 @@ export function useLeaderboard() {
         });
 
         return Object.values(playerStats).sort(
-          (a, b) => b.earnings - a.earnings
+          (a, b) => (b.earnings ?? 0) - (a.earnings ?? 0)
         );
       } catch (error) {
         console.error("Error fetching leaderboard:", error);

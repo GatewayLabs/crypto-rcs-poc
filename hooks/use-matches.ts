@@ -81,9 +81,21 @@ export function useMatches() {
         for (const event of createdEvents) {
           if (event.args && event.args.gameId && event.args.playerA) {
             const gameId = event.args.gameId.toString();
+            let betAmount = DEFAULT_BET_AMOUNT_WEI;
 
-            // Get bet amount from transaction value or use default
-            const betAmount = event.transactionValue || DEFAULT_BET_AMOUNT_WEI;
+            // Try to get transaction value
+            if (event.transactionHash) {
+              try {
+                const tx = await publicClient.getTransaction({
+                  hash: event.transactionHash,
+                });
+                if (tx && tx.value > 0n) {
+                  betAmount = tx.value;
+                }
+              } catch (error) {
+                console.error("Error fetching transaction:", error);
+              }
+            }
 
             gameData[gameId] = {
               ...gameData[gameId],
@@ -101,10 +113,18 @@ export function useMatches() {
             if (gameData[gameId]) {
               gameData[gameId].playerB = event.args.playerB.toLowerCase();
 
-              // If we have transaction value, update bet amount
-              if (event.transactionValue) {
-                // For simplicity, we'll use the default amount if exact amount not available
-                gameData[gameId].betAmount = DEFAULT_BET_AMOUNT_WEI;
+              // Try to get transaction value for joining
+              if (event.transactionHash) {
+                try {
+                  const tx = await publicClient.getTransaction({
+                    hash: event.transactionHash,
+                  });
+                  if (tx && tx.value > 0n) {
+                    gameData[gameId].betAmount = tx.value;
+                  }
+                } catch (error) {
+                  console.error("Error fetching transaction:", error);
+                }
               }
             }
           }
