@@ -14,7 +14,7 @@ export default function Leaderboard() {
   const rowsPerPage = 20;
   const sortedLeaderboard = [...leaderboard].sort((a, b) => {
     if ("earnings" in a && "earnings" in b) {
-      return b.earnings - a.earnings;
+      return (b.earnings ?? 0) - (a.earnings ?? 0);
     }
     return b.score - a.score;
   });
@@ -50,7 +50,7 @@ export default function Leaderboard() {
     const sorted = [...leaderboard].sort((a, b) => {
       // Use earnings if available, otherwise fall back to score
       if ("earnings" in a && "earnings" in b) {
-        return b.earnings - a.earnings;
+        return (b.earnings ?? 0) - (a.earnings ?? 0);
       }
       return b.score - a.score;
     });
@@ -129,7 +129,7 @@ export default function Leaderboard() {
                         <div className="flex items-center h-14">
                           <div className="text-sm font-normal leading-none">
                             {"earnings" in player
-                              ? player.earnings.toFixed(2)
+                              ? (player.earnings ?? 0).toFixed(2)
                               : (player.score > 0 ? "+" : "") +
                                 player.score.toString()}
                           </div>
