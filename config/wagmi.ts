@@ -1,12 +1,13 @@
-import { getDefaultConfig } from "@rainbow-me/rainbowkit";
+import { createConfig } from "@privy-io/wagmi";
 import { baseSepolia } from "viem/chains";
 import { monad } from "./chains";
+import { http } from "viem";
 
-const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "";
-
-export const config = getDefaultConfig({
-  appName: "Crypto Rock Paper Scissors",
-  projectId,
+export const config = createConfig({
   chains: [baseSepolia, monad],
+  transports: {
+    [baseSepolia.id]: http(),
+    [monad.id]: http(),
+  },
   ssr: true,
 });

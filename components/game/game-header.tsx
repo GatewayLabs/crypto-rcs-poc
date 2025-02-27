@@ -1,9 +1,9 @@
 "use client";
 
-import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { formatEther } from "ethers";
 import { useEffect, useState } from "react";
 import { useAccount, useBalance } from "wagmi";
+import WalletButton from "./wallet-button";
 
 export default function Header() {
   const { address, isConnected } = useAccount();
@@ -35,7 +35,7 @@ export default function Header() {
             {balance ? parseFloat(formatEther(balance)).toFixed(4) : "0.0000"}{" "}
             MON
           </div>
-          <ConnectButton showBalance={false} />
+          <WalletButton />
         </div>
       </div>
     </div>
