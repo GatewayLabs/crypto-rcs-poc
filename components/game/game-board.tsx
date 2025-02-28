@@ -95,7 +95,9 @@ export default function GameBoard() {
     } else if (betValue > limit) {
       setErrorMessage(`Max limit is ${limit} MON`);
       return false;
-    } else if ((Number(parseFloat(formatEther(balance!))) || 0) < betValue) {
+    } else if (
+      Number(parseFloat(formatEther(balance || BigInt(0)))) < betValue
+    ) {
       setErrorMessage(`Insufficient balance`);
       return false;
     } else {
