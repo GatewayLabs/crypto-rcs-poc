@@ -10,8 +10,9 @@ import { Move } from "@/lib/crypto";
 import { soundEffects } from "@/lib/sounds/sound-effects";
 import { GameToast, useGameUIStore } from "@/stores/game-ui-store";
 import { GamePhase } from "@/types/game";
+import { formatEther } from "ethers";
 import { useEffect, useState } from "react";
-import { useAccount } from "wagmi";
+import { useAccount, useBalance } from "wagmi";
 import GameBet from "./game-bet";
 
 const GAME_BUTTONS = [
@@ -29,13 +30,22 @@ const GAME_BUTTONS = [
   },
 ];
 
-const MAX_BET_VALUE = 10;
-
 export default function GameBoard() {
   const { createGame, joinGame, resetGame, isCreatingGame, isJoiningGame } =
     useGame();
-
+  const { address, isConnected } = useAccount();
+  const { data: userBalance } = useBalance({
+    address,
+  });
+  const [balance, setBalance] = useState<bigint | undefined>(BigInt(0));
   const [betValue, setBetValue] = useState(0);
+
+  useEffect(() => {
+    if (!isConnected) {
+      return;
+    }
+    setBalance(userBalance?.value);
+  }, [isConnected, userBalance]);
 
   // Get UI state from Zustand
   const {
@@ -52,8 +62,6 @@ export default function GameBoard() {
     dismissToast,
     setTransactionModal,
   } = useGameUIStore();
-
-  const { address } = useAccount();
 
   useEffect(() => {
     if (phase === GamePhase.FINISHED && result) {
@@ -143,8 +151,8 @@ export default function GameBoard() {
         </div>
         <GameBet
           value={betValue}
-          maxValue={MAX_BET_VALUE}
           onBet={(value) => setBetValue(value)}
+          balance={Number(parseFloat(formatEther(balance!)))}
         />
         <div className="text-white text-2xl mt-8 font-bold leading-none tracking-[-0.6px] max-md:max-w-full">
           Make your move
@@ -161,7 +169,8 @@ export default function GameBoard() {
                 isCreatingGame ||
                 isJoiningGame ||
                 phase !== GamePhase.CHOOSING ||
-                betValue === 0
+                betValue === 0 ||
+                Number(parseFloat(formatEther(balance!))) < betValue
               }
               aria-selected={
                 typeof playerMove === "string" && playerMove === button.label
