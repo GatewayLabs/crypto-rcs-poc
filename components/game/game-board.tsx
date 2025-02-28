@@ -39,6 +39,8 @@ export default function GameBoard() {
   });
   const [balance, setBalance] = useState<bigint | undefined>(BigInt(0));
   const [betValue, setBetValue] = useState(0);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const limit = 1;
 
   useEffect(() => {
     if (!isConnected) {
@@ -72,6 +74,10 @@ export default function GameBoard() {
   }, [phase, result]);
 
   useEffect(() => {
+    setErrorMessage(null);
+  }, [betValue]);
+
+  useEffect(() => {
     // Show transaction modal based on phase
     if (phase === GamePhase.SELECTED) {
       setTransactionModal(true, "approve");
@@ -82,8 +88,28 @@ export default function GameBoard() {
     }
   }, [phase, setTransactionModal]);
 
+  const validateBetValue = (): boolean => {
+    if (betValue === 0) {
+      setErrorMessage(`Please enter a bet amount`);
+      return false;
+    } else if (betValue > limit) {
+      setErrorMessage(`Max limit is ${limit} MON`);
+      return false;
+    } else if ((Number(parseFloat(formatEther(balance!))) || 0) < betValue) {
+      setErrorMessage(`Insufficient balance`);
+      return false;
+    } else {
+      setErrorMessage(null);
+      return true;
+    }
+  };
+
   const handleMove = async (move: Move) => {
     if (phase !== GamePhase.CHOOSING || !address) return;
+
+    if (!validateBetValue()) {
+      return;
+    }
 
     try {
       soundEffects.select();
@@ -152,7 +178,7 @@ export default function GameBoard() {
         <GameBet
           value={betValue}
           onBet={(value) => setBetValue(value)}
-          balance={Number(parseFloat(formatEther(balance!)))}
+          errorMessage={errorMessage}
         />
         <div className="text-white text-2xl mt-8 font-bold leading-none tracking-[-0.6px] max-md:max-w-full">
           Make your move
@@ -168,9 +194,7 @@ export default function GameBoard() {
                 !address ||
                 isCreatingGame ||
                 isJoiningGame ||
-                phase !== GamePhase.CHOOSING ||
-                betValue === 0 ||
-                Number(parseFloat(formatEther(balance!))) < betValue
+                phase !== GamePhase.CHOOSING
               }
               aria-selected={
                 typeof playerMove === "string" && playerMove === button.label
