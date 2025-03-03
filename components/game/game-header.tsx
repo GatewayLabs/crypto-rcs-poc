@@ -8,12 +8,27 @@ import Modal from './modal';
 import WithdrawModal from './withdraw-modal';
 import { usePrivy } from '@privy-io/react-auth';
 import { useWallet } from '@/contexts/wallet-context';
+import { monad } from '@/config/chains';
+import { config } from '@/config/wagmi';
 
 export default function Header() {
   const { authenticated } = usePrivy();
   const { walletAddress } = useWallet();
   const { data: userBalance, isLoading } = useBalance({
     address: walletAddress as `0x${string}`,
+    config: {
+      ...config,
+      chains: [
+        {
+          ...monad,
+          rpcUrls: {
+            default: {
+              http: ['https://testnet-rpc.monad.xyz'],
+            },
+          },
+        },
+      ],
+    },
   });
   const [balance, setBalance] = useState<bigint | undefined>(BigInt(0));
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);

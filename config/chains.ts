@@ -4,7 +4,10 @@ export const monad = {
   id: 10143,
   rpcUrls: {
     default: {
-      http: ['https://testnet-rpc.monad.xyz'],
+      http: [
+        `https://monad-testnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`,
+        'https://testnet-rpc.monad.xyz',
+      ],
     },
   },
   name: 'Monad Testnet',
