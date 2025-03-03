@@ -10,6 +10,7 @@ export default function WithdrawModal({ onClose }: WithdrawModalProps) {
   const [value, setValue] = useState(1);
   const [textButton, setTextButton] = useState("Withdraw now");
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleWithdraw = () => {
     console.log("Withdraw", value);
@@ -23,6 +24,7 @@ export default function WithdrawModal({ onClose }: WithdrawModalProps) {
       }, 2000);
     } catch (error) {
       console.error("Error withdrawing", error);
+      setErrorMessage("Error withdrawing");
       setTextButton("Withdraw now");
       setIsLoading(false);
     }
@@ -30,7 +32,11 @@ export default function WithdrawModal({ onClose }: WithdrawModalProps) {
 
   return (
     <>
-      <div className="flex flex-col bg-zinc-800 border-zinc-600 border flex rounded-sm mb-6">
+      <div
+        className={`flex flex-col bg-zinc-800 border flex rounded-sm ${
+          errorMessage ? "border-red-500" : "border-zinc-600 mb-6"
+        }`}
+      >
         <div className="flex flex-col sm:flex-row">
           <input
             id="withdraw-amount"
@@ -71,6 +77,10 @@ export default function WithdrawModal({ onClose }: WithdrawModalProps) {
           </button>
         </div>
       </div>
+
+      {errorMessage && (
+        <div className="text-red-500 text-sm mt-4 mb-6">{errorMessage}</div>
+      )}
 
       <button
         onClick={() => handleWithdraw()}
