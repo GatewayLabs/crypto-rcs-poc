@@ -6,7 +6,6 @@ export const monad = {
     default: {
       http: [
         `https://monad-testnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`,
-        'https://testnet-rpc.monad.xyz',
       ],
     },
   },
