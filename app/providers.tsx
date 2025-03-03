@@ -1,10 +1,11 @@
-"use client";
+'use client';
 
-import { config } from "@/config/wagmi";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { WagmiProvider } from "@privy-io/wagmi";
-import { PrivyProvider } from "@privy-io/react-auth";
-import { privyConfig } from "@/config/privy";
+import { config } from '@/config/wagmi';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { WagmiProvider } from '@privy-io/wagmi';
+import { PrivyProvider } from '@privy-io/react-auth';
+import { privyConfig } from '@/config/privy';
+import { WalletProvider } from '@/contexts/wallet-context';
 
 const queryClient = new QueryClient();
 
@@ -16,7 +17,9 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       config={privyConfig}
     >
       <QueryClientProvider client={queryClient}>
-        <WagmiProvider config={config}>{children}</WagmiProvider>
+        <WagmiProvider config={config}>
+          <WalletProvider>{children}</WalletProvider>
+        </WagmiProvider>
       </QueryClientProvider>
     </PrivyProvider>
   );

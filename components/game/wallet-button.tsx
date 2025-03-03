@@ -1,11 +1,13 @@
-"use client";
+'use client';
 
-import { usePrivy } from "@privy-io/react-auth";
-import { Button } from "@/components/ui/button";
-import Avatar from "boring-avatars";
+import { usePrivy } from '@privy-io/react-auth';
+import { Button } from '@/components/ui/button';
+import Avatar from 'boring-avatars';
+import { useWallet } from '@/contexts/wallet-context';
 
 export default function WalletButton() {
-  const { authenticated, login, logout, user } = usePrivy();
+  const { authenticated, login, logout } = usePrivy();
+  const { walletAddress } = useWallet();
 
   return (
     <Button
@@ -14,12 +16,11 @@ export default function WalletButton() {
     >
       {authenticated ? (
         <div className="flex items-center gap-2 ">
-          <Avatar variant="pixel" size={24} name={user?.wallet?.address} />
-          {user?.wallet?.address.slice(0, 6)}...
-          {user?.wallet?.address.slice(-4)}
+          <Avatar variant="pixel" size={24} name={walletAddress} />
+          {walletAddress?.slice(0, 6)}...{walletAddress?.slice(-4)}
         </div>
       ) : (
-        "Login"
+        'Login'
       )}
     </Button>
   );

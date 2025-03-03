@@ -7,10 +7,13 @@ import WalletButton from './wallet-button';
 import Modal from './modal';
 import WithdrawModal from './withdraw-modal';
 import { usePrivy } from '@privy-io/react-auth';
+import { useWallet } from '@/contexts/wallet-context';
+
 export default function Header() {
-  const { user, authenticated } = usePrivy();
+  const { authenticated } = usePrivy();
+  const { walletAddress } = useWallet();
   const { data: userBalance, isLoading } = useBalance({
-    address: user?.wallet?.address as `0x${string}`,
+    address: walletAddress as `0x${string}`,
   });
   const [balance, setBalance] = useState<bigint | undefined>(BigInt(0));
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
