@@ -1,15 +1,15 @@
-"use client";
+'use client';
 
-import { Move, encryptMove } from "@/lib/crypto";
-import { gameContractConfig } from "@/config/contracts";
+import { Move, encryptMove } from '@/lib/crypto';
+import { gameContractConfig } from '@/config/contracts';
 import {
   usePublicClient,
   useReadContract,
   useWatchContractEvent,
   useWriteContract,
-} from "wagmi";
-import { useCallback } from "react";
-import { parseEventLogs } from "viem";
+} from 'wagmi';
+import { useCallback } from 'react';
+import { parseEventLogs } from 'viem';
 
 // Default bet amount in ETH
 export const DEFAULT_BET_AMOUNT = 0.01;
@@ -21,7 +21,7 @@ export function useGameContract(gameId?: number) {
   // Read game info
   const { data: gameInfo, refetch: refetchGameInfo } = useReadContract({
     ...gameContractConfig,
-    functionName: "getGameInfo",
+    functionName: 'getGameInfo',
     args: gameId ? [BigInt(gameId)] : undefined,
     query: { enabled: Boolean(gameId) },
   });
@@ -42,9 +42,10 @@ export function useGameContract(gameId?: number) {
         // Get transaction hash
         const hash = await writeContract({
           ...gameContractConfig,
-          functionName: "createGame",
+          functionName: 'createGame',
           args: [encryptedMove as `0x${string}`],
-          value: betAmount, // Add bet amount
+          value: betAmount,
+          gas: 1000000n,
         });
 
         // Wait for transaction receipt
@@ -59,11 +60,11 @@ export function useGameContract(gameId?: number) {
 
         return Number(result);
       } catch (error) {
-        console.error("Error creating game:", error);
+        console.error('Error creating game:', error);
         throw error;
       }
     },
-    [writeContract, publicClient]
+    [writeContract, publicClient],
   );
 
   const joinGame = useCallback(
@@ -72,16 +73,16 @@ export function useGameContract(gameId?: number) {
         const encryptedMove = await encryptMove(move);
         await writeContract({
           ...gameContractConfig,
-          functionName: "joinGame",
+          functionName: 'joinGame',
           args: [BigInt(gameId), encryptedMove as `0x${string}`],
           value: betAmount, // Add bet amount
         });
       } catch (error) {
-        console.error("Error joining game:", error);
+        console.error('Error joining game:', error);
         throw error;
       }
     },
-    [writeContract]
+    [writeContract],
   );
 
   const submitMoves = useCallback(
@@ -89,15 +90,15 @@ export function useGameContract(gameId?: number) {
       try {
         await writeContract({
           ...gameContractConfig,
-          functionName: "submitMoves",
+          functionName: 'submitMoves',
           args: [BigInt(gameId)],
         });
       } catch (error) {
-        console.error("Error submitting moves:", error);
+        console.error('Error submitting moves:', error);
         throw error;
       }
     },
-    [writeContract]
+    [writeContract],
   );
 
   const computeDifference = useCallback(
@@ -105,15 +106,15 @@ export function useGameContract(gameId?: number) {
       try {
         await writeContract({
           ...gameContractConfig,
-          functionName: "computeDifference",
+          functionName: 'computeDifference',
           args: [BigInt(gameId)],
         });
       } catch (error) {
-        console.error("Error computing difference:", error);
+        console.error('Error computing difference:', error);
         throw error;
       }
     },
-    [writeContract]
+    [writeContract],
   );
 
   const finalizeGame = useCallback(
@@ -121,41 +122,41 @@ export function useGameContract(gameId?: number) {
       try {
         await writeContract({
           ...gameContractConfig,
-          functionName: "finalizeGame",
+          functionName: 'finalizeGame',
           args: [BigInt(gameId), BigInt(diffMod3)],
         });
       } catch (error) {
-        console.error("Error finalizing game:", error);
+        console.error('Error finalizing game:', error);
         throw error;
       }
     },
-    [writeContract]
+    [writeContract],
   );
 
   // Event listeners
   useWatchContractEvent({
     ...gameContractConfig,
-    eventName: "GameCreated",
+    eventName: 'GameCreated',
     onLogs(logs) {
-      console.log("Game created:", logs);
+      console.log('Game created:', logs);
       refetchGameInfo();
     },
   });
 
   useWatchContractEvent({
     ...gameContractConfig,
-    eventName: "GameJoined",
+    eventName: 'GameJoined',
     onLogs(logs) {
-      console.log("Game joined:", logs);
+      console.log('Game joined:', logs);
       refetchGameInfo();
     },
   });
 
   useWatchContractEvent({
     ...gameContractConfig,
-    eventName: "GameResolved",
+    eventName: 'GameResolved',
     onLogs(logs) {
-      console.log("Game resolved:", logs);
+      console.log('Game resolved:', logs);
       refetchGameInfo();
     },
   });
