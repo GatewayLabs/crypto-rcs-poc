@@ -10,7 +10,7 @@ import { usePrivy } from '@privy-io/react-auth';
 import { useWallet } from '@/contexts/wallet-context';
 import { monad } from '@/config/chains';
 import { config } from '@/config/wagmi';
-
+import { http } from 'viem';
 export default function Header() {
   const { authenticated } = usePrivy();
   const { walletAddress } = useWallet();
@@ -18,16 +18,9 @@ export default function Header() {
     address: walletAddress as `0x${string}`,
     config: {
       ...config,
-      chains: [
-        {
-          ...monad,
-          rpcUrls: {
-            default: {
-              http: ['https://testnet-rpc.monad.xyz'],
-            },
-          },
-        },
-      ],
+      transport: {
+        [monad.id]: http('https://testnet-rpc.monad.xyz'),
+      },
     },
   });
   const [balance, setBalance] = useState<bigint | undefined>(BigInt(0));
