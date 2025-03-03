@@ -2,7 +2,7 @@
 
 import ErrorDialog from "@/components/game/error-dialog";
 import GameButton from "@/components/game/game-button";
-import GameResult from "@/components/game/game-result";
+import GameResultView from "@/components/game/game-result";
 import TransactionModal from "@/components/game/transaction-modal";
 import { ToastContainer } from "@/components/ui/toast";
 import { useGame } from "@/hooks/use-game";
@@ -10,8 +10,9 @@ import { Move } from "@/lib/crypto";
 import { soundEffects } from "@/lib/sounds/sound-effects";
 import { GameToast, useGameUIStore } from "@/stores/game-ui-store";
 import { GamePhase } from "@/types/game";
+import { formatEther } from "ethers";
 import { useEffect, useState } from "react";
-import { useAccount } from "wagmi";
+import { useAccount, useBalance } from "wagmi";
 import GameBet from "./game-bet";
 
 const GAME_BUTTONS = [
@@ -29,13 +30,24 @@ const GAME_BUTTONS = [
   },
 ];
 
-const MAX_BET_VALUE = 10;
-
 export default function GameBoard() {
   const { createGame, joinGame, resetGame, isCreatingGame, isJoiningGame } =
     useGame();
-
+  const { address, isConnected } = useAccount();
+  const { data: userBalance } = useBalance({
+    address,
+  });
+  const [balance, setBalance] = useState<bigint | undefined>(BigInt(0));
   const [betValue, setBetValue] = useState(0);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const limit = 1;
+
+  useEffect(() => {
+    if (!isConnected) {
+      return;
+    }
+    setBalance(userBalance?.value);
+  }, [isConnected, userBalance]);
 
   // Get UI state from Zustand
   const {
@@ -53,8 +65,6 @@ export default function GameBoard() {
     setTransactionModal,
   } = useGameUIStore();
 
-  const { address } = useAccount();
-
   useEffect(() => {
     if (phase === GamePhase.FINISHED && result) {
       if (result === "WIN") soundEffects.win();
@@ -62,6 +72,10 @@ export default function GameBoard() {
       else soundEffects.draw();
     }
   }, [phase, result]);
+
+  useEffect(() => {
+    setErrorMessage(null);
+  }, [betValue]);
 
   useEffect(() => {
     // Show transaction modal based on phase
@@ -74,8 +88,30 @@ export default function GameBoard() {
     }
   }, [phase, setTransactionModal]);
 
+  const validateBetValue = (): boolean => {
+    if (betValue === 0) {
+      setErrorMessage(`Please enter a bet amount`);
+      return false;
+    } else if (betValue > limit) {
+      setErrorMessage(`Max limit is ${limit} MON`);
+      return false;
+    } else if (
+      Number(parseFloat(formatEther(balance || BigInt(0)))) < betValue
+    ) {
+      setErrorMessage(`Insufficient balance`);
+      return false;
+    } else {
+      setErrorMessage(null);
+      return true;
+    }
+  };
+
   const handleMove = async (move: Move) => {
     if (phase !== GamePhase.CHOOSING || !address) return;
+
+    if (!validateBetValue()) {
+      return;
+    }
 
     try {
       soundEffects.select();
@@ -110,12 +146,13 @@ export default function GameBoard() {
     gameId !== undefined
   ) {
     return (
-      <GameResult
+      <GameResultView
         playerMove={playerMove}
         houseMove={houseMove}
         result={result}
         gameId={String(gameId)}
         onPlayAgain={handlePlayAgain}
+        value={betValue}
       />
     );
   }
@@ -142,8 +179,8 @@ export default function GameBoard() {
         </div>
         <GameBet
           value={betValue}
-          maxValue={MAX_BET_VALUE}
           onBet={(value) => setBetValue(value)}
+          errorMessage={errorMessage}
         />
         <div className="text-white text-2xl mt-8 font-bold leading-none tracking-[-0.6px] max-md:max-w-full">
           Make your move
@@ -159,8 +196,7 @@ export default function GameBoard() {
                 !address ||
                 isCreatingGame ||
                 isJoiningGame ||
-                phase !== GamePhase.CHOOSING ||
-                betValue === 0
+                phase !== GamePhase.CHOOSING
               }
               aria-selected={
                 typeof playerMove === "string" && playerMove === button.label
