@@ -1,26 +1,29 @@
-"use client";
+'use client';
 
-import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { formatEther } from "ethers";
-import { useEffect, useState } from "react";
-import { useAccount, useBalance } from "wagmi";
-import Modal from "./modal";
-import WithdrawModal from "./withdraw-modal";
+import { formatEther } from 'ethers';
+import { useEffect, useState } from 'react';
+import { useBalance } from 'wagmi';
+import WalletButton from './wallet-button';
+import Modal from './modal';
+import WithdrawModal from './withdraw-modal';
+import { usePrivy } from '@privy-io/react-auth';
+import { useWallet } from '@/contexts/wallet-context';
 
 export default function Header() {
-  const { address, isConnected } = useAccount();
+  const { authenticated } = usePrivy();
+  const { walletAddress } = useWallet();
   const { data: userBalance, isLoading } = useBalance({
-    address,
+    address: walletAddress as `0x${string}`,
   });
   const [balance, setBalance] = useState<bigint | undefined>(BigInt(0));
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
 
   useEffect(() => {
-    if (!isConnected || isLoading) {
+    if (!authenticated || isLoading) {
       return;
     }
     setBalance(userBalance?.value);
-  }, [isConnected, userBalance, isLoading]);
+  }, [authenticated, userBalance, isLoading]);
 
   return (
     <>
@@ -36,10 +39,10 @@ export default function Header() {
         <div className="bg-zinc-950 border-b border-l self-stretch flex min-w-60 min-h-[95px] flex-col overflow-hidden justify-center flex-1 shrink basis-[0%] my-auto px-6 py-7 rounded-3xl border-white border-solid max-md:max-w-full max-md:px-5 items-end">
           <div className="flex items-center gap-2 text-neutral-50 font-normal">
             <div className="bg-zinc-800 border-zinc-800 border self-stretch flex min-w-16 items-center overflow-hidden justify-center my-auto pl-3 py-2 rounded-md border-solid transition-all duration-300">
-              {balance ? parseFloat(formatEther(balance)).toFixed(4) : "0.0000"}{" "}
+              {balance ? parseFloat(formatEther(balance)).toFixed(4) : '0.0000'}{' '}
               MON
               <div className="ml-3">
-                {balance && isConnected && (
+                {balance && authenticated && (
                   <button
                     data-modal-target="crud-modal"
                     data-modal-toggle="crud-modal"
@@ -71,7 +74,7 @@ export default function Header() {
                 </div>
               )}
             </div>
-            <ConnectButton showBalance={false} />
+            <WalletButton />
           </div>
         </div>
       </div>

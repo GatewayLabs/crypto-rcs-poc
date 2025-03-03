@@ -6,8 +6,6 @@ import { DEFAULT_BET_AMOUNT_WEI } from "./use-game-contract";
 import { formatEther } from "viem";
 
 export function useLeaderboard() {
-  const { address } = useAccount();
-  const queryClient = useQueryClient();
   const publicClient = usePublicClient();
 
   const {

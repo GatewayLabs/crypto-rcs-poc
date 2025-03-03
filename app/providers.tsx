@@ -1,29 +1,26 @@
-"use client";
-import { config } from "@/config/wagmi";
-import { darkTheme, RainbowKitProvider } from "@rainbow-me/rainbowkit";
-import "@rainbow-me/rainbowkit/styles.css";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { WagmiProvider } from "wagmi";
+'use client';
+
+import { config } from '@/config/wagmi';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { WagmiProvider } from '@privy-io/wagmi';
+import { PrivyProvider } from '@privy-io/react-auth';
+import { privyConfig } from '@/config/privy';
+import { WalletProvider } from '@/contexts/wallet-context';
 
 const queryClient = new QueryClient();
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <WagmiProvider config={config}>
+    <PrivyProvider
+      appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID!}
+      clientId={process.env.NEXT_PUBLIC_PRIVY_CLIENT_ID!}
+      config={privyConfig}
+    >
       <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider
-          coolMode
-          modalSize="compact"
-          theme={darkTheme({
-            accentColor: "#8D0CFF",
-            accentColorForeground: "white",
-            borderRadius: "medium",
-            overlayBlur: "small",
-          })}
-        >
-          {children}
-        </RainbowKitProvider>
+        <WagmiProvider config={config}>
+          <WalletProvider>{children}</WalletProvider>
+        </WagmiProvider>
       </QueryClientProvider>
-    </WagmiProvider>
+    </PrivyProvider>
   );
 }
