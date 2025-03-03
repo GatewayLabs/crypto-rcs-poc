@@ -15,7 +15,7 @@ export default function WithdrawModal({ onClose }: WithdrawModalProps) {
   const handleWithdraw = () => {
     console.log("Withdraw", value);
     try {
-      setIsLoading(true);
+      setIsLoading(true); // Simulate loading (remove after withdraw function is implemented)
       setTextButton("Confirm in wallet");
       // Withdraw function here
       setTimeout(() => {
@@ -26,7 +26,7 @@ export default function WithdrawModal({ onClose }: WithdrawModalProps) {
       console.error("Error withdrawing", error);
       setErrorMessage("Error withdrawing");
       setTextButton("Withdraw now");
-      setIsLoading(false);
+      setIsLoading(false); // Simulate loading (remove after withdraw function is implemented)
     }
   };
 
