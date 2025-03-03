@@ -22,11 +22,6 @@ export default function Header() {
     setBalance(userBalance?.value);
   }, [isConnected, userBalance, isLoading]);
 
-  const handleWithdraw = (value: number) => {
-    setIsWithdrawModalOpen(false);
-    console.log("Withdraw", value);
-  };
-
   return (
     <>
       <div className="bg-white flex w-full items-center justify-between flex-wrap rounded-3xl max-md:max-w-full">
@@ -69,7 +64,7 @@ export default function Header() {
                       smallTitle="withdraw"
                     >
                       <WithdrawModal
-                        onWithdraw={(value) => handleWithdraw(value)}
+                        onClose={() => setIsWithdrawModalOpen(false)}
                       />
                     </Modal>
                   </div>
