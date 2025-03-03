@@ -16,7 +16,7 @@ export default function GameBet({ onBet, value, errorMessage }: GameBetProps) {
       >
         <div className="flex flex-grow-1">
           <input
-            className="bg-transparent border-transparent text-[rgb(255,255,255)] text-md font-normal leading-none text-center uppercase flex-grow-0 w-32"
+            className="bg-transparent border-transparent  outline-none text-white focus:transparent focus:border-transparent text-md font-normal leading-none text-center uppercase flex-grow-0 w-32 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             type="number"
             placeholder="0"
             value={value}
