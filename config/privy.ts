@@ -1,4 +1,5 @@
 import type { PrivyClientConfig } from '@privy-io/react-auth';
+import { monad } from './chains';
 
 export const privyConfig: PrivyClientConfig = {
   embeddedWallets: {
@@ -9,4 +10,5 @@ export const privyConfig: PrivyClientConfig = {
     showWalletLoginFirst: true,
     theme: 'dark',
   },
+  supportedChains: [monad],
 };

@@ -1,20 +1,20 @@
-import { Chain } from "wagmi/chains";
+import { Chain } from 'wagmi/chains';
 
 export const monad = {
-  id: 678746,
+  id: 10143,
   rpcUrls: {
-    default: { http: ["https://testnet-rpc.monad.xyz/"] },
+    default: { http: ['https://testnet-rpc.monad.xyz/'] },
   },
-  name: "Monad Testnet",
+  name: 'Monad Testnet',
   nativeCurrency: {
-    name: "Monad",
-    symbol: "MON",
+    name: 'Monad',
+    symbol: 'MON',
     decimals: 18,
   },
   blockExplorers: {
     default: {
-      name: "Monad Explorer",
-      url: "https://testnet.monadexplorer.com/",
+      name: 'Monad Explorer',
+      url: 'https://testnet.monadexplorer.com/',
     },
   },
 } as const satisfies Chain;
