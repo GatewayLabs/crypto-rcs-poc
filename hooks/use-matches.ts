@@ -1,13 +1,13 @@
-import { Move } from '@/lib/crypto';
-import { GameHistory, GameResult } from '@/types/game';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useAccount } from 'wagmi';
-import { formatEther } from 'viem';
-import { GameState } from './use-player-games';
+import { Move } from "@/lib/crypto";
+import { GameHistory, GameResult } from "@/types/game";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { formatEther } from "viem";
+import { useAccount } from "wagmi";
+import { GameState } from "./use-player-games";
 
 // Subgraph URL
 const SUBGRAPH_URL =
-  'https://api.studio.thegraph.com/query/105896/odyssey-rps/version/latest';
+  "https://api.studio.thegraph.com/query/105896/odyssey-rps/version/latest";
 
 // GraphQL query for player's games (both created and joined)
 const PLAYER_GAMES_QUERY = `
@@ -91,7 +91,7 @@ export function useMatches() {
     isLoading,
     refetch,
   } = useQuery({
-    queryKey: ['matches', address],
+    queryKey: ["matches", address],
     queryFn: async () => {
       if (!address) return [] as GameHistory[];
 
@@ -101,9 +101,9 @@ export function useMatches() {
 
         // Fetch data from the subgraph
         const response = await fetch(SUBGRAPH_URL, {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
             query: PLAYER_GAMES_QUERY,
@@ -120,8 +120,8 @@ export function useMatches() {
         const data = (await response.json()) as SubgraphGamesResponse;
 
         if (data.errors) {
-          console.error('GraphQL errors:', data.errors);
-          throw new Error('GraphQL query failed');
+          console.error("GraphQL errors:", data.errors);
+          throw new Error("GraphQL query failed");
         }
 
         const userMatches: GameHistory[] = [];
@@ -147,7 +147,7 @@ export function useMatches() {
             diffMod3Value,
             true, // isPlayerA
             game.winner?.toLowerCase() === normalizedAddress,
-            betAmount,
+            betAmount
           );
 
           userMatches.push({
@@ -184,7 +184,7 @@ export function useMatches() {
             diffMod3Value,
             false, // isPlayerA
             game.winner?.toLowerCase() === normalizedAddress,
-            betAmount,
+            betAmount
           );
 
           userMatches.push({
@@ -203,8 +203,8 @@ export function useMatches() {
         return userMatches.sort((a, b) => b.timestamp - a.timestamp);
       } catch (error) {
         console.error(
-          'Error fetching match history from subgraph:',
-          error instanceof Error ? error.message : String(error),
+          "Error fetching match history from subgraph:",
+          error instanceof Error ? error.message : String(error)
         );
         return [] as GameHistory[];
       }
@@ -219,7 +219,7 @@ export function useMatches() {
     diffMod3Value: number,
     isPlayerA: boolean,
     isWinner: boolean,
-    betAmount: number,
+    betAmount: number
   ): {
     playerMove: Move;
     houseMove: Move;
@@ -232,7 +232,7 @@ export function useMatches() {
     let betValue: number = 0;
 
     if (diffMod3Value === 0) {
-      const drawMoves: Move[] = ['ROCK', 'PAPER', 'SCISSORS'];
+      const drawMoves: Move[] = ["ROCK", "PAPER", "SCISSORS"];
       const randomDrawMove =
         drawMoves[Math.floor(Math.random() * drawMoves.length)];
       playerMove = randomDrawMove;
@@ -242,26 +242,26 @@ export function useMatches() {
     } else if (diffMod3Value === 1) {
       // Player A wins
       if (isPlayerA) {
-        playerMove = 'ROCK';
-        houseMove = 'SCISSORS';
+        playerMove = "ROCK";
+        houseMove = "SCISSORS";
         result = GameResult.WIN;
         betValue = betAmount;
       } else {
-        playerMove = 'SCISSORS';
-        houseMove = 'ROCK';
+        playerMove = "SCISSORS";
+        houseMove = "ROCK";
         result = GameResult.LOSE;
         betValue = -betAmount;
       }
     } else {
       // Player B wins
       if (!isPlayerA) {
-        playerMove = 'ROCK';
-        houseMove = 'SCISSORS';
+        playerMove = "ROCK";
+        houseMove = "SCISSORS";
         result = GameResult.WIN;
         betValue = betAmount;
       } else {
-        playerMove = 'SCISSORS';
-        houseMove = 'ROCK';
+        playerMove = "SCISSORS";
+        houseMove = "ROCK";
         result = GameResult.LOSE;
         betValue = -betAmount;
       }
@@ -273,7 +273,7 @@ export function useMatches() {
       (result === GameResult.LOSE && isWinner)
     ) {
       console.warn(
-        'Game result logic mismatch with winner field, using winner field',
+        "Game result logic mismatch with winner field, using winner field"
       );
       if (isWinner) {
         result = GameResult.WIN;
@@ -296,13 +296,55 @@ export function useMatches() {
     try {
       await refetch();
     } catch (error) {
-      console.error('Error refetching match history:', error);
+      console.error("Error refetching match history:", error);
     }
+  };
+
+  const addLocalMatch = (gameData: {
+    gameId: number;
+    playerMove: Move;
+    result: GameResult;
+    transactionHash: string;
+    houseMove: Move;
+    betAmount: bigint;
+  }) => {
+    if (!address) return;
+
+    queryClient.setQueryData(
+      ["matches", address],
+      (oldData: GameHistory[] | undefined) => {
+        if (!oldData) return [];
+
+        const existingMatch = oldData.find(
+          (match) => match.gameId === gameData.gameId
+        );
+        if (existingMatch) return oldData;
+
+        const newMatch: GameHistory = {
+          id: `local-${gameData.gameId}-${Date.now()}`,
+          gameId: gameData.gameId,
+          timestamp: Date.now(),
+          playerMove: gameData.playerMove,
+          houseMove: gameData.houseMove,
+          result: gameData.result,
+          playerAddress: address,
+          transactionHash: gameData.transactionHash,
+          betValue:
+            gameData.result === GameResult.WIN
+              ? Number(formatEther(gameData.betAmount))
+              : gameData.result === GameResult.LOSE
+              ? -Number(formatEther(gameData.betAmount))
+              : 0, // DRAW
+        };
+
+        return [newMatch, ...oldData];
+      }
+    );
   };
 
   const clearHistoryMutation = async () => {
     if (address) {
-      queryClient.setQueryData(['matches', address], []);
+      queryClient.setQueryData(["matches", address], []);
     }
   };
 
@@ -310,6 +352,7 @@ export function useMatches() {
     matches,
     isLoading,
     addMatch,
+    addLocalMatch,
     clearHistory: clearHistoryMutation,
     totalEarnings,
   };

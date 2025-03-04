@@ -1,10 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
-import { LeaderboardEntry } from '@/types/game';
-import { formatEther } from 'viem';
+import { LeaderboardEntry } from "@/types/game";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { formatEther } from "viem";
 
 // Subgraph URL
 const SUBGRAPH_URL =
-  'https://api.studio.thegraph.com/query/105896/odyssey-rps/version/latest';
+  "https://api.studio.thegraph.com/query/105896/odyssey-rps/version/latest";
 
 // Define types for the subgraph response
 interface SubgraphPlayer {
@@ -49,19 +49,20 @@ const PLAYERS_QUERY = `
  * Fetch leaderboard data from the subgraph
  */
 export function useLeaderboard() {
+  const queryClient = useQueryClient();
   const {
     data: leaderboard = [],
     isLoading,
     refetch,
   } = useQuery({
-    queryKey: ['leaderboard'],
+    queryKey: ["leaderboard"],
     queryFn: async (): Promise<LeaderboardEntry[]> => {
       try {
         // Fetch data from the subgraph
         const response = await fetch(SUBGRAPH_URL, {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
             query: PLAYERS_QUERY,
@@ -75,18 +76,18 @@ export function useLeaderboard() {
         const data = (await response.json()) as SubgraphResponse;
 
         if (data.errors) {
-          console.error('GraphQL errors:', data.errors);
-          throw new Error('GraphQL query failed');
+          console.error("GraphQL errors:", data.errors);
+          throw new Error("GraphQL query failed");
         }
 
         // Transform the data to match our LeaderboardEntry structure
         const players: LeaderboardEntry[] = data.data.players.map((player) => {
           // Calculate earnings (totalWonAmount - totalBetAmount)
           const totalBetAmountEth = Number(
-            formatEther(BigInt(player.totalBetAmount)),
+            formatEther(BigInt(player.totalBetAmount))
           );
           const totalWonAmountEth = Number(
-            formatEther(BigInt(player.totalWonAmount)),
+            formatEther(BigInt(player.totalWonAmount))
           );
           const earnings = totalWonAmountEth - totalBetAmountEth;
 
@@ -108,8 +109,8 @@ export function useLeaderboard() {
         return players;
       } catch (error) {
         console.error(
-          'Error fetching leaderboard from subgraph:',
-          error instanceof Error ? error.message : String(error),
+          "Error fetching leaderboard from subgraph:",
+          error instanceof Error ? error.message : String(error)
         );
         return [];
       }
@@ -123,15 +124,69 @@ export function useLeaderboard() {
       await refetch();
     } catch (error) {
       console.error(
-        'Error refetching leaderboard:',
-        error instanceof Error ? error.message : String(error),
+        "Error refetching leaderboard:",
+        error instanceof Error ? error.message : String(error)
       );
     }
+  };
+
+  const updateLocalLeaderboard = (
+    address: string,
+    result: "WIN" | "LOSE" | "DRAW",
+    betAmount: number
+  ) => {
+    queryClient.setQueryData(
+      ["leaderboard"],
+      (oldData: LeaderboardEntry[] | undefined) => {
+        if (!oldData) return [];
+
+        const newData = [...oldData];
+
+        let playerEntry = newData.find(
+          (entry) => entry.address.toLowerCase() === address.toLowerCase()
+        );
+
+        if (!playerEntry) {
+          playerEntry = {
+            address,
+            gamesPlayed: 0,
+            wins: 0,
+            losses: 0,
+            draws: 0,
+            score: 0,
+            earnings: 0,
+          };
+          newData.push(playerEntry);
+        } else if (playerEntry.earnings === undefined) {
+          playerEntry.earnings = 0;
+        }
+
+        playerEntry.gamesPlayed += 1;
+        playerEntry.earnings = playerEntry.earnings || 0;
+
+        if (result === "WIN") {
+          playerEntry.wins += 1;
+          playerEntry.score += 1;
+          playerEntry.earnings += betAmount;
+        } else if (result === "LOSE") {
+          playerEntry.losses += 1;
+          playerEntry.score -= 1;
+          playerEntry.earnings -= betAmount;
+        } else if (result === "DRAW") {
+          playerEntry.draws += 1;
+        }
+
+        newData.sort((a, b) => (b.earnings ?? 0) - (a.earnings ?? 0));
+
+        return newData;
+      }
+    );
   };
 
   return {
     leaderboard,
     isLoading,
     updateLeaderboard,
+    updateLocalLeaderboard,
   };
 }

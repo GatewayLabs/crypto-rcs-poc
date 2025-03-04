@@ -1,14 +1,16 @@
+import { playHouseMove, resolveGame } from "@/app/actions/house";
+import { Move } from "@/lib/crypto";
+import { useGameUIStore } from "@/stores/game-ui-store";
+import { GamePhase, GameResult } from "@/types/game";
 import { useMutation } from "@tanstack/react-query";
+import { useCallback, useEffect } from "react";
+import { formatEther } from "viem";
+import { useAccount } from "wagmi";
 import {
-  useGameContract,
   DEFAULT_BET_AMOUNT,
   DEFAULT_BET_AMOUNT_WEI,
+  useGameContract,
 } from "./use-game-contract";
-import { Move } from "@/lib/crypto";
-import { GamePhase, GameResult } from "@/types/game";
-import { useEffect, useCallback } from "react";
-import { playHouseMove, resolveGame } from "@/app/actions/house";
-import { useGameUIStore } from "@/stores/game-ui-store";
 import { useLeaderboard } from "./use-leaderboard";
 import { useMatches } from "./use-matches";
 
@@ -22,8 +24,9 @@ export function useGame() {
     gameInfo,
   } = useGameContract();
 
-  const { updateLeaderboard } = useLeaderboard();
-  const { addMatch } = useMatches();
+  const { address } = useAccount();
+  const { updateLeaderboard, updateLocalLeaderboard } = useLeaderboard();
+  const { addMatch, addLocalMatch } = useMatches();
 
   const gameUIState = useGameUIStore();
   const {
@@ -38,19 +41,33 @@ export function useGame() {
   } = useGameUIStore();
 
   const updateStats = useCallback(async () => {
-    console.log("Updating game stats...");
     try {
-      await Promise.all([updateLeaderboard(), addMatch()]);
-      console.log("Game stats updated successfully");
+      const results = await Promise.allSettled([
+        updateLeaderboard(),
+        addMatch(),
+      ]);
+
+      results.forEach((result, index) => {
+        if (result.status === "rejected") {
+          console.error(`Error in update operation ${index}:`, result.reason);
+        }
+      });
+
+      if (results.every((result) => result.status === "fulfilled")) {
+        console.log("Game stats updated successfully");
+      } else {
+        console.warn("Some game stats updates failed");
+      }
     } catch (error) {
       console.error("Error updating game stats:", error);
     }
   }, [updateLeaderboard, addMatch]);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function determineGamePhase(gameInfo: any) {
     if (!gameInfo) return GamePhase.CHOOSING;
 
-    const [playerA, playerB, winner, finished, bothCommitted] = gameInfo;
+    const [playerB, finished, bothCommitted] = gameInfo;
 
     if (finished) {
       return GamePhase.FINISHED;
@@ -106,7 +123,25 @@ export function useGame() {
           setTransactionHash(resolveResult.hash);
         }
 
-        await updateStats();
+        // Update local leaderboard
+        if (address) {
+          updateLocalLeaderboard(
+            address,
+            gameResult as unknown as "WIN" | "LOSE" | "DRAW",
+            Number(formatEther(betAmount))
+          );
+
+          addLocalMatch({
+            gameId,
+            playerMove: move,
+            result: gameResult,
+            transactionHash: resolveResult.hash || "",
+            houseMove: houseResult.move || "ROCK",
+            betAmount,
+          });
+        }
+
+        // await updateStats(); // We don't need to update stats here, it will be updated after 60 seconds
 
         return {
           gameId,
@@ -164,7 +199,7 @@ export function useGame() {
           setTransactionHash(resolveResult.hash);
         }
 
-        await updateStats();
+        // await updateStats(); // We don't need to update stats here, it will be updated after 60 seconds
 
         return {
           gameId,
