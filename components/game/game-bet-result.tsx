@@ -1,4 +1,4 @@
-import { GameResult } from "@/types/game";
+import { GameResult } from '@/types/game';
 
 interface GameBetResultProps {
   gameResult: GameResult;
@@ -11,25 +11,25 @@ export default function GameBetResult({
 }: GameBetResultProps) {
   const data = {
     WIN: {
-      color: "text-[#AEF342]",
-      title: "Great move!",
-      message: "Here is your prize",
-      icon: "/icons/win.svg",
-      symbol: "+",
+      color: 'text-[#AEF342]',
+      title: 'Great move!',
+      message: 'You won som $MON!',
+      icon: '/icons/win.svg',
+      symbol: '+',
     },
     LOSE: {
-      color: "text-[#FF666B]",
-      title: "Bad move!",
-      message: "You lost this amount",
-      icon: "/icons/lose.svg",
-      symbol: "-",
+      color: 'text-[#FF666B]',
+      title: 'Bad move!',
+      message: 'You lost your wager',
+      icon: '/icons/lose.svg',
+      symbol: '-',
     },
     DRAW: {
-      color: "text-[#FD9800]",
-      title: "Almost there!",
-      message: "Your bet has been refunded to your account balance",
-      icon: "/icons/draw.svg",
-      symbol: "",
+      color: 'text-[#FD9800]',
+      title: 'Almost there!',
+      message: 'Your wager has been refunded to your account balance',
+      icon: '/icons/draw.svg',
+      symbol: '',
     },
   };
 
