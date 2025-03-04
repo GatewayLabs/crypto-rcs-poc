@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import { useMatches } from "@/hooks/use-matches";
-import { ExternalLink } from "lucide-react";
-import MatchesSummary from "./matches-summary";
-import { useState, useEffect } from "react";
+import { useMatches } from '@/hooks/use-matches';
+import { ExternalLink } from 'lucide-react';
+import MatchesSummary from './matches-summary';
+import { useState, useEffect } from 'react';
 
 export default function MatchHistory() {
   const { matches } = useMatches();
@@ -44,7 +44,7 @@ export default function MatchHistory() {
     const now = currentTime;
     const diffInSeconds = Math.floor((now - timestamp) / 1000);
 
-    if (diffInSeconds < 5) return "just now";
+    if (diffInSeconds < 5) return 'just now';
     if (diffInSeconds < 60) return `${diffInSeconds}s ago`;
 
     const diffInMinutes = Math.floor(diffInSeconds / 60);
@@ -60,21 +60,21 @@ export default function MatchHistory() {
   };
 
   const getExplorerUrl = (txHash: string) => {
-    return `https://sepolia.basescan.org/tx/${txHash}`;
+    return `https://testnet.monadexplorer.com/tx/${txHash}`;
   };
 
-  const getMoveImage = (move: "ROCK" | "PAPER" | "SCISSORS") => {
+  const getMoveImage = (move: 'ROCK' | 'PAPER' | 'SCISSORS') => {
     const images = {
-      ROCK: "/icons/rock.svg",
-      PAPER: "/icons/paper.svg",
-      SCISSORS: "/icons/scissors.svg",
+      ROCK: '/icons/rock.svg',
+      PAPER: '/icons/paper.svg',
+      SCISSORS: '/icons/scissors.svg',
     };
     return images[move];
   };
 
   const formatBetValue = (value?: number) => {
-    if (value === undefined) return "0";
-    if (value === 0) return "0";
+    if (value === undefined) return '0';
+    if (value === 0) return '0';
     if (value > 0) {
       return `+${value.toFixed(2)}`;
     }
@@ -149,11 +149,11 @@ export default function MatchHistory() {
                       <td className="px-4 min-h-14 w-[108px]">
                         <div
                           className={`text-sm font-normal leading-none my-auto ${
-                            game.result === "WIN"
-                              ? "text-[rgba(174,243,66,1)]"
-                              : game.result === "LOSE"
-                              ? "text-red-500"
-                              : "text-yellow-500"
+                            game.result === 'WIN'
+                              ? 'text-[rgba(174,243,66,1)]'
+                              : game.result === 'LOSE'
+                              ? 'text-red-500'
+                              : 'text-yellow-500'
                           }`}
                         >
                           {game.result.slice(0, 1).toUpperCase() +
@@ -188,13 +188,13 @@ export default function MatchHistory() {
         </div>
         <div className="flex w-full items-center gap-[40px_100px] text-sm leading-6 justify-between flex-wrap pt-4 max-md:max-w-full">
           <div className="text-[color:var(--muted-foreground)] font-normal self-stretch my-auto">
-            Showing{" "}
+            Showing{' '}
             {currentMatches.length > 0
               ? `${indexOfFirstMatch + 1}-${Math.min(
                   indexOfLastMatch,
-                  matches.length
+                  matches.length,
                 )}`
-              : "0"}{" "}
+              : '0'}{' '}
             of {matches.length} row(s)
           </div>
           <div className="self-stretch flex items-center gap-2 text-[color:var(--primary)] font-medium whitespace-nowrap my-auto pl-2">
@@ -202,7 +202,7 @@ export default function MatchHistory() {
               onClick={goToPreviousPage}
               disabled={currentPage === 1}
               className={`bg-zinc-950 border-zinc-700 border self-stretch flex min-w-16 items-center overflow-hidden justify-center my-auto px-2 py-1.5 rounded-md border-solid ${
-                currentPage === 1 ? "opacity-50" : "hover:bg-zinc-900"
+                currentPage === 1 ? 'opacity-50' : 'hover:bg-zinc-900'
               }`}
             >
               <div className="self-stretch my-auto px-1">Previous</div>
@@ -211,7 +211,7 @@ export default function MatchHistory() {
               onClick={goToNextPage}
               disabled={currentPage >= totalPages}
               className={`bg-zinc-950 border-zinc-700 border self-stretch flex min-w-16 items-center overflow-hidden justify-center my-auto px-2 py-1.5 rounded-md border-solid ${
-                currentPage >= totalPages ? "opacity-50" : "hover:bg-zinc-900"
+                currentPage >= totalPages ? 'opacity-50' : 'hover:bg-zinc-900'
               }`}
             >
               <div className="self-stretch my-auto px-1">Next</div>

@@ -1,238 +1,195 @@
-import { gameContractConfig } from "@/config/contracts";
-import { Move } from "@/lib/crypto";
-import { GameHistory, GameResult } from "@/types/game";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAccount, usePublicClient } from "wagmi";
-import { DEFAULT_BET_AMOUNT_WEI } from "./use-game-contract";
-import { formatEther } from "viem";
+import { Move } from '@/lib/crypto';
+import { GameHistory, GameResult } from '@/types/game';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAccount } from 'wagmi';
+import { formatEther } from 'viem';
+import { GameState } from './use-player-games';
+
+// Subgraph URL
+const SUBGRAPH_URL =
+  'https://api.studio.thegraph.com/query/105896/odyssey-rps/version/latest';
+
+// GraphQL query for player's games (both created and joined)
+const PLAYER_GAMES_QUERY = `
+  query GetPlayerGames($playerId: String!) {
+    playerA: games(where: { playerA: $playerId }, orderBy: createdAt, orderDirection: desc) {
+      id
+      gameId
+      playerA {
+        id
+      }
+      playerB {
+        id
+      }
+      betAmount
+      winner
+      state
+      isFinished
+      createdAt
+      resolvedAt
+      transactionHash
+      revealedDifference
+    }
+    playerB: games(where: { playerB: $playerId }, orderBy: createdAt, orderDirection: desc) {
+      id
+      gameId
+      playerA {
+        id
+      }
+      playerB {
+        id
+      }
+      betAmount
+      winner
+      state
+      isFinished
+      createdAt
+      resolvedAt
+      transactionHash
+      revealedDifference
+    }
+  }
+`;
+
+interface SubgraphGame {
+  id: string;
+  gameId: string;
+  playerA: {
+    id: string;
+  };
+  playerB: {
+    id: string;
+  } | null;
+  betAmount: string;
+  winner: string | null;
+  state: string;
+  isFinished: boolean;
+  createdAt: string;
+  resolvedAt: string | null;
+  transactionHash: string;
+  revealedDifference: number | null;
+}
+
+interface SubgraphGamesResponse {
+  data: {
+    playerA: SubgraphGame[];
+    playerB: SubgraphGame[];
+  };
+  errors?: Array<{
+    message: string;
+    locations: Array<{ line: number; column: number }>;
+    path: string[];
+  }>;
+}
 
 export function useMatches() {
   const { address } = useAccount();
   const queryClient = useQueryClient();
-  const publicClient = usePublicClient();
 
   const {
     data: matches = [],
     isLoading,
     refetch,
   } = useQuery({
-    queryKey: ["matches", address],
+    queryKey: ['matches', address],
     queryFn: async () => {
-      if (!publicClient || !address) return [] as GameHistory[];
+      if (!address) return [] as GameHistory[];
 
       try {
-        const resolvedEvents = await publicClient.getLogs({
-          address: gameContractConfig.address,
-          event: {
-            type: "event",
-            name: "GameResolved",
-            inputs: [
-              { indexed: true, name: "gameId", type: "uint256" },
-              { indexed: false, name: "winner", type: "address" },
-              { indexed: false, name: "diffMod3", type: "int256" },
-            ],
+        // Normalize the address to lowercase
+        const normalizedAddress = address.toLowerCase();
+
+        // Fetch data from the subgraph
+        const response = await fetch(SUBGRAPH_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
           },
-          fromBlock: "earliest",
-          toBlock: "latest",
+          body: JSON.stringify({
+            query: PLAYER_GAMES_QUERY,
+            variables: {
+              playerId: normalizedAddress,
+            },
+          }),
         });
 
-        const createdEvents = await publicClient.getLogs({
-          address: gameContractConfig.address,
-          event: {
-            type: "event",
-            name: "GameCreated",
-            inputs: [
-              { indexed: true, name: "gameId", type: "uint256" },
-              { indexed: true, name: "playerA", type: "address" },
-            ],
-          },
-          fromBlock: "earliest",
-          toBlock: "latest",
-        });
-
-        const joinedEvents = await publicClient.getLogs({
-          address: gameContractConfig.address,
-          event: {
-            type: "event",
-            name: "GameJoined",
-            inputs: [
-              { indexed: true, name: "gameId", type: "uint256" },
-              { indexed: true, name: "playerB", type: "address" },
-            ],
-          },
-          fromBlock: "earliest",
-          toBlock: "latest",
-        });
-
-        const gameData: Record<
-          string,
-          {
-            playerA: string;
-            playerB: string;
-            createdBlock?: bigint;
-            resolvedBlock?: bigint;
-            winner?: string;
-            diffMod3?: bigint;
-            transactionHash?: string;
-            betAmount: bigint;
-          }
-        > = {};
-
-        for (const event of createdEvents) {
-          if (event.args && event.args.gameId && event.args.playerA) {
-            const gameId = event.args.gameId.toString();
-            let betAmount = DEFAULT_BET_AMOUNT_WEI;
-
-            // Try to get transaction value
-            if (event.transactionHash) {
-              try {
-                const tx = await publicClient.getTransaction({
-                  hash: event.transactionHash,
-                });
-                if (tx && tx.value > 0n) {
-                  betAmount = tx.value;
-                }
-              } catch (error) {
-                console.error("Error fetching transaction:", error);
-              }
-            }
-
-            gameData[gameId] = {
-              ...gameData[gameId],
-              playerA: event.args.playerA.toLowerCase(),
-              playerB: "",
-              createdBlock: event.blockNumber,
-              betAmount: betAmount,
-            };
-          }
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
         }
 
-        for (const event of joinedEvents) {
-          if (event.args && event.args.gameId && event.args.playerB) {
-            const gameId = event.args.gameId.toString();
-            if (gameData[gameId]) {
-              gameData[gameId].playerB = event.args.playerB.toLowerCase();
+        const data = (await response.json()) as SubgraphGamesResponse;
 
-              // Try to get transaction value for joining
-              if (event.transactionHash) {
-                try {
-                  const tx = await publicClient.getTransaction({
-                    hash: event.transactionHash,
-                  });
-                  if (tx && tx.value > 0n) {
-                    gameData[gameId].betAmount = tx.value;
-                  }
-                } catch (error) {
-                  console.error("Error fetching transaction:", error);
-                }
-              }
-            }
-          }
-        }
-
-        for (const event of resolvedEvents) {
-          if (event.args && event.args.gameId) {
-            const gameId = event.args.gameId.toString();
-            if (gameData[gameId]) {
-              gameData[gameId] = {
-                ...gameData[gameId],
-                winner: event.args.winner?.toLowerCase(),
-                diffMod3: event.args.diffMod3,
-                resolvedBlock: event.blockNumber,
-                transactionHash: event.transactionHash,
-              };
-            }
-          }
+        if (data.errors) {
+          console.error('GraphQL errors:', data.errors);
+          throw new Error('GraphQL query failed');
         }
 
         const userMatches: GameHistory[] = [];
 
-        for (const [gameId, game] of Object.entries(gameData)) {
-          const normalizedAddress = address.toLowerCase();
-          const isPlayerA = game.playerA === normalizedAddress;
-          const isPlayerB = game.playerB === normalizedAddress;
-
-          if (!isPlayerA && !isPlayerB) continue;
-          if (!game.resolvedBlock || game.diffMod3 === undefined) continue;
-
-          let timestamp = Date.now();
-          try {
-            const block = await publicClient.getBlock({
-              blockNumber: game.resolvedBlock,
-            });
-            timestamp = Number(block.timestamp) * 1000;
-          } catch (error) {
-            console.error("Error fetching block timestamp:", error);
+        // Process games where player is playerA
+        for (const game of data.data.playerA) {
+          if (
+            game.state !== GameState.RESOLVED ||
+            !game.resolvedAt ||
+            game.revealedDifference === null
+          ) {
+            continue;
           }
 
-          // Get bet amount in ETH
-          const betAmount = game.betAmount || DEFAULT_BET_AMOUNT_WEI;
-          const betValueEth = Number(formatEther(betAmount));
+          const betAmount = Number(formatEther(BigInt(game.betAmount)));
+          const timestamp = Number(game.resolvedAt) * 1000;
 
-          // Determine the player's move and opponent's move
-          // For Rock-Paper-Scissors with Paillier:
-          // diffMod3 = 0 => tie
-          // diffMod3 = 1 => player A wins
-          // diffMod3 = 2 => player B wins
-          let playerMove: Move;
-          let houseMove: Move;
-          let result: GameResult;
-          let betValue: number = 0;
+          // Convert revealedDifference to diffMod3 (ensure positive value 0-2)
+          const diffMod3Value = ((game.revealedDifference % 3) + 3) % 3;
 
-          // Infer moves from diffMod3
-          // This is approximate since we can't know the exact moves without decryption
-          // We're reconstructing probable moves based on the game rules
-          // Handle potential negative values by ensuring we get a positive modulo
-          let diffMod3Value: number;
-          if (game.diffMod3 !== undefined) {
-            const mod = game.diffMod3 % 3n;
-            diffMod3Value = Number(mod < 0n ? mod + 3n : mod);
-          } else {
-            diffMod3Value = 1; // Default to non-draw if undefined
-          }
-
-          if (diffMod3Value === 0) {
-            // It's a tie, so both players chose the same move
-            // For visualization variety, randomly pick one of the three moves for draws
-            // In a real draw, both players must have played the same move
-            const drawMoves: Move[] = ["ROCK", "PAPER", "SCISSORS"];
-            const randomDrawMove =
-              drawMoves[Math.floor(Math.random() * drawMoves.length)];
-            playerMove = randomDrawMove;
-            houseMove = randomDrawMove;
-            result = GameResult.DRAW;
-            betValue = 0;
-          } else if (diffMod3Value === 1) {
-            // Player A wins
-            if (isPlayerA) {
-              playerMove = "ROCK";
-              houseMove = "SCISSORS";
-              result = GameResult.WIN;
-              betValue = betValueEth;
-            } else {
-              playerMove = "SCISSORS";
-              houseMove = "ROCK";
-              result = GameResult.LOSE;
-              betValue = -betValueEth;
-            }
-          } else {
-            // Player B wins
-            if (isPlayerB) {
-              playerMove = "ROCK";
-              houseMove = "SCISSORS";
-              result = GameResult.WIN;
-              betValue = betValueEth;
-            } else {
-              playerMove = "SCISSORS";
-              houseMove = "ROCK";
-              result = GameResult.LOSE;
-              betValue = -betValueEth;
-            }
-          }
+          // Infer moves and results from diffMod3
+          const { playerMove, houseMove, result, betValue } = inferGameResult(
+            diffMod3Value,
+            true, // isPlayerA
+            game.winner?.toLowerCase() === normalizedAddress,
+            betAmount,
+          );
 
           userMatches.push({
-            id: gameId,
-            gameId: Number(gameId),
+            id: game.id,
+            gameId: Number(game.gameId),
+            timestamp,
+            playerMove,
+            houseMove,
+            result,
+            playerAddress: normalizedAddress,
+            transactionHash: game.transactionHash,
+            betValue: betValue,
+          });
+        }
+
+        // Process games where player is playerB
+        for (const game of data.data.playerB) {
+          if (
+            game.state !== GameState.RESOLVED ||
+            !game.resolvedAt ||
+            game.revealedDifference === null
+          ) {
+            continue; // Skip games that aren't resolved yet
+          }
+
+          const betAmount = Number(formatEther(BigInt(game.betAmount)));
+          const timestamp = Number(game.resolvedAt) * 1000;
+
+          // Convert revealedDifference to diffMod3 (ensure positive value 0-2)
+          const diffMod3Value = ((game.revealedDifference % 3) + 3) % 3;
+
+          // Infer moves and results from diffMod3
+          const { playerMove, houseMove, result, betValue } = inferGameResult(
+            diffMod3Value,
+            false, // isPlayerA
+            game.winner?.toLowerCase() === normalizedAddress,
+            betAmount,
+          );
+
+          userMatches.push({
+            id: game.id,
+            gameId: Number(game.gameId),
             timestamp,
             playerMove,
             houseMove,
@@ -245,14 +202,90 @@ export function useMatches() {
 
         return userMatches.sort((a, b) => b.timestamp - a.timestamp);
       } catch (error) {
-        console.error("Error fetching match history:", error);
+        console.error(
+          'Error fetching match history from subgraph:',
+          error instanceof Error ? error.message : String(error),
+        );
         return [] as GameHistory[];
       }
     },
-    enabled: !!publicClient && !!address,
+    enabled: !!address,
     refetchInterval: 60000,
     staleTime: 5000,
   });
+
+  // Helper function to infer game results from diffMod3
+  function inferGameResult(
+    diffMod3Value: number,
+    isPlayerA: boolean,
+    isWinner: boolean,
+    betAmount: number,
+  ): {
+    playerMove: Move;
+    houseMove: Move;
+    result: GameResult;
+    betValue: number;
+  } {
+    let playerMove: Move;
+    let houseMove: Move;
+    let result: GameResult;
+    let betValue: number = 0;
+
+    if (diffMod3Value === 0) {
+      const drawMoves: Move[] = ['ROCK', 'PAPER', 'SCISSORS'];
+      const randomDrawMove =
+        drawMoves[Math.floor(Math.random() * drawMoves.length)];
+      playerMove = randomDrawMove;
+      houseMove = randomDrawMove;
+      result = GameResult.DRAW;
+      betValue = 0;
+    } else if (diffMod3Value === 1) {
+      // Player A wins
+      if (isPlayerA) {
+        playerMove = 'ROCK';
+        houseMove = 'SCISSORS';
+        result = GameResult.WIN;
+        betValue = betAmount;
+      } else {
+        playerMove = 'SCISSORS';
+        houseMove = 'ROCK';
+        result = GameResult.LOSE;
+        betValue = -betAmount;
+      }
+    } else {
+      // Player B wins
+      if (!isPlayerA) {
+        playerMove = 'ROCK';
+        houseMove = 'SCISSORS';
+        result = GameResult.WIN;
+        betValue = betAmount;
+      } else {
+        playerMove = 'SCISSORS';
+        houseMove = 'ROCK';
+        result = GameResult.LOSE;
+        betValue = -betAmount;
+      }
+    }
+
+    // Double-check with the actual winner (in case logic doesn't match)
+    if (
+      (result === GameResult.WIN && !isWinner) ||
+      (result === GameResult.LOSE && isWinner)
+    ) {
+      console.warn(
+        'Game result logic mismatch with winner field, using winner field',
+      );
+      if (isWinner) {
+        result = GameResult.WIN;
+        betValue = betAmount;
+      } else {
+        result = GameResult.LOSE;
+        betValue = -betAmount;
+      }
+    }
+
+    return { playerMove, houseMove, result, betValue };
+  }
 
   // Calculate total earnings from all matches
   const totalEarnings = matches.reduce((total, match) => {
@@ -263,13 +296,13 @@ export function useMatches() {
     try {
       await refetch();
     } catch (error) {
-      console.error("Error refetching match history:", error);
+      console.error('Error refetching match history:', error);
     }
   };
 
   const clearHistoryMutation = async () => {
     if (address) {
-      queryClient.setQueryData(["matches", address], []);
+      queryClient.setQueryData(['matches', address], []);
     }
   };
 
