@@ -1,6 +1,7 @@
-"use client";
+'use client';
 
-import React from "react";
+import React from 'react';
+import Image from 'next/image';
 
 export default function GameHeader() {
   return (
@@ -8,11 +9,12 @@ export default function GameHeader() {
       className="bg-zinc-950 border self-stretch relative flex min-w-60 min-h-56 flex-col justify-center w-[461px] my-auto px-12 py-[47px] rounded-3xl border-white border-solid max-md:max-w-full max-md:px-5"
       role="banner"
     >
-      <img
-        loading="lazy"
-        src="https://cdn.builder.io/api/v1/image/assets/7e9fda62d1fd4d2cb4b968860ae91a02/979acf298c5e69a83991487ab2578eadcba2d2bee0ed8aacda3bdf6aef4f2176?placeholderIfAbsent=true"
-        className="aspect-[2.81] object-contain w-[365px] self-center z-0 max-w-full"
+      <Image
+        src="/logo.svg"
         alt="Game logo"
+        width={365}
+        height={128}
+        className="aspect-[2.81] object-contain w-[365px] self-center z-0 max-w-full"
       />
       <img
         loading="lazy"

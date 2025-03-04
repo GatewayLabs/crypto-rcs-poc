@@ -45,7 +45,6 @@ export function useGameContract(gameId?: number) {
           functionName: 'createGame',
           args: [encryptedMove as `0x${string}`],
           value: betAmount,
-          gas: 1_000_000n,
         });
 
         // Wait for transaction receipt

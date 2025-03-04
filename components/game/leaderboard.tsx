@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import { useLeaderboard } from "@/hooks/use-leaderboard";
-import { useGameUIStore } from "@/stores/game-ui-store";
-import { useEffect, useState } from "react";
-import { useAccount } from "wagmi";
+import { useLeaderboard } from '@/hooks/use-leaderboard';
+import { useGameUIStore } from '@/stores/game-ui-store';
+import { useEffect, useState } from 'react';
+import { useAccount } from 'wagmi';
 
 export default function Leaderboard() {
   const { leaderboard } = useLeaderboard();
@@ -13,7 +13,7 @@ export default function Leaderboard() {
 
   const rowsPerPage = 20;
   const sortedLeaderboard = [...leaderboard].sort((a, b) => {
-    if ("earnings" in a && "earnings" in b) {
+    if ('earnings' in a && 'earnings' in b) {
       return (b.earnings ?? 0) - (a.earnings ?? 0);
     }
     return b.score - a.score;
@@ -26,7 +26,7 @@ export default function Leaderboard() {
   const indexOfFirstPlayer = indexOfLastPlayer - rowsPerPage;
   const currentPlayers = sortedLeaderboard.slice(
     indexOfFirstPlayer,
-    indexOfLastPlayer
+    indexOfLastPlayer,
   );
 
   // Change page handlers
@@ -49,14 +49,14 @@ export default function Leaderboard() {
 
     const sorted = [...leaderboard].sort((a, b) => {
       // Use earnings if available, otherwise fall back to score
-      if ("earnings" in a && "earnings" in b) {
+      if ('earnings' in a && 'earnings' in b) {
         return (b.earnings ?? 0) - (a.earnings ?? 0);
       }
       return b.score - a.score;
     });
 
     const playerIndex = sorted.findIndex(
-      (player) => player.address.toLowerCase() === address.toLowerCase()
+      (player) => player.address.toLowerCase() === address.toLowerCase(),
     );
 
     const playerSummary = playerIndex !== -1 ? sorted[playerIndex] : null;
@@ -83,7 +83,7 @@ export default function Leaderboard() {
                     Player
                   </th>
                   <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3 w-[150px]">
-                    Earned (MON)
+                    PnL ($MON)
                   </th>
                 </tr>
               </thead>
@@ -105,12 +105,12 @@ export default function Leaderboard() {
                           <div
                             className={`text-xs font-normal whitespace-nowrap leading-none px-2.5 py-0.5 rounded-full ${
                               indexOfFirstPlayer + index === 0
-                                ? "bg-yellow-400 text-zinc-900"
+                                ? 'bg-yellow-400 text-zinc-900'
                                 : indexOfFirstPlayer + index === 1
-                                ? "bg-gray-400 text-zinc-900"
+                                ? 'bg-gray-400 text-zinc-900'
                                 : indexOfFirstPlayer + index === 2
-                                ? "bg-amber-600 text-zinc-900"
-                                : "bg-zinc-700 text-zinc-300"
+                                ? 'bg-amber-600 text-zinc-900'
+                                : 'bg-zinc-700 text-zinc-300'
                             }`}
                           >
                             {indexOfFirstPlayer + index + 1}
@@ -128,9 +128,9 @@ export default function Leaderboard() {
                       <td className="px-4 min-h-14 w-[150px]">
                         <div className="flex items-center h-14">
                           <div className="text-sm font-normal leading-none">
-                            {"earnings" in player
+                            {'earnings' in player
                               ? (player.earnings ?? 0).toFixed(2)
-                              : (player.score > 0 ? "+" : "") +
+                              : (player.score > 0 ? '+' : '') +
                                 player.score.toString()}
                           </div>
                         </div>
@@ -144,13 +144,13 @@ export default function Leaderboard() {
         </div>
         <div className="flex w-full items-center gap-[40px_100px] text-sm leading-6 justify-between flex-wrap pt-4 max-md:max-w-full">
           <div className="text-[color:var(--muted-foreground)] font-normal self-stretch my-auto">
-            Showing{" "}
+            Showing{' '}
             {currentPlayers.length > 0
               ? `${indexOfFirstPlayer + 1}-${Math.min(
                   indexOfLastPlayer,
-                  sortedLeaderboard.length
+                  sortedLeaderboard.length,
                 )}`
-              : "0"}{" "}
+              : '0'}{' '}
             of {sortedLeaderboard.length} row(s)
           </div>
           <div className="self-stretch flex items-center gap-2 text-[color:var(--primary)] font-medium whitespace-nowrap my-auto pl-2">
@@ -158,7 +158,7 @@ export default function Leaderboard() {
               onClick={goToPreviousPage}
               disabled={currentPage === 1}
               className={`bg-zinc-950 border-zinc-700 border self-stretch flex min-w-16 items-center overflow-hidden justify-center my-auto px-2 py-1.5 rounded-md border-solid ${
-                currentPage === 1 ? "opacity-50" : "hover:bg-zinc-900"
+                currentPage === 1 ? 'opacity-50' : 'hover:bg-zinc-900'
               }`}
             >
               <div className="self-stretch my-auto px-1">Previous</div>
@@ -167,7 +167,7 @@ export default function Leaderboard() {
               onClick={goToNextPage}
               disabled={currentPage >= totalPages}
               className={`bg-zinc-950 border-zinc-700 border self-stretch flex min-w-16 items-center overflow-hidden justify-center my-auto px-2 py-1.5 rounded-md border-solid ${
-                currentPage >= totalPages ? "opacity-50" : "hover:bg-zinc-900"
+                currentPage >= totalPages ? 'opacity-50' : 'hover:bg-zinc-900'
               }`}
             >
               <div className="self-stretch my-auto px-1">Next</div>
