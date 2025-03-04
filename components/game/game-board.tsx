@@ -1,32 +1,32 @@
-"use client";
+'use client';
 
-import ErrorDialog from "@/components/game/error-dialog";
-import GameButton from "@/components/game/game-button";
-import GameResultView from "@/components/game/game-result";
-import TransactionModal from "@/components/game/transaction-modal";
-import { ToastContainer } from "@/components/ui/toast";
-import { useGame } from "@/hooks/use-game";
-import { Move } from "@/lib/crypto";
-import { soundEffects } from "@/lib/sounds/sound-effects";
-import { GameToast, useGameUIStore } from "@/stores/game-ui-store";
-import { GamePhase } from "@/types/game";
-import { formatEther } from "ethers";
-import { useEffect, useState } from "react";
-import { useAccount, useBalance } from "wagmi";
-import GameBet from "./game-bet";
+import ErrorDialog from '@/components/game/error-dialog';
+import GameButton from '@/components/game/game-button';
+import GameResultView from '@/components/game/game-result';
+import TransactionModal from '@/components/game/transaction-modal';
+import { ToastContainer } from '@/components/ui/toast';
+import { useGame } from '@/hooks/use-game';
+import { Move } from '@/lib/crypto';
+import { soundEffects } from '@/lib/sounds/sound-effects';
+import { GameToast, useGameUIStore } from '@/stores/game-ui-store';
+import { GamePhase } from '@/types/game';
+import { formatEther } from 'ethers';
+import { useEffect, useState } from 'react';
+import { useAccount, useBalance } from 'wagmi';
+import GameBet from './game-bet';
 
 const GAME_BUTTONS = [
   {
-    label: "ROCK",
-    imageSrc: "/images/rock.png",
+    label: 'ROCK',
+    imageSrc: '/images/rock.png',
   },
   {
-    label: "PAPER",
-    imageSrc: "/images/paper.png",
+    label: 'PAPER',
+    imageSrc: '/images/paper.png',
   },
   {
-    label: "SCISSORS",
-    imageSrc: "/images/scissors.png",
+    label: 'SCISSORS',
+    imageSrc: '/images/scissors.png',
   },
 ];
 
@@ -67,8 +67,8 @@ export default function GameBoard() {
 
   useEffect(() => {
     if (phase === GamePhase.FINISHED && result) {
-      if (result === "WIN") soundEffects.win();
-      else if (result === "LOSE") soundEffects.lose();
+      if (result === 'WIN') soundEffects.win();
+      else if (result === 'LOSE') soundEffects.lose();
       else soundEffects.draw();
     }
   }, [phase, result]);
@@ -80,9 +80,9 @@ export default function GameBoard() {
   useEffect(() => {
     // Show transaction modal based on phase
     if (phase === GamePhase.SELECTED) {
-      setTransactionModal(true, "approve");
+      setTransactionModal(true, 'approve');
     } else if (phase === GamePhase.WAITING || phase === GamePhase.REVEALING) {
-      setTransactionModal(true, "validate");
+      setTransactionModal(true, 'validate');
     } else {
       setTransactionModal(false);
     }
@@ -117,24 +117,24 @@ export default function GameBoard() {
       soundEffects.select();
 
       if (!gameId) {
-        addToast("Creating new game...", "info");
+        addToast('Creating new game...', 'info');
         await createGame(move, BigInt(betValue * 10 ** 18));
-        addToast("Game created! Waiting for opponent...", "success");
+        addToast('Game created! Waiting for opponent...', 'success');
       } else {
-        addToast("Joining game...", "info");
+        addToast('Joining game...', 'info');
         await joinGame(gameId, move, BigInt(betValue * 10 ** 18));
-        addToast("Joined game!", "success");
+        addToast('Joined game!', 'success');
       }
     } catch (error) {
-      addToast("Error processing move", "info");
-      console.error("Error making move:", error);
+      addToast('Error processing move', 'info');
+      console.error('Error making move:', error);
     }
   };
 
   const handlePlayAgain = () => {
     soundEffects.click();
     resetGame();
-    addToast("Starting new game!", "info");
+    addToast('Starting new game!', 'info');
   };
 
   if (
@@ -163,15 +163,15 @@ export default function GameBoard() {
         <div className="max-w-full">
           <div className="text-zinc-400 text-sm leading-none max-md:max-w-full">
             {!address
-              ? "Connect your wallet to play"
+              ? 'Connect your wallet to play'
               : phase === GamePhase.CHOOSING
               ? gameId
-                ? "Join the game..."
-                : "Make your move to start the match"
-              : "Processing your move..."}
+                ? 'Join the game...'
+                : 'Make your move to start the match'
+              : 'Processing your move...'}
           </div>
           <div className="text-white text-5xl font-bold leading-none tracking-[-1.2px] mt-3 max-md:max-w-full max-md:text-[40px]">
-            Let&apos;s rock on-chain
+            Wager your $MON
           </div>
         </div>
         <div className="text-white mt-8 text-2xl font-bold leading-none tracking-[-0.6px] max-md:max-w-full">
@@ -199,7 +199,7 @@ export default function GameBoard() {
                 phase !== GamePhase.CHOOSING
               }
               aria-selected={
-                typeof playerMove === "string" && playerMove === button.label
+                typeof playerMove === 'string' && playerMove === button.label
               }
             />
           ))}
@@ -210,9 +210,9 @@ export default function GameBoard() {
         isOpen={isTransactionModalOpen}
         type={transactionType}
       />
-      <ErrorDialog isOpen={!!error} onClose={resetGame} error={error || ""} />
+      <ErrorDialog isOpen={!!error} onClose={resetGame} error={error || ''} />
       <ToastContainer
-        toasts={toasts.filter((t: GameToast) => t.type !== "error")}
+        toasts={toasts.filter((t: GameToast) => t.type !== 'error')}
         onDismiss={dismissToast}
       />
     </>
