@@ -49,7 +49,7 @@ export default function BalanceButton() {
                 {balance
                   ? parseFloat(formatEther(balance)).toFixed(4)
                   : "0.0000"}{" "}
-                MON
+                $MON
               </span>
               {isOpen ? (
                 <ChevronUp className="h-4 w-4 opacity-70" />
