@@ -2,21 +2,19 @@
 
 import { Move, encryptMove } from '@/lib/crypto';
 import { gameContractConfig } from '@/config/contracts';
-import {
-  usePublicClient,
-  useReadContract,
-  useWatchContractEvent,
-  useWriteContract,
-} from 'wagmi';
+import { usePublicClient, useReadContract, useWriteContract } from 'wagmi';
 import { useCallback } from 'react';
-import { parseEventLogs } from 'viem';
+import { EstimateContractGasParameters, parseEventLogs } from 'viem';
+import { monad } from '@/config/chains';
+import * as paillier from 'paillier-bigint';
 
-// Default bet amount in ETH
 export const DEFAULT_BET_AMOUNT = 0.01;
 export const DEFAULT_BET_AMOUNT_WEI = BigInt(DEFAULT_BET_AMOUNT * 10 ** 18);
 
 export function useGameContract(gameId?: number) {
-  const publicClient = usePublicClient();
+  const publicClient = usePublicClient({
+    chainId: monad.id,
+  });
 
   // Read game info
   const { data: gameInfo, refetch: refetchGameInfo } = useReadContract({
@@ -25,6 +23,24 @@ export function useGameContract(gameId?: number) {
     args: gameId ? [BigInt(gameId)] : undefined,
     query: { enabled: Boolean(gameId) },
   });
+
+  const estimateGasWithRetry = async (
+    params: EstimateContractGasParameters,
+  ) => {
+    let retries = 0;
+    const maxRetries = 3;
+
+    while (retries < maxRetries) {
+      try {
+        const estimate = await publicClient!.estimateContractGas(params);
+        return (estimate * 120n) / 100n;
+      } catch (error) {
+        retries++;
+        if (retries === maxRetries) throw error;
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+    }
+  };
 
   // Write hooks
   const {
@@ -39,22 +55,36 @@ export function useGameContract(gameId?: number) {
       try {
         const encryptedMove = await encryptMove(move);
 
-        // Get transaction hash
-        const hash = await writeContract({
+        let paddedEncryptedMove = encryptedMove;
+        if (encryptedMove.length % 2 !== 0) {
+          paddedEncryptedMove = encryptedMove.replace('0x', '0x0');
+        }
+
+        while (paddedEncryptedMove.length < 258) {
+          paddedEncryptedMove = paddedEncryptedMove.replace('0x', '0x0');
+        }
+
+        const gas = await estimateGasWithRetry({
           ...gameContractConfig,
           functionName: 'createGame',
-          args: [encryptedMove as `0x${string}`],
+          args: [paddedEncryptedMove as `0x${string}`],
           value: betAmount,
         });
 
-        // Wait for transaction receipt
+        const hash = await writeContract({
+          ...gameContractConfig,
+          functionName: 'createGame',
+          args: [paddedEncryptedMove as `0x${string}`],
+          value: betAmount,
+          gas,
+        });
+
         const receipt = await publicClient!.waitForTransactionReceipt({ hash });
         const events = parseEventLogs({
           logs: receipt.logs,
           abi: gameContractConfig.abi,
         });
 
-        // Get game ID
         const result = events[0]?.args?.gameId;
 
         return Number(result);
