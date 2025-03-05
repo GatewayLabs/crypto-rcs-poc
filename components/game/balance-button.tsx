@@ -1,21 +1,21 @@
-"use client";
+'use client';
 
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { useWallet } from "@/contexts/wallet-context";
-import { usePrivy } from "@privy-io/react-auth";
-import { formatEther } from "ethers";
-import { ChevronDown, ChevronUp, Download, Upload } from "lucide-react";
-import { useEffect, useState } from "react";
-import { useBalance } from "wagmi";
-import { Button } from "../ui/button";
-import DepositModal from "./deposit-modal";
-import Modal from "./modal";
-import WithdrawModal from "./withdraw-modal";
+} from '@/components/ui/dropdown-menu';
+import { useWallet } from '@/contexts/wallet-context';
+import { usePrivy } from '@privy-io/react-auth';
+import { formatEther } from 'ethers';
+import { ChevronDown, ChevronUp, Download, Upload } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useBalance } from 'wagmi';
+import { Button } from '../ui/button';
+import DepositModal from './deposit-modal';
+import Modal from './modal';
+import WithdrawModal from './withdraw-modal';
 
 export default function BalanceButton() {
   const { authenticated } = usePrivy();
@@ -48,7 +48,8 @@ export default function BalanceButton() {
               <span>
                 {balance
                   ? parseFloat(formatEther(balance)).toFixed(4)
-                  : "0.0000"}{" "}
+                  : '0.0000'}{' '}
+                $MON
               </span>
               {isOpen ? (
                 <ChevronUp className="h-4 w-4 opacity-70" />

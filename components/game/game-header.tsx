@@ -1,11 +1,13 @@
-"use client";
+'use client';
 
-import WalletButton from "./wallet-button";
-
-import Image from "next/image";
-import BalanceButton from "./balance-button";
+import { useWallet } from '@/contexts/wallet-context';
+import Image from 'next/image';
+import BalanceButton from './balance-button';
+import WalletButton from './wallet-button';
 
 export default function Header() {
+  const { walletAddress } = useWallet();
+
   return (
     <>
       <div className="bg-white flex w-full items-center justify-between flex-wrap rounded-3xl max-md:max-w-full">
@@ -14,7 +16,7 @@ export default function Header() {
         </div>
         <div className="bg-zinc-950 border-b border-l self-stretch flex min-w-60 flex-col overflow-hidden justify-center flex-1 shrink basis-[0%] my-auto px-6 py-7 rounded-3xl border-white border-solid max-md:max-w-full max-md:px-5 items-end">
           <div className="flex items-center gap-2 text-neutral-50 font-normal">
-            <BalanceButton />
+            {walletAddress && <BalanceButton />}
             <WalletButton />
           </div>
         </div>
