@@ -6,7 +6,7 @@ import MatchesSummary from './matches-summary';
 import { useState, useEffect } from 'react';
 
 export default function MatchHistory() {
-  const { matches } = useMatches();
+  const { matches, playerStats } = useMatches();
   const [currentPage, setCurrentPage] = useState(1);
   const [currentTime, setCurrentTime] = useState(Date.now());
 
@@ -87,7 +87,7 @@ export default function MatchHistory() {
         Your matches
       </div>
 
-      <MatchesSummary />
+      {playerStats && <MatchesSummary playerStats={playerStats} />}
 
       <div className="w-full mt-4 max-md:max-w-full flex flex-col flex-grow">
         <div className="flex-grow">

@@ -2,9 +2,14 @@
 
 import { useGameUIStore } from '@/stores/game-ui-store';
 import { useMatches } from '@/hooks/use-matches';
+import { SubgraphPlayerStats } from '@/types/game';
 
-export default function MatchesSummary() {
-  const { playerRank, playerSummary } = useGameUIStore();
+export default function MatchesSummary({
+  playerStats,
+}: {
+  playerStats: SubgraphPlayerStats;
+}) {
+  const { playerRank } = useGameUIStore();
   const { totalEarnings } = useMatches();
 
   const formattedEarnings =
@@ -13,6 +18,10 @@ export default function MatchesSummary() {
     ) : (
       <div className="h-8 w-8 bg-zinc-700 rounded animate-pulse"></div>
     );
+
+  const wins = playerStats?.wins ?? 0;
+  const draws = playerStats?.draws ?? 0;
+  const losses = playerStats?.losses ?? 0;
 
   return (
     <div className="mt-6 w-full">
@@ -33,8 +42,8 @@ export default function MatchesSummary() {
         <div className="flex flex-col items-center justify-center p-4 flex-1">
           <span className="text-zinc-400 text-sm font-normal mb-2">Wins</span>
           <span className="text-[#AEF342] text-2xl font-medium">
-            {playerSummary?.wins != undefined ? (
-              playerSummary?.wins
+            {playerStats ? (
+              wins
             ) : (
               <div className="h-8 w-8 bg-zinc-700 rounded animate-pulse"></div>
             )}
@@ -46,8 +55,8 @@ export default function MatchesSummary() {
         <div className="flex flex-col items-center justify-center p-4 flex-1">
           <span className="text-zinc-400 text-sm font-normal mb-2">Draws</span>
           <span className="text-[#FD9800] text-2xl font-medium">
-            {playerSummary?.draws != undefined ? (
-              playerSummary?.draws
+            {playerStats ? (
+              draws
             ) : (
               <div className="h-8 w-8 bg-zinc-700 rounded animate-pulse"></div>
             )}
@@ -59,8 +68,8 @@ export default function MatchesSummary() {
         <div className="flex flex-col items-center justify-center p-4 flex-1">
           <span className="text-zinc-400 text-sm font-normal mb-2">Losses</span>
           <span className="text-[#FF666B] text-2xl font-medium">
-            {playerSummary?.losses != undefined ? (
-              playerSummary?.losses
+            {playerStats ? (
+              losses
             ) : (
               <div className="h-8 w-8 bg-zinc-700 rounded animate-pulse"></div>
             )}

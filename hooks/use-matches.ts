@@ -1,17 +1,25 @@
-import { Move } from "@/lib/crypto";
-import { GameHistory, GameResult } from "@/types/game";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { formatEther } from "viem";
-import { useAccount } from "wagmi";
-import { GameState } from "./use-player-games";
+import { useWallet } from '@/contexts/wallet-context';
+import { Move } from '@/lib/crypto';
+import {
+  GameHistory,
+  GameResult,
+  SubgraphGamesResponse,
+  SubgraphPlayerStats,
+} from '@/types/game';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { formatEther } from 'viem';
 
-// Subgraph URL
 const SUBGRAPH_URL = process.env.NEXT_PUBLIC_SUBGRAPH_URL as string;
 
-// GraphQL query for player's games (both created and joined)
 const PLAYER_GAMES_QUERY = `
-  query GetPlayerGames($playerId: String!) {
-    playerA: games(where: { playerA: $playerId }, orderBy: createdAt, orderDirection: desc) {
+  query GetPlayerGames($playerId: ID!, $first: Int, $skip: Int) {
+    playerA: games(
+      where: { playerA: $playerId, state: "RESOLVED" }
+      orderBy: resolvedAt
+      orderDirection: desc
+      first: $first
+      skip: $skip
+    ) {
       id
       gameId
       playerA {
@@ -22,14 +30,18 @@ const PLAYER_GAMES_QUERY = `
       }
       betAmount
       winner
-      state
       isFinished
-      createdAt
       resolvedAt
       transactionHash
       revealedDifference
     }
-    playerB: games(where: { playerB: $playerId }, orderBy: createdAt, orderDirection: desc) {
+    playerB: games(
+      where: { playerB: $playerId, state: "RESOLVED" }
+      orderBy: resolvedAt
+      orderDirection: desc
+      first: $first
+      skip: $skip
+    ) {
       id
       gameId
       playerA {
@@ -40,74 +52,51 @@ const PLAYER_GAMES_QUERY = `
       }
       betAmount
       winner
-      state
       isFinished
-      createdAt
       resolvedAt
       transactionHash
       revealedDifference
+    }
+    # Get aggregated stats for summary component
+    playerStats: player(id: $playerId) {
+      totalGamesPlayed
+      wins
+      losses
+      draws
+      netProfitLoss
+      totalReturned
     }
   }
 `;
 
-interface SubgraphGame {
-  id: string;
-  gameId: string;
-  playerA: {
-    id: string;
-  };
-  playerB: {
-    id: string;
-  } | null;
-  betAmount: string;
-  winner: string | null;
-  state: string;
-  isFinished: boolean;
-  createdAt: string;
-  resolvedAt: string | null;
-  transactionHash: string;
-  revealedDifference: number | null;
-}
-
-interface SubgraphGamesResponse {
-  data: {
-    playerA: SubgraphGame[];
-    playerB: SubgraphGame[];
-  };
-  errors?: Array<{
-    message: string;
-    locations: Array<{ line: number; column: number }>;
-    path: string[];
-  }>;
-}
-
 export function useMatches() {
-  const { address } = useAccount();
+  const { walletAddress: address } = useWallet();
   const queryClient = useQueryClient();
+  const PAGE_SIZE = 50;
 
   const {
-    data: matches = [],
+    data: matchesData = { matches: [], totalEarnings: 0, playerStats: null },
     isLoading,
     refetch,
   } = useQuery({
-    queryKey: ["matches", address],
+    queryKey: ['matches', address],
     queryFn: async () => {
-      if (!address) return [] as GameHistory[];
+      if (!address) return { matches: [], totalEarnings: 0, playerStats: null };
 
       try {
-        // Normalize the address to lowercase
         const normalizedAddress = address.toLowerCase();
 
-        // Fetch data from the subgraph
         const response = await fetch(SUBGRAPH_URL, {
-          method: "POST",
+          method: 'POST',
           headers: {
-            "Content-Type": "application/json",
+            'Content-Type': 'application/json',
           },
           body: JSON.stringify({
             query: PLAYER_GAMES_QUERY,
             variables: {
               playerId: normalizedAddress,
+              first: PAGE_SIZE,
+              skip: 0,
             },
           }),
         });
@@ -119,35 +108,33 @@ export function useMatches() {
         const data = (await response.json()) as SubgraphGamesResponse;
 
         if (data.errors) {
-          console.error("GraphQL errors:", data.errors);
-          throw new Error("GraphQL query failed");
+          console.error('GraphQL errors:', data.errors);
+          throw new Error('GraphQL query failed');
         }
 
         const userMatches: GameHistory[] = [];
+        let totalEarnings = 0;
 
-        // Process games where player is playerA
         for (const game of data.data.playerA) {
-          if (
-            game.state !== GameState.RESOLVED ||
-            !game.resolvedAt ||
-            game.revealedDifference === null
-          ) {
+          if (!game.resolvedAt || game.revealedDifference === null) {
             continue;
           }
 
           const betAmount = Number(formatEther(BigInt(game.betAmount)));
           const timestamp = Number(game.resolvedAt) * 1000;
 
-          // Convert revealedDifference to diffMod3 (ensure positive value 0-2)
           const diffMod3Value = ((game.revealedDifference % 3) + 3) % 3;
 
-          // Infer moves and results from diffMod3
+          // TODO: This is a temporary function to infer game results from diffMod3
+          // We should find a way to use the actual moves from the game instead
           const { playerMove, houseMove, result, betValue } = inferGameResult(
             diffMod3Value,
-            true, // isPlayerA
+            true,
             game.winner?.toLowerCase() === normalizedAddress,
-            betAmount
+            betAmount,
           );
+
+          totalEarnings += betValue;
 
           userMatches.push({
             id: game.id,
@@ -162,29 +149,24 @@ export function useMatches() {
           });
         }
 
-        // Process games where player is playerB
         for (const game of data.data.playerB) {
-          if (
-            game.state !== GameState.RESOLVED ||
-            !game.resolvedAt ||
-            game.revealedDifference === null
-          ) {
-            continue; // Skip games that aren't resolved yet
+          if (!game.resolvedAt || game.revealedDifference === null) {
+            continue;
           }
 
           const betAmount = Number(formatEther(BigInt(game.betAmount)));
           const timestamp = Number(game.resolvedAt) * 1000;
 
-          // Convert revealedDifference to diffMod3 (ensure positive value 0-2)
           const diffMod3Value = ((game.revealedDifference % 3) + 3) % 3;
 
-          // Infer moves and results from diffMod3
           const { playerMove, houseMove, result, betValue } = inferGameResult(
             diffMod3Value,
-            false, // isPlayerA
+            false,
             game.winner?.toLowerCase() === normalizedAddress,
-            betAmount
+            betAmount,
           );
+
+          totalEarnings += betValue;
 
           userMatches.push({
             id: game.id,
@@ -199,13 +181,22 @@ export function useMatches() {
           });
         }
 
-        return userMatches.sort((a, b) => b.timestamp - a.timestamp);
+        userMatches.sort((a, b) => b.timestamp - a.timestamp);
+
+        if (data.data.playerStats?.netProfitLoss) {
+          totalEarnings = Number(
+            formatEther(BigInt(data.data.playerStats.netProfitLoss)),
+          );
+        }
+
+        return {
+          matches: userMatches,
+          totalEarnings,
+          playerStats: data.data.playerStats,
+        };
       } catch (error) {
-        console.error(
-          "Error fetching match history from subgraph:",
-          error instanceof Error ? error.message : String(error)
-        );
-        return [] as GameHistory[];
+        console.error('Error fetching matches:', error);
+        return { matches: [], totalEarnings: 0, playerStats: null };
       }
     },
     enabled: !!address,
@@ -214,11 +205,13 @@ export function useMatches() {
   });
 
   // Helper function to infer game results from diffMod3
+  // TODO: This is a temporary function to infer game results from diffMod3
+  // We should find a way to use the actual moves from the game instead
   function inferGameResult(
     diffMod3Value: number,
     isPlayerA: boolean,
     isWinner: boolean,
-    betAmount: number
+    betAmount: number,
   ): {
     playerMove: Move;
     houseMove: Move;
@@ -231,7 +224,7 @@ export function useMatches() {
     let betValue: number = 0;
 
     if (diffMod3Value === 0) {
-      const drawMoves: Move[] = ["ROCK", "PAPER", "SCISSORS"];
+      const drawMoves: Move[] = ['ROCK', 'PAPER', 'SCISSORS'];
       const randomDrawMove =
         drawMoves[Math.floor(Math.random() * drawMoves.length)];
       playerMove = randomDrawMove;
@@ -241,26 +234,26 @@ export function useMatches() {
     } else if (diffMod3Value === 1) {
       // Player A wins
       if (isPlayerA) {
-        playerMove = "ROCK";
-        houseMove = "SCISSORS";
+        playerMove = 'ROCK';
+        houseMove = 'SCISSORS';
         result = GameResult.WIN;
         betValue = betAmount;
       } else {
-        playerMove = "SCISSORS";
-        houseMove = "ROCK";
+        playerMove = 'SCISSORS';
+        houseMove = 'ROCK';
         result = GameResult.LOSE;
         betValue = -betAmount;
       }
     } else {
       // Player B wins
       if (!isPlayerA) {
-        playerMove = "ROCK";
-        houseMove = "SCISSORS";
+        playerMove = 'ROCK';
+        houseMove = 'SCISSORS';
         result = GameResult.WIN;
         betValue = betAmount;
       } else {
-        playerMove = "SCISSORS";
-        houseMove = "ROCK";
+        playerMove = 'SCISSORS';
+        houseMove = 'ROCK';
         result = GameResult.LOSE;
         betValue = -betAmount;
       }
@@ -272,7 +265,7 @@ export function useMatches() {
       (result === GameResult.LOSE && isWinner)
     ) {
       console.warn(
-        "Game result logic mismatch with winner field, using winner field"
+        'Game result logic mismatch with winner field, using winner field',
       );
       if (isWinner) {
         result = GameResult.WIN;
@@ -286,16 +279,11 @@ export function useMatches() {
     return { playerMove, houseMove, result, betValue };
   }
 
-  // Calculate total earnings from all matches
-  const totalEarnings = matches.reduce((total, match) => {
-    return total + (match.betValue || 0);
-  }, 0);
-
   const addMatch = async () => {
     try {
       await refetch();
     } catch (error) {
-      console.error("Error refetching match history:", error);
+      console.error('Error refetching match history:', error);
     }
   };
 
@@ -309,50 +297,77 @@ export function useMatches() {
   }) => {
     if (!address) return;
 
-    queryClient.setQueryData(
-      ["matches", address],
-      (oldData: GameHistory[] | undefined) => {
-        if (!oldData) return [];
+    const betValue =
+      gameData.result === GameResult.WIN
+        ? Number(formatEther(gameData.betAmount))
+        : gameData.result === GameResult.LOSE
+        ? -Number(formatEther(gameData.betAmount))
+        : 0;
 
-        const existingMatch = oldData.find(
-          (match) => match.gameId === gameData.gameId
+    const newMatch: GameHistory = {
+      id: `local-${gameData.gameId}-${Date.now()}`,
+      gameId: gameData.gameId,
+      timestamp: Date.now(),
+      playerMove: gameData.playerMove,
+      houseMove: gameData.houseMove,
+      result: gameData.result,
+      playerAddress: address,
+      transactionHash: gameData.transactionHash,
+      betValue: betValue,
+    };
+
+    queryClient.setQueryData(
+      ['matches', address],
+      (
+        oldData:
+          | {
+              matches: GameHistory[];
+              totalEarnings: number;
+              playerStats: SubgraphPlayerStats | null;
+            }
+          | undefined,
+      ) => {
+        if (!oldData)
+          return {
+            matches: [newMatch],
+            totalEarnings: betValue,
+            playerStats: null,
+          };
+
+        const existingMatch = oldData.matches.find(
+          (match) => match.gameId === gameData.gameId,
         );
         if (existingMatch) return oldData;
 
-        const newMatch: GameHistory = {
-          id: `local-${gameData.gameId}-${Date.now()}`,
-          gameId: gameData.gameId,
-          timestamp: Date.now(),
-          playerMove: gameData.playerMove,
-          houseMove: gameData.houseMove,
-          result: gameData.result,
-          playerAddress: address,
-          transactionHash: gameData.transactionHash,
-          betValue:
-            gameData.result === GameResult.WIN
-              ? Number(formatEther(gameData.betAmount))
-              : gameData.result === GameResult.LOSE
-              ? -Number(formatEther(gameData.betAmount))
-              : 0, // DRAW
-        };
+        // Update total earnings
+        const newTotalEarnings = oldData.totalEarnings + betValue;
 
-        return [newMatch, ...oldData];
-      }
+        return {
+          matches: [newMatch, ...oldData.matches],
+          totalEarnings: newTotalEarnings,
+          playerStats: oldData.playerStats,
+        };
+      },
     );
   };
 
   const clearHistoryMutation = async () => {
     if (address) {
-      queryClient.setQueryData(["matches", address], []);
+      queryClient.setQueryData(['matches', address], {
+        matches: [],
+        totalEarnings: 0,
+        playerStats: null,
+      });
     }
   };
 
   return {
-    matches,
+    matches: matchesData.matches,
     isLoading,
     addMatch,
     addLocalMatch,
     clearHistory: clearHistoryMutation,
-    totalEarnings,
+    totalEarnings: matchesData.totalEarnings,
+    playerStats: matchesData.playerStats,
   };
 }
