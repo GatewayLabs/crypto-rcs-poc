@@ -7,6 +7,38 @@ import { parseEventLogs } from 'viem';
 import * as paillier from 'paillier-bigint';
 import { DEFAULT_BET_AMOUNT_WEI } from '@/hooks/use-game-contract';
 
+// Define return types for our functions
+export type PlayHouseMoveSuccessResult = {
+  success: true;
+  hash: `0x${string}`;
+  move: Move;
+};
+
+export type PlayHouseMoveErrorResult = {
+  success: false;
+  error: string;
+};
+
+export type PlayHouseMoveResult =
+  | PlayHouseMoveSuccessResult
+  | PlayHouseMoveErrorResult;
+
+export type ResolveGameSuccessResult = {
+  success: true;
+  result: number;
+  hash: string;
+  info?: string;
+};
+
+export type ResolveGameErrorResult = {
+  success: false;
+  error: string;
+};
+
+export type ResolveGameResult =
+  | ResolveGameSuccessResult
+  | ResolveGameErrorResult;
+
 function generateHouseMove(): Move {
   const moves: Move[] = ['ROCK', 'PAPER', 'SCISSORS'];
   const weights = [0.4, 0.3, 0.3];
@@ -22,11 +54,13 @@ function generateHouseMove(): Move {
 export async function playHouseMove(
   gameId: number,
   betAmount = DEFAULT_BET_AMOUNT_WEI,
-) {
+): Promise<PlayHouseMoveResult> {
   try {
     if (gameId === undefined || gameId === null || isNaN(gameId)) {
       throw new Error('Invalid game ID');
     }
+
+    console.log(`Starting house move for game ${gameId} with bet ${betAmount}`);
 
     const validBetAmount =
       betAmount && !isNaN(Number(betAmount))
@@ -79,10 +113,12 @@ export async function playHouseMove(
     }
 
     const houseMove = generateHouseMove();
+    console.log(`Generated house move for game ${gameId}: ${houseMove}`);
 
     let encryptedMove;
     try {
       encryptedMove = (await encryptMove(houseMove)) as `0x${string}`;
+      console.log(`Encrypted move length: ${encryptedMove.length - 2} bytes`); // -2 for '0x' prefix
     } catch (error) {
       console.error('Error encrypting move:', error);
       throw new Error('Failed to encrypt house move');
@@ -189,6 +225,12 @@ export async function playHouseMove(
       );
     }
 
+    const successResponse = {
+      success: true as const,
+      hash: receipt.transactionHash,
+      move: houseMove,
+    };
+
     try {
       const finalGameData = await publicClient.readContract({
         ...gameContractConfig,
@@ -211,26 +253,25 @@ export async function playHouseMove(
       console.warn(`Could not verify final game state after joining:`, error);
     }
 
-    return {
-      success: true,
-      hash: receipt.transactionHash,
-      move: houseMove,
-    };
+    return successResponse;
   } catch (error) {
     console.error('Error in house move:', error);
     return {
-      success: false,
+      success: false as const,
       error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
 
-export async function resolveGame(gameId: number) {
+export async function resolveGame(gameId: number): Promise<ResolveGameResult> {
   try {
     if (gameId === undefined || gameId === null || isNaN(gameId)) {
       throw new Error('Invalid game ID');
     }
 
+    console.log(`Starting to resolve game ${gameId}`);
+
+    // Add more detailed game data validation
     let gameData;
     try {
       gameData = await publicClient.readContract({
@@ -261,6 +302,13 @@ export async function resolveGame(gameId: number) {
       revealedDiff,
     ] = gameData;
 
+    console.log(`Resolving game ${gameId}:`);
+    console.log(`- Players: A=${playerA}, B=${playerB}`);
+    console.log(
+      `- State: finished=${finished}, bothCommitted=${bothCommitted}`,
+    );
+    console.log(`- Existing winner: ${winner}, revealed diff: ${revealedDiff}`);
+
     // More detailed state validation
     if (
       playerA === '0x0000000000000000000000000000000000000000' ||
@@ -280,7 +328,19 @@ export async function resolveGame(gameId: number) {
 
     // Check game state - should be JOINED (both players present, not finished, not moves submitted yet)
     if (finished) {
-      throw new Error(`Game ID ${gameId} is already finished`);
+      // If already finished, we can return early with the existing result
+      if (revealedDiff !== null && revealedDiff !== undefined) {
+        console.log(
+          `Game ${gameId} is already finished with result: ${revealedDiff}`,
+        );
+        return {
+          success: true as const,
+          info: 'Game was already finalized',
+          result: Number(revealedDiff),
+          hash: '',
+        };
+      }
+      throw new Error(`Game ${gameId} is already finished but has no result`);
     }
 
     if (bothCommitted) {
@@ -345,6 +405,10 @@ export async function resolveGame(gameId: number) {
         `Failed to complete ${name} after ${maxRetries} attempts`,
       );
     };
+
+    // Default to -1 for initial result value
+    let diffMod3 = -1n;
+    let finalHash = '';
 
     // Submit moves only if not already submitted
     if (!bothCommitted) {
@@ -493,7 +557,7 @@ export async function resolveGame(gameId: number) {
     const privateKeyMu = BigInt('0x' + process.env.PAILLIER_MU);
 
     // Generate keys
-    let publicKey, privateKey, decryptedDifference, diffMod3;
+    let publicKey, privateKey, decryptedDifference;
     try {
       if (!latestDifferenceCipher || latestDifferenceCipher === '0x') {
         throw new Error('No difference cipher available for decryption');
@@ -520,6 +584,13 @@ export async function resolveGame(gameId: number) {
       );
     }
 
+    // Prepare our success response with the result we've calculated
+    const successResponse: ResolveGameSuccessResult = {
+      success: true as const,
+      result: Number(diffMod3),
+      hash: finalHash, // Will be updated if we call finalizeGame
+    };
+
     // Check if the game has already been finalized
     let isFinished = false;
     try {
@@ -535,9 +606,8 @@ export async function resolveGame(gameId: number) {
           `Game ${gameId} is already finalized, no need to call finalizeGame`,
         );
         return {
-          success: true,
+          ...successResponse,
           info: 'Game was already finalized',
-          result: Number(diffMod3),
         };
       }
     } catch (error) {
@@ -567,6 +637,10 @@ export async function resolveGame(gameId: number) {
       'finalizeGame receipt',
     );
 
+    // Update our success response with the finalization hash
+    finalHash = finalizationReceipt.transactionHash;
+    successResponse.hash = finalHash;
+
     // Verify final game state
     try {
       const finalGameData = await publicClient.readContract({
@@ -584,15 +658,11 @@ export async function resolveGame(gameId: number) {
       console.warn(`Could not verify final game state:`, error);
     }
 
-    return {
-      success: true,
-      hash: finalizationReceipt.transactionHash,
-      result: Number(diffMod3),
-    };
+    return successResponse;
   } catch (error) {
     console.error('Error resolving game:', error);
     return {
-      success: false,
+      success: false as const,
       error: error instanceof Error ? error.message : 'Unknown error',
     };
   }

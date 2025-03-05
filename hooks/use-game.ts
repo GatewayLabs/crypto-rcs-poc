@@ -116,13 +116,13 @@ export function useGame() {
 
         const houseResult = await playHouseMove(gameId, betAmount);
         if (!houseResult.success) {
-          throw new Error(houseResult.error);
+          throw new Error(houseResult.error || 'Failed to play house move');
         }
 
         setPhase(GamePhase.REVEALING);
         const resolveResult = await resolveGame(gameId);
         if (!resolveResult.success) {
-          throw new Error(resolveResult.error);
+          throw new Error(resolveResult.error || 'Failed to resolve game');
         }
 
         const gameResult =
@@ -136,8 +136,9 @@ export function useGame() {
         setResult(gameResult);
         setPhase(GamePhase.FINISHED);
 
-        if (resolveResult.hash) {
-          setTransactionHash(resolveResult.hash);
+        const txHash = resolveResult.hash || '';
+        if (txHash) {
+          setTransactionHash(txHash);
         }
 
         // Update local leaderboard
@@ -152,7 +153,7 @@ export function useGame() {
             gameId,
             playerMove: move,
             result: gameResult,
-            transactionHash: resolveResult.hash || '',
+            transactionHash: txHash,
             houseMove: inferHouseMove(gameResult, move),
             betAmount,
           });
@@ -163,7 +164,7 @@ export function useGame() {
           playerMove: move,
           phase: GamePhase.FINISHED,
           result: gameResult,
-          transactionHash: resolveResult.hash,
+          transactionHash: txHash,
           houseMove: inferHouseMove(gameResult, move),
           betAmount,
         };
@@ -197,7 +198,7 @@ export function useGame() {
 
         const resolveResult = await resolveGame(gameId);
         if (!resolveResult.success) {
-          throw new Error(resolveResult.error);
+          throw new Error(resolveResult.error || 'Failed to resolve game');
         }
 
         const gameResult =
@@ -211,8 +212,9 @@ export function useGame() {
         setResult(gameResult);
         setPhase(GamePhase.FINISHED);
 
-        if (resolveResult.hash) {
-          setTransactionHash(resolveResult.hash);
+        const txHash = resolveResult.hash || '';
+        if (txHash) {
+          setTransactionHash(txHash);
         }
 
         return {
@@ -220,7 +222,7 @@ export function useGame() {
           playerMove: move,
           phase: GamePhase.FINISHED,
           result: gameResult,
-          transactionHash: resolveResult.hash,
+          transactionHash: txHash,
           houseMove: inferHouseMove(gameResult, move),
           betAmount,
         };
