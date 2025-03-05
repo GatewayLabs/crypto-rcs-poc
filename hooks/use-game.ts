@@ -170,7 +170,9 @@ export function useGame() {
         };
       } catch (error) {
         if (error instanceof Error) {
-          setError(error.message);
+          if (!error.message.includes('rejected the request')) {
+            setError(error.message);
+          }
         } else {
           setError('Failed to create game');
         }
