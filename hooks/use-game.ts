@@ -1,18 +1,18 @@
-import { playHouseMove, resolveGame } from "@/app/actions/house";
-import { Move } from "@/lib/crypto";
-import { useGameUIStore } from "@/stores/game-ui-store";
-import { GamePhase, GameResult } from "@/types/game";
-import { useMutation } from "@tanstack/react-query";
-import { useCallback, useEffect } from "react";
-import { formatEther } from "viem";
-import { useAccount } from "wagmi";
+import { playHouseMove, resolveGame } from '@/app/actions/house';
+import { Move } from '@/lib/crypto';
+import { useGameUIStore } from '@/stores/game-ui-store';
+import { GamePhase, GameResult } from '@/types/game';
+import { useMutation } from '@tanstack/react-query';
+import { useCallback, useEffect } from 'react';
+import { formatEther } from 'viem';
+import { useAccount } from 'wagmi';
 import {
   DEFAULT_BET_AMOUNT,
   DEFAULT_BET_AMOUNT_WEI,
   useGameContract,
-} from "./use-game-contract";
-import { useLeaderboard } from "./use-leaderboard";
-import { useMatches } from "./use-matches";
+} from './use-game-contract';
+import { useLeaderboard } from './use-leaderboard';
+import { useMatches } from './use-matches';
 
 export function useGame() {
   const {
@@ -48,18 +48,18 @@ export function useGame() {
       ]);
 
       results.forEach((result, index) => {
-        if (result.status === "rejected") {
+        if (result.status === 'rejected') {
           console.error(`Error in update operation ${index}:`, result.reason);
         }
       });
 
-      if (results.every((result) => result.status === "fulfilled")) {
-        console.log("Game stats updated successfully");
+      if (results.every((result) => result.status === 'fulfilled')) {
+        console.log('Game stats updated successfully');
       } else {
-        console.warn("Some game stats updates failed");
+        console.warn('Some game stats updates failed');
       }
     } catch (error) {
-      console.error("Error updating game stats:", error);
+      console.error('Error updating game stats:', error);
     }
   }, [updateLeaderboard, addMatch]);
 
@@ -77,11 +77,31 @@ export function useGame() {
       return GamePhase.REVEALING;
     }
 
-    if (playerB !== "0x0000000000000000000000000000000000000000") {
+    if (playerB !== '0x0000000000000000000000000000000000000000') {
       return GamePhase.WAITING;
     }
 
     return GamePhase.SELECTED;
+  }
+
+  function inferHouseMove(gameResult: GameResult, userMove: Move) {
+    if (gameResult === GameResult.WIN) {
+      return userMove === 'ROCK'
+        ? 'SCISSORS'
+        : userMove === 'PAPER'
+        ? 'ROCK'
+        : 'PAPER';
+    }
+
+    if (gameResult === GameResult.LOSE) {
+      return userMove === 'ROCK'
+        ? 'PAPER'
+        : userMove === 'PAPER'
+        ? 'SCISSORS'
+        : 'ROCK';
+    }
+
+    return userMove;
   }
 
   const createGameMutation = useMutation({
@@ -99,10 +119,6 @@ export function useGame() {
           throw new Error(houseResult.error);
         }
 
-        if (houseResult.move) {
-          setHouseMove(houseResult.move);
-        }
-
         setPhase(GamePhase.REVEALING);
         const resolveResult = await resolveGame(gameId);
         if (!resolveResult.success) {
@@ -116,6 +132,7 @@ export function useGame() {
             ? GameResult.WIN
             : GameResult.LOSE;
 
+        setHouseMove(inferHouseMove(gameResult, move));
         setResult(gameResult);
         setPhase(GamePhase.FINISHED);
 
@@ -127,21 +144,19 @@ export function useGame() {
         if (address) {
           updateLocalLeaderboard(
             address,
-            gameResult as unknown as "WIN" | "LOSE" | "DRAW",
-            Number(formatEther(betAmount))
+            gameResult as unknown as 'WIN' | 'LOSE' | 'DRAW',
+            Number(formatEther(betAmount)),
           );
 
           addLocalMatch({
             gameId,
             playerMove: move,
             result: gameResult,
-            transactionHash: resolveResult.hash || "",
-            houseMove: houseResult.move || "ROCK",
+            transactionHash: resolveResult.hash || '',
+            houseMove: inferHouseMove(gameResult, move),
             betAmount,
           });
         }
-
-        // await updateStats(); // We don't need to update stats here, it will be updated after 60 seconds
 
         return {
           gameId,
@@ -149,14 +164,14 @@ export function useGame() {
           phase: GamePhase.FINISHED,
           result: gameResult,
           transactionHash: resolveResult.hash,
-          houseMove: houseResult.move,
+          houseMove: inferHouseMove(gameResult, move),
           betAmount,
         };
       } catch (error) {
         if (error instanceof Error) {
           setError(error.message);
         } else {
-          setError("Failed to create game");
+          setError('Failed to create game');
         }
         setPhase(GamePhase.ERROR);
         throw error;
@@ -192,6 +207,7 @@ export function useGame() {
             ? GameResult.WIN
             : GameResult.LOSE;
 
+        setHouseMove(inferHouseMove(gameResult, move));
         setResult(gameResult);
         setPhase(GamePhase.FINISHED);
 
@@ -199,21 +215,20 @@ export function useGame() {
           setTransactionHash(resolveResult.hash);
         }
 
-        // await updateStats(); // We don't need to update stats here, it will be updated after 60 seconds
-
         return {
           gameId,
           playerMove: move,
           phase: GamePhase.FINISHED,
           result: gameResult,
           transactionHash: resolveResult.hash,
+          houseMove: inferHouseMove(gameResult, move),
           betAmount,
         };
       } catch (error) {
         if (error instanceof Error) {
           setError(error.message);
         } else {
-          setError("Failed to join game");
+          setError('Failed to join game');
         }
         setPhase(GamePhase.ERROR);
         throw error;
@@ -266,7 +281,6 @@ export function useGame() {
         currentPhase === GamePhase.FINISHED &&
         gameUIState.phase !== GamePhase.FINISHED
       ) {
-        // Game just finished according to contract data
         updateStats();
       }
     }
@@ -274,7 +288,7 @@ export function useGame() {
 
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible" && gameUIState.gameId) {
+      if (document.visibilityState === 'visible' && gameUIState.gameId) {
         if (
           gameUIState.phase === GamePhase.REVEALING ||
           gameUIState.phase === GamePhase.WAITING
@@ -287,10 +301,10 @@ export function useGame() {
       }
     };
 
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [
     gameUIState.gameId,
@@ -308,7 +322,7 @@ export function useGame() {
     joinGame: (
       gameId: number,
       move: Move,
-      betAmount = DEFAULT_BET_AMOUNT_WEI
+      betAmount = DEFAULT_BET_AMOUNT_WEI,
     ) => joinGameMutation.mutate({ gameId, move, betAmount }),
     submitMoves: (gameId: number) => revealGameMutation.mutate(gameId),
     computeDifference: (gameId: number) =>
