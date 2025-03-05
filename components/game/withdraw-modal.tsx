@@ -8,12 +8,14 @@ interface WithdrawModalProps {
 
 export default function WithdrawModal({ onClose }: WithdrawModalProps) {
   const [value, setValue] = useState(1);
+  const [address, setAddress] = useState<string>("");
   const [textButton, setTextButton] = useState("Withdraw now");
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleWithdraw = () => {
-    console.log("Withdraw", value);
+    console.log("Withdraw value", value);
+    console.log("Withdraw address", address);
     try {
       setIsLoading(true); // Simulate loading (remove after withdraw function is implemented)
       setTextButton("Confirm in wallet");
@@ -79,12 +81,31 @@ export default function WithdrawModal({ onClose }: WithdrawModalProps) {
       </div>
 
       {errorMessage && (
-        <div className="text-red-500 text-sm mt-4 mb-6">{errorMessage}</div>
+        <div className="text-red-500 text-sm mt-4 mb-4">{errorMessage}</div>
       )}
+
+      <div className="flex items-center pr-4 pointer-events-none mb-4">
+        <span className="text-md text-white">Address</span>
+      </div>
+
+      <div
+        className={`flex flex-col bg-zinc-800 border flex rounded-sm mb-6 border-zinc-600`}
+      >
+        <div className="flex flex-col sm:flex-row">
+          <input
+            id="withdraw-address"
+            type="text"
+            placeholder="0x00e0f5b0a3f2a3"
+            className="w-full p-4 bg-zinc-800 border border-transparent rounded-lg text-md outline-none text-white focus:transparent focus:border-transparent transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+          />
+        </div>
+      </div>
 
       <button
         onClick={() => handleWithdraw()}
-        disabled={!value || isLoading}
+        disabled={!value || !address || isLoading}
         className="w-full py-4 px-6 bg-white text-black hover:bg-zinc-100 disabled:bg-zinc-400 disabled:text-zinc-700 font-medium rounded-sm transition-colors flex items-center justify-center gap-2"
       >
         {isLoading && (
