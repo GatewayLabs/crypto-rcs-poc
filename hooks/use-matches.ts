@@ -6,8 +6,7 @@ import { useAccount } from "wagmi";
 import { GameState } from "./use-player-games";
 
 // Subgraph URL
-const SUBGRAPH_URL =
-  "https://api.studio.thegraph.com/query/105896/odyssey-rps/version/latest";
+const SUBGRAPH_URL = process.env.NEXT_PUBLIC_SUBGRAPH_URL as string;
 
 // GraphQL query for player's games (both created and joined)
 const PLAYER_GAMES_QUERY = `
