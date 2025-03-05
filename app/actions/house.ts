@@ -49,16 +49,80 @@ export async function playHouseMove(
     const houseMove = generateHouseMove();
     const encryptedMove = (await encryptMove(houseMove)) as `0x${string}`;
 
-    const { request } = await publicClient.simulateContract({
-      ...gameContractConfig,
-      functionName: 'joinGame',
-      args: [BigInt(gameId), encryptedMove],
-      account: walletClient.account,
-      value: validBetAmount,
-    });
+    // Add retry logic for simulation
+    let requestResult;
+    let retryCount = 0;
+    const maxRetries = 3;
 
-    const hash = await walletClient.writeContract(request);
-    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    while (retryCount < maxRetries) {
+      try {
+        requestResult = await publicClient.simulateContract({
+          ...gameContractConfig,
+          functionName: 'joinGame',
+          args: [BigInt(gameId), encryptedMove],
+          account: walletClient.account,
+          value: validBetAmount,
+        });
+        break; // If successful, exit the loop
+      } catch (simError) {
+        retryCount++;
+        console.warn(`Simulation attempt ${retryCount} failed:`, simError);
+        if (retryCount >= maxRetries) throw simError;
+        // Wait before retrying
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+    }
+
+    if (!requestResult) {
+      throw new Error('Failed to simulate transaction after multiple attempts');
+    }
+
+    // Add retry logic for transaction sending
+    let hash;
+    retryCount = 0;
+
+    while (retryCount < maxRetries) {
+      try {
+        hash = await walletClient.writeContract(requestResult.request);
+        break; // If successful, exit the loop
+      } catch (txError) {
+        retryCount++;
+        console.warn(`Transaction attempt ${retryCount} failed:`, txError);
+        if (retryCount >= maxRetries) throw txError;
+        // Wait before retrying
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+    }
+
+    if (!hash) {
+      throw new Error('Failed to send transaction after multiple attempts');
+    }
+
+    // Add retry logic for receipt waiting
+    let receipt;
+    retryCount = 0;
+
+    while (retryCount < maxRetries) {
+      try {
+        receipt = await publicClient.waitForTransactionReceipt({ hash });
+        break; // If successful, exit the loop
+      } catch (receiptError) {
+        retryCount++;
+        console.warn(
+          `Receipt fetch attempt ${retryCount} failed:`,
+          receiptError,
+        );
+        if (retryCount >= maxRetries) throw receiptError;
+        // Wait before retrying
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
+    }
+
+    if (!receipt) {
+      throw new Error(
+        'Failed to get transaction receipt after multiple attempts',
+      );
+    }
 
     return {
       success: true,
@@ -89,29 +153,76 @@ export async function resolveGame(gameId: number) {
       throw new Error('Both moves must be committed first');
     }
 
-    // Submit moves
-    const { request: submitRequest } = await publicClient.simulateContract({
-      ...gameContractConfig,
-      functionName: 'submitMoves',
-      args: [BigInt(gameId)],
-      account: walletClient.account,
-    });
+    // Helper function for retry logic
+    const retryOperation = async <T>(
+      operation: () => Promise<T>,
+      name: string,
+      maxRetries = 3,
+      delay = 2000,
+    ): Promise<T> => {
+      let retryCount = 0;
+      let result: T;
 
-    const submitHash = await walletClient.writeContract(submitRequest);
-    await publicClient.waitForTransactionReceipt({ hash: submitHash });
+      while (retryCount < maxRetries) {
+        try {
+          result = await operation();
+          return result; // Return the result on success
+        } catch (error) {
+          retryCount++;
+          console.warn(`${name} attempt ${retryCount} failed:`, error);
+          if (retryCount >= maxRetries) throw error;
+          // Wait before retrying
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
 
-    // Compute difference
-    const { request: computeRequest } = await publicClient.simulateContract({
-      ...gameContractConfig,
-      functionName: 'computeDifference',
-      args: [BigInt(gameId)],
-      account: walletClient.account,
-    });
+      throw new Error(
+        `Failed to complete ${name} after ${maxRetries} attempts`,
+      );
+    };
 
-    const computeHash = await walletClient.writeContract(computeRequest);
-    const receipt = await publicClient.waitForTransactionReceipt({
-      hash: computeHash,
-    });
+    // Submit moves with retry
+    const submitRequest = await retryOperation(async () => {
+      const { request } = await publicClient.simulateContract({
+        ...gameContractConfig,
+        functionName: 'submitMoves',
+        args: [BigInt(gameId)],
+        account: walletClient.account,
+      });
+      return request;
+    }, 'submitMoves simulation');
+
+    const submitHash = await retryOperation(
+      async () => walletClient.writeContract(submitRequest),
+      'submitMoves transaction',
+    );
+
+    await retryOperation(
+      async () => publicClient.waitForTransactionReceipt({ hash: submitHash }),
+      'submitMoves receipt',
+    );
+
+    // Compute difference with retry
+    const computeRequest = await retryOperation(async () => {
+      const { request } = await publicClient.simulateContract({
+        ...gameContractConfig,
+        functionName: 'computeDifference',
+        args: [BigInt(gameId)],
+        account: walletClient.account,
+      });
+      return request;
+    }, 'computeDifference simulation');
+
+    const computeHash = await retryOperation(
+      async () => walletClient.writeContract(computeRequest),
+      'computeDifference transaction',
+    );
+
+    const receipt = await retryOperation(
+      async () => publicClient.waitForTransactionReceipt({ hash: computeHash }),
+      'computeDifference receipt',
+    );
+
     const events = parseEventLogs({
       logs: receipt.logs,
       abi: gameContractConfig.abi,
@@ -120,6 +231,11 @@ export async function resolveGame(gameId: number) {
 
     // Get difference cipher
     const result = events[0]?.args?.differenceCipher;
+    if (!result) {
+      throw new Error(
+        'Failed to extract difference cipher from transaction logs',
+      );
+    }
 
     // Finalize game
     const publicKeyN = BigInt('0x' + process.env.NEXT_PUBLIC_PAILLIER_N);
@@ -139,17 +255,27 @@ export async function resolveGame(gameId: number) {
     const decryptedDifference = privateKey.decrypt(BigInt(result));
     const diffMod3 = decryptedDifference % 3n;
 
-    const { request: finalizeRequest } = await publicClient.simulateContract({
-      ...gameContractConfig,
-      functionName: 'finalizeGame',
-      args: [BigInt(gameId), diffMod3],
-      account: walletClient.account,
-    });
+    // Finalize game with retry
+    const finalizeRequest = await retryOperation(async () => {
+      const { request } = await publicClient.simulateContract({
+        ...gameContractConfig,
+        functionName: 'finalizeGame',
+        args: [BigInt(gameId), diffMod3],
+        account: walletClient.account,
+      });
+      return request;
+    }, 'finalizeGame simulation');
 
-    const finalizeHash = await walletClient.writeContract(finalizeRequest);
-    const finalizationReceipt = await publicClient.waitForTransactionReceipt({
-      hash: finalizeHash,
-    });
+    const finalizeHash = await retryOperation(
+      async () => walletClient.writeContract(finalizeRequest),
+      'finalizeGame transaction',
+    );
+
+    const finalizationReceipt = await retryOperation(
+      async () =>
+        publicClient.waitForTransactionReceipt({ hash: finalizeHash }),
+      'finalizeGame receipt',
+    );
 
     return {
       success: true,
