@@ -53,30 +53,19 @@ export default function WithdrawModal({ onClose }: WithdrawModalProps) {
           </div>
         </div>
         <div className="flex gap-1 px-4 mb-6">
-          <button
-            onClick={() => setValue(0.1)}
-            className="bg-zinc-800 border-zinc-600 border self-stretch flex min-w-16 items-center overflow-hidden justify-center my-auto opacity-80 px-2 py-1.5 rounded-sm border-solid transition-all duration-300 hover:border-[rgba(141,12,255,1)] group-hover:opacity-50 hover:!opacity-100"
-          >
-            0.1 MON
-          </button>
-          <button
-            onClick={() => setValue(0.25)}
-            className="bg-zinc-800 border-zinc-600 border self-stretch flex min-w-16 items-center overflow-hidden justify-center my-auto opacity-80 px-2 py-1.5 rounded-sm border-solid transition-all duration-300 hover:border-[rgba(141,12,255,1)] group-hover:opacity-50 hover:!opacity-100"
-          >
-            0.25 MON
-          </button>
-          <button
-            onClick={() => setValue(0.5)}
-            className="bg-zinc-800 border-zinc-600 border self-stretch flex min-w-16 items-center overflow-hidden justify-center my-auto opacity-80 px-2 py-1.5 rounded-sm border-solid transition-all duration-300 hover:border-[rgba(141,12,255,1)] group-hover:opacity-50 hover:!opacity-100"
-          >
-            0.5 MON
-          </button>
-          <button
-            onClick={() => setValue(1)}
-            className="bg-zinc-800 border-zinc-600 border self-stretch flex min-w-16 items-center overflow-hidden justify-center my-auto opacity-80 px-2 py-1.5 rounded-sm border-solid transition-all duration-300 hover:border-[rgba(141,12,255,1)] group-hover:opacity-50 hover:!opacity-100"
-          >
-            1 MON
-          </button>
+          {[0.1, 0.25, 0.5, 1].map((amount) => (
+            <button
+              key={amount}
+              onClick={() => setValue(amount)}
+              className={`bg-zinc-800 self-stretch flex min-w-16 items-center overflow-hidden justify-center my-auto opacity-80 px-3 py-1.5 border rounded-md border-solid transition-all duration-300  ${
+                value === amount
+                  ? "border-[rgba(141,12,255,1)] group-hover:opacity-50 hover:!opacity-100"
+                  : "border-zinc-600 hover:border-[rgba(141,12,255,1)] group-hover:opacity-50 hover:!opacity-100"
+              }`}
+            >
+              {amount} MON
+            </button>
+          ))}
         </div>
       </div>
 
