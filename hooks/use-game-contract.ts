@@ -132,34 +132,6 @@ export function useGameContract(gameId?: number) {
     [writeContract],
   );
 
-  // Event listeners
-  useWatchContractEvent({
-    ...gameContractConfig,
-    eventName: 'GameCreated',
-    onLogs(logs) {
-      console.log('Game created:', logs);
-      refetchGameInfo();
-    },
-  });
-
-  useWatchContractEvent({
-    ...gameContractConfig,
-    eventName: 'GameJoined',
-    onLogs(logs) {
-      console.log('Game joined:', logs);
-      refetchGameInfo();
-    },
-  });
-
-  useWatchContractEvent({
-    ...gameContractConfig,
-    eventName: 'GameResolved',
-    onLogs(logs) {
-      console.log('Game resolved:', logs);
-      refetchGameInfo();
-    },
-  });
-
   return {
     // Read data
     gameInfo,
