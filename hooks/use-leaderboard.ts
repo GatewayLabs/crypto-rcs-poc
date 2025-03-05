@@ -1,6 +1,6 @@
-import { LeaderboardEntry } from "@/types/game";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { formatEther } from "viem";
+import { LeaderboardEntry } from '@/types/game';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { formatEther } from 'viem';
 
 // Subgraph URL
 const SUBGRAPH_URL = process.env.NEXT_PUBLIC_SUBGRAPH_URL as string;
@@ -13,8 +13,10 @@ interface SubgraphPlayer {
   wins: number;
   losses: number;
   draws: number;
-  totalBetAmount: string;
-  totalWonAmount: string;
+  netProfitLoss: string;
+  totalReturned: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface SubgraphResponse {
@@ -31,15 +33,17 @@ interface SubgraphResponse {
 // GraphQL query for players data
 const PLAYERS_QUERY = `
   query GetPlayers {
-    players(orderBy: totalWonAmount, orderDirection: desc, first: 100) {
+    players(orderBy: netProfitLoss, orderDirection: desc, first: 100) {
       id
       address
       totalGamesPlayed
       wins
       losses
       draws
-      totalBetAmount
-      totalWonAmount
+      netProfitLoss
+      totalReturned
+      createdAt
+      updatedAt
     }
   }
 `;
@@ -54,14 +58,14 @@ export function useLeaderboard() {
     isLoading,
     refetch,
   } = useQuery({
-    queryKey: ["leaderboard"],
+    queryKey: ['leaderboard'],
     queryFn: async (): Promise<LeaderboardEntry[]> => {
       try {
         // Fetch data from the subgraph
         const response = await fetch(SUBGRAPH_URL, {
-          method: "POST",
+          method: 'POST',
           headers: {
-            "Content-Type": "application/json",
+            'Content-Type': 'application/json',
           },
           body: JSON.stringify({
             query: PLAYERS_QUERY,
@@ -75,20 +79,14 @@ export function useLeaderboard() {
         const data = (await response.json()) as SubgraphResponse;
 
         if (data.errors) {
-          console.error("GraphQL errors:", data.errors);
-          throw new Error("GraphQL query failed");
+          console.error('GraphQL errors:', data.errors);
+          throw new Error('GraphQL query failed');
         }
 
         // Transform the data to match our LeaderboardEntry structure
         const players: LeaderboardEntry[] = data.data.players.map((player) => {
-          // Calculate earnings (totalWonAmount - totalBetAmount)
-          const totalBetAmountEth = Number(
-            formatEther(BigInt(player.totalBetAmount))
-          );
-          const totalWonAmountEth = Number(
-            formatEther(BigInt(player.totalWonAmount))
-          );
-          const earnings = totalWonAmountEth - totalBetAmountEth;
+          // Calculate earnings from netProfitLoss
+          const earnings = Number(formatEther(BigInt(player.netProfitLoss)));
 
           // Calculate score (wins - losses)
           const score = player.wins - player.losses;
@@ -108,8 +106,8 @@ export function useLeaderboard() {
         return players;
       } catch (error) {
         console.error(
-          "Error fetching leaderboard from subgraph:",
-          error instanceof Error ? error.message : String(error)
+          'Error fetching leaderboard from subgraph:',
+          error instanceof Error ? error.message : String(error),
         );
         return [];
       }
@@ -123,26 +121,26 @@ export function useLeaderboard() {
       await refetch();
     } catch (error) {
       console.error(
-        "Error refetching leaderboard:",
-        error instanceof Error ? error.message : String(error)
+        'Error refetching leaderboard:',
+        error instanceof Error ? error.message : String(error),
       );
     }
   };
 
   const updateLocalLeaderboard = (
     address: string,
-    result: "WIN" | "LOSE" | "DRAW",
-    betAmount: number
+    result: 'WIN' | 'LOSE' | 'DRAW',
+    betAmount: number,
   ) => {
     queryClient.setQueryData(
-      ["leaderboard"],
+      ['leaderboard'],
       (oldData: LeaderboardEntry[] | undefined) => {
         if (!oldData) return [];
 
         const newData = [...oldData];
 
         let playerEntry = newData.find(
-          (entry) => entry.address.toLowerCase() === address.toLowerCase()
+          (entry) => entry.address.toLowerCase() === address.toLowerCase(),
         );
 
         if (!playerEntry) {
@@ -163,22 +161,22 @@ export function useLeaderboard() {
         playerEntry.gamesPlayed += 1;
         playerEntry.earnings = playerEntry.earnings || 0;
 
-        if (result === "WIN") {
+        if (result === 'WIN') {
           playerEntry.wins += 1;
           playerEntry.score += 1;
           playerEntry.earnings += betAmount;
-        } else if (result === "LOSE") {
+        } else if (result === 'LOSE') {
           playerEntry.losses += 1;
           playerEntry.score -= 1;
           playerEntry.earnings -= betAmount;
-        } else if (result === "DRAW") {
+        } else if (result === 'DRAW') {
           playerEntry.draws += 1;
         }
 
         newData.sort((a, b) => (b.earnings ?? 0) - (a.earnings ?? 0));
 
         return newData;
-      }
+      },
     );
   };
 
