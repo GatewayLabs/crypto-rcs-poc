@@ -1,11 +1,11 @@
-'use server';
+"use server";
 
-import { Move, encryptMove } from '@/lib/crypto';
-import { gameContractConfig } from '@/config/contracts';
-import { publicClient, walletClient } from '@/config/server';
-import { parseEventLogs } from 'viem';
-import * as paillier from 'paillier-bigint';
-import { DEFAULT_BET_AMOUNT_WEI } from '@/hooks/use-game-contract';
+import { Move, encryptMove } from "@/lib/crypto";
+import { gameContractConfig } from "@/config/contracts";
+import { publicClient, walletClient } from "@/config/server";
+import { parseEventLogs } from "viem";
+import * as paillier from "paillier-bigint";
+import { DEFAULT_BET_AMOUNT_WEI } from "@/hooks/use-game-contract";
 
 // Define return types for our functions
 export type PlayHouseMoveSuccessResult = {
@@ -40,7 +40,7 @@ export type ResolveGameResult =
   | ResolveGameErrorResult;
 
 function generateHouseMove(): Move {
-  const moves: Move[] = ['ROCK', 'PAPER', 'SCISSORS'];
+  const moves: Move[] = ["ROCK", "PAPER", "SCISSORS"];
   const weights = [0.4, 0.3, 0.3];
   const random = Math.random();
   let sum = 0;
@@ -48,16 +48,16 @@ function generateHouseMove(): Move {
     sum += weights[i];
     if (random <= sum) return moves[i];
   }
-  return 'ROCK';
+  return "ROCK";
 }
 
 export async function playHouseMove(
   gameId: number,
-  betAmount = DEFAULT_BET_AMOUNT_WEI,
+  betAmount = DEFAULT_BET_AMOUNT_WEI
 ): Promise<PlayHouseMoveResult> {
   try {
     if (gameId === undefined || gameId === null || isNaN(gameId)) {
-      throw new Error('Invalid game ID');
+      throw new Error("Invalid game ID");
     }
 
     console.log(`Starting house move for game ${gameId} with bet ${betAmount}`);
@@ -71,13 +71,13 @@ export async function playHouseMove(
     try {
       gameData = await publicClient.readContract({
         ...gameContractConfig,
-        functionName: 'getGameInfo',
+        functionName: "getGameInfo",
         args: [BigInt(gameId)],
       });
     } catch (error) {
-      console.error('Error fetching game data:', error);
+      console.error("Error fetching game data:", error);
       throw new Error(
-        `Failed to fetch game data: Game ID ${gameId} may not exist`,
+        `Failed to fetch game data: Game ID ${gameId} may not exist`
       );
     }
 
@@ -91,16 +91,16 @@ export async function playHouseMove(
     console.log(`Joining game ${gameId}:`);
     console.log(`- Players: A=${playerA}, B=${playerB}`);
     console.log(
-      `- State: finished=${finished}, bothCommitted=${bothCommitted}`,
+      `- State: finished=${finished}, bothCommitted=${bothCommitted}`
     );
 
-    if (playerB !== '0x0000000000000000000000000000000000000000') {
+    if (playerB !== "0x0000000000000000000000000000000000000000") {
       throw new Error(
-        `Game ID ${gameId} has already been joined by another player (${playerB})`,
+        `Game ID ${gameId} has already been joined by another player (${playerB})`
       );
     }
 
-    if (playerA === '0x0000000000000000000000000000000000000000') {
+    if (playerA === "0x0000000000000000000000000000000000000000") {
       throw new Error(`Game ID ${gameId} has not been properly created`);
     }
 
@@ -115,13 +115,22 @@ export async function playHouseMove(
     const houseMove = generateHouseMove();
     console.log(`Generated house move for game ${gameId}: ${houseMove}`);
 
-    let encryptedMove;
+    let encryptedMove, paddedEncryptedMove;
+
     try {
-      encryptedMove = (await encryptMove(houseMove)) as `0x${string}`;
-      console.log(`Encrypted move length: ${encryptedMove.length - 2} bytes`); // -2 for '0x' prefix
+      encryptedMove = await encryptMove(houseMove);
+
+      paddedEncryptedMove = encryptedMove;
+      if (encryptedMove.length % 2 !== 0) {
+        paddedEncryptedMove = encryptedMove.replace("0x", "0x0");
+      }
+
+      while (paddedEncryptedMove.length < 258) {
+        paddedEncryptedMove = paddedEncryptedMove.replace("0x", "0x0");
+      }
     } catch (error) {
-      console.error('Error encrypting move:', error);
-      throw new Error('Failed to encrypt house move');
+      console.error("Error encrypting move:", error);
+      throw new Error("Failed to encrypt house move");
     }
 
     let requestResult;
@@ -133,35 +142,43 @@ export async function playHouseMove(
         console.log(`Simulation attempt ${retryCount + 1} for game ${gameId}`);
         requestResult = await publicClient.simulateContract({
           ...gameContractConfig,
-          functionName: 'joinGame',
-          args: [BigInt(gameId), encryptedMove],
+          functionName: "joinGame",
+          args: [BigInt(gameId), paddedEncryptedMove as `0x${string}`],
           account: walletClient.account,
           value: validBetAmount,
         });
-        console.log('Simulation successful');
+        console.log("Simulation successful");
         break;
       } catch (simError) {
         retryCount++;
         console.warn(
           `Simulation attempt ${retryCount} failed for game ${gameId}:`,
-          simError,
+          simError
         );
 
         if (retryCount < maxRetries) {
-          console.log('Generating a different house move and re-encrypting...');
+          console.log("Generating a different house move and re-encrypting...");
           const newHouseMove = generateHouseMove();
           encryptedMove = (await encryptMove(newHouseMove)) as `0x${string}`;
 
+          paddedEncryptedMove = encryptedMove;
+          if (encryptedMove.length % 2 !== 0) {
+            paddedEncryptedMove = encryptedMove.replace("0x", "0x0");
+          }
+
+          while (paddedEncryptedMove.length < 258) {
+            paddedEncryptedMove = paddedEncryptedMove.replace("0x", "0x0");
+          }
           await new Promise((resolve) => setTimeout(resolve, 2000));
         } else {
           const errorMessage =
             simError instanceof Error ? simError.message : String(simError);
           if (
-            errorMessage.includes('Invalid params') ||
-            errorMessage.includes('Invalid parameters')
+            errorMessage.includes("Invalid params") ||
+            errorMessage.includes("Invalid parameters")
           ) {
             throw new Error(
-              `Contract rejected parameters for game ${gameId}. The game may be in an invalid state or already played.`,
+              `Contract rejected parameters for game ${gameId}. The game may be in an invalid state or already played.`
             );
           }
           throw simError;
@@ -170,7 +187,7 @@ export async function playHouseMove(
     }
 
     if (!requestResult) {
-      throw new Error('Failed to simulate transaction after multiple attempts');
+      throw new Error("Failed to simulate transaction after multiple attempts");
     }
 
     let hash;
@@ -186,7 +203,7 @@ export async function playHouseMove(
         retryCount++;
         console.warn(
           `Transaction attempt ${retryCount} failed for game ${gameId}:`,
-          txError,
+          txError
         );
         if (retryCount >= maxRetries) throw txError;
         await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -194,7 +211,7 @@ export async function playHouseMove(
     }
 
     if (!hash) {
-      throw new Error('Failed to send transaction after multiple attempts');
+      throw new Error("Failed to send transaction after multiple attempts");
     }
 
     let receipt;
@@ -203,7 +220,7 @@ export async function playHouseMove(
     while (retryCount < maxRetries) {
       try {
         console.log(
-          `Waiting for receipt, attempt ${retryCount + 1} for game ${gameId}`,
+          `Waiting for receipt, attempt ${retryCount + 1} for game ${gameId}`
         );
         receipt = await publicClient.waitForTransactionReceipt({ hash });
         console.log(`Receipt received for game ${gameId}`);
@@ -212,7 +229,7 @@ export async function playHouseMove(
         retryCount++;
         console.warn(
           `Receipt fetch attempt ${retryCount} failed for game ${gameId}:`,
-          receiptError,
+          receiptError
         );
         if (retryCount >= maxRetries) throw receiptError;
         await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -221,7 +238,7 @@ export async function playHouseMove(
 
     if (!receipt) {
       throw new Error(
-        'Failed to get transaction receipt after multiple attempts',
+        "Failed to get transaction receipt after multiple attempts"
       );
     }
 
@@ -234,7 +251,7 @@ export async function playHouseMove(
     try {
       const finalGameData = await publicClient.readContract({
         ...gameContractConfig,
-        functionName: 'getGameInfo',
+        functionName: "getGameInfo",
         args: [BigInt(gameId)],
       });
       const updatedPlayerB = finalGameData[1];
@@ -243,10 +260,10 @@ export async function playHouseMove(
         `Game ${gameId} joined status: house address matches playerB = ${
           updatedPlayerB.toLowerCase() ===
           walletClient.account.address.toLowerCase()
-        }`,
+        }`
       );
 
-      if (updatedPlayerB === '0x0000000000000000000000000000000000000000') {
+      if (updatedPlayerB === "0x0000000000000000000000000000000000000000") {
         console.warn(`Game ${gameId} may not have been properly joined`);
       }
     } catch (error) {
@@ -255,10 +272,10 @@ export async function playHouseMove(
 
     return successResponse;
   } catch (error) {
-    console.error('Error in house move:', error);
+    console.error("Error in house move:", error);
     return {
       success: false as const,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: error instanceof Error ? error.message : "Unknown error",
     };
   }
 }
@@ -266,7 +283,7 @@ export async function playHouseMove(
 export async function resolveGame(gameId: number): Promise<ResolveGameResult> {
   try {
     if (gameId === undefined || gameId === null || isNaN(gameId)) {
-      throw new Error('Invalid game ID');
+      throw new Error("Invalid game ID");
     }
 
     console.log(`Starting to resolve game ${gameId}`);
@@ -276,13 +293,13 @@ export async function resolveGame(gameId: number): Promise<ResolveGameResult> {
     try {
       gameData = await publicClient.readContract({
         ...gameContractConfig,
-        functionName: 'getGameInfo',
+        functionName: "getGameInfo",
         args: [BigInt(gameId)],
       });
     } catch (error) {
-      console.error('Error fetching game data:', error);
+      console.error("Error fetching game data:", error);
       throw new Error(
-        `Failed to fetch game data: Game ID ${gameId} may not exist`,
+        `Failed to fetch game data: Game ID ${gameId} may not exist`
       );
     }
 
@@ -305,24 +322,24 @@ export async function resolveGame(gameId: number): Promise<ResolveGameResult> {
     console.log(`Resolving game ${gameId}:`);
     console.log(`- Players: A=${playerA}, B=${playerB}`);
     console.log(
-      `- State: finished=${finished}, bothCommitted=${bothCommitted}`,
+      `- State: finished=${finished}, bothCommitted=${bothCommitted}`
     );
     console.log(`- Existing winner: ${winner}, revealed diff: ${revealedDiff}`);
 
     // More detailed state validation
     if (
-      playerA === '0x0000000000000000000000000000000000000000' ||
-      playerB === '0x0000000000000000000000000000000000000000'
+      playerA === "0x0000000000000000000000000000000000000000" ||
+      playerB === "0x0000000000000000000000000000000000000000"
     ) {
       throw new Error(
-        `Game ID ${gameId}: Both players must be committed first (A: ${playerA}, B: ${playerB})`,
+        `Game ID ${gameId}: Both players must be committed first (A: ${playerA}, B: ${playerB})`
       );
     }
 
     // Check if game has encrypted choices
     if (!encChoiceA || !encChoiceB) {
       throw new Error(
-        `Game ID ${gameId}: Missing encrypted choices. A: ${!!encChoiceA}, B: ${!!encChoiceB}`,
+        `Game ID ${gameId}: Missing encrypted choices. A: ${!!encChoiceA}, B: ${!!encChoiceB}`
       );
     }
 
@@ -331,13 +348,13 @@ export async function resolveGame(gameId: number): Promise<ResolveGameResult> {
       // If already finished, we can return early with the existing result
       if (revealedDiff !== null && revealedDiff !== undefined) {
         console.log(
-          `Game ${gameId} is already finished with result: ${revealedDiff}`,
+          `Game ${gameId} is already finished with result: ${revealedDiff}`
         );
         return {
           success: true as const,
-          info: 'Game was already finalized',
+          info: "Game was already finalized",
           result: Number(revealedDiff),
-          hash: '',
+          hash: "",
         };
       }
       throw new Error(`Game ${gameId} is already finished but has no result`);
@@ -346,14 +363,14 @@ export async function resolveGame(gameId: number): Promise<ResolveGameResult> {
     if (bothCommitted) {
       // Check if we should skip to computeDifference instead
       console.log(
-        `Game ${gameId} already has moves submitted, will proceed to computeDifference`,
+        `Game ${gameId} already has moves submitted, will proceed to computeDifference`
       );
     }
 
-    if (differenceCipher && differenceCipher !== '0x') {
+    if (differenceCipher && differenceCipher !== "0x") {
       // Check if we should skip to finalizeGame instead
       console.log(
-        `Game ${gameId} already has difference computed, will proceed to finalizeGame`,
+        `Game ${gameId} already has difference computed, will proceed to finalizeGame`
       );
     }
 
@@ -362,7 +379,7 @@ export async function resolveGame(gameId: number): Promise<ResolveGameResult> {
       operation: () => Promise<T>,
       name: string,
       maxRetries = 3,
-      delay = 2000,
+      delay = 2000
     ): Promise<T> => {
       let retryCount = 0;
       let result: T;
@@ -377,38 +394,38 @@ export async function resolveGame(gameId: number): Promise<ResolveGameResult> {
           retryCount++;
           console.warn(
             `${name} attempt ${retryCount} failed for game ${gameId}:`,
-            error,
+            error
           );
 
           // Check for invalid params error
           const errorMessage =
             error instanceof Error ? error.message : String(error);
           if (
-            (errorMessage.includes('Invalid params') ||
-              errorMessage.includes('Invalid parameters')) &&
+            (errorMessage.includes("Invalid params") ||
+              errorMessage.includes("Invalid parameters")) &&
             retryCount >= maxRetries
           ) {
             throw new Error(
-              `${name} failed: Contract rejected parameters for game ${gameId}. The game may be in an invalid state.`,
+              `${name} failed: Contract rejected parameters for game ${gameId}. The game may be in an invalid state.`
             );
           }
 
           if (retryCount >= maxRetries) throw error;
           // Wait before retrying with increasing delay
           await new Promise((resolve) =>
-            setTimeout(resolve, delay * retryCount),
+            setTimeout(resolve, delay * retryCount)
           );
         }
       }
 
       throw new Error(
-        `Failed to complete ${name} after ${maxRetries} attempts`,
+        `Failed to complete ${name} after ${maxRetries} attempts`
       );
     };
 
     // Default to -1 for initial result value
     let diffMod3 = -1n;
-    let finalHash = '';
+    let finalHash = "";
 
     // Submit moves only if not already submitted
     if (!bothCommitted) {
@@ -416,34 +433,34 @@ export async function resolveGame(gameId: number): Promise<ResolveGameResult> {
       const submitRequest = await retryOperation(async () => {
         const { request } = await publicClient.simulateContract({
           ...gameContractConfig,
-          functionName: 'submitMoves',
+          functionName: "submitMoves",
           args: [BigInt(gameId)],
           account: walletClient.account,
         });
         return request;
-      }, 'submitMoves simulation');
+      }, "submitMoves simulation");
 
       const submitHash = await retryOperation(
         async () => walletClient.writeContract(submitRequest),
-        'submitMoves transaction',
+        "submitMoves transaction"
       );
 
       await retryOperation(
         async () =>
           publicClient.waitForTransactionReceipt({ hash: submitHash }),
-        'submitMoves receipt',
+        "submitMoves receipt"
       );
 
       // Verify the game state after submitMoves
       try {
         const updatedGameData = await publicClient.readContract({
           ...gameContractConfig,
-          functionName: 'getGameInfo',
+          functionName: "getGameInfo",
           args: [BigInt(gameId)],
         });
         const updatedBothCommitted = updatedGameData[4]; // bothCommitted is at index 4
         console.log(
-          `Game ${gameId} bothCommitted after submitMoves: ${updatedBothCommitted}`,
+          `Game ${gameId} bothCommitted after submitMoves: ${updatedBothCommitted}`
         );
 
         if (!updatedBothCommitted) {
@@ -459,71 +476,71 @@ export async function resolveGame(gameId: number): Promise<ResolveGameResult> {
     try {
       const latestData = await publicClient.readContract({
         ...gameContractConfig,
-        functionName: 'getGameInfo',
+        functionName: "getGameInfo",
         args: [BigInt(gameId)],
       });
       latestDifferenceCipher = latestData[7]; // differenceCipher is at index 7
     } catch (error) {
       console.warn(
         `Could not check latest game state before computeDifference:`,
-        error,
+        error
       );
     }
 
     // Compute difference only if not already computed
-    if (!latestDifferenceCipher || latestDifferenceCipher === '0x') {
+    if (!latestDifferenceCipher || latestDifferenceCipher === "0x") {
       console.log(`Computing difference for game ${gameId}`);
       const computeRequest = await retryOperation(async () => {
         const { request } = await publicClient.simulateContract({
           ...gameContractConfig,
-          functionName: 'computeDifference',
+          functionName: "computeDifference",
           args: [BigInt(gameId)],
           account: walletClient.account,
         });
         return request;
-      }, 'computeDifference simulation');
+      }, "computeDifference simulation");
 
       const computeHash = await retryOperation(
         async () => walletClient.writeContract(computeRequest),
-        'computeDifference transaction',
+        "computeDifference transaction"
       );
 
       const receipt = await retryOperation(
         async () =>
           publicClient.waitForTransactionReceipt({ hash: computeHash }),
-        'computeDifference receipt',
+        "computeDifference receipt"
       );
 
       // Verify the game state after computeDifference
       try {
         const updatedGameData = await publicClient.readContract({
           ...gameContractConfig,
-          functionName: 'getGameInfo',
+          functionName: "getGameInfo",
           args: [BigInt(gameId)],
         });
         latestDifferenceCipher = updatedGameData[7]; // differenceCipher is at index 7
         console.log(
           `Game ${gameId} has difference computed: ${
-            !!latestDifferenceCipher && latestDifferenceCipher !== '0x'
-          }`,
+            !!latestDifferenceCipher && latestDifferenceCipher !== "0x"
+          }`
         );
 
-        if (!latestDifferenceCipher || latestDifferenceCipher === '0x') {
+        if (!latestDifferenceCipher || latestDifferenceCipher === "0x") {
           console.warn(
-            `Game ${gameId} difference was not computed successfully`,
+            `Game ${gameId} difference was not computed successfully`
           );
         }
       } catch (error) {
         console.warn(
           `Could not verify game state after computeDifference:`,
-          error,
+          error
         );
       }
 
       const events = parseEventLogs({
         logs: receipt.logs,
         abi: gameContractConfig.abi,
-        eventName: 'DifferenceComputed',
+        eventName: "DifferenceComputed",
       });
 
       // Get difference cipher from events
@@ -533,54 +550,54 @@ export async function resolveGame(gameId: number): Promise<ResolveGameResult> {
         latestDifferenceCipher = eventResult;
         console.log(
           `Got difference cipher from event for game ${gameId}: ${
-            typeof latestDifferenceCipher === 'string'
-              ? latestDifferenceCipher.substring(0, 20) + '...'
-              : 'N/A'
-          }`,
+            typeof latestDifferenceCipher === "string"
+              ? latestDifferenceCipher.substring(0, 20) + "..."
+              : "N/A"
+          }`
         );
-      } else if (!latestDifferenceCipher || latestDifferenceCipher === '0x') {
+      } else if (!latestDifferenceCipher || latestDifferenceCipher === "0x") {
         throw new Error(
-          'Failed to extract difference cipher from transaction logs or contract state',
+          "Failed to extract difference cipher from transaction logs or contract state"
         );
       }
     } else {
       console.log(
-        `Difference already computed for game ${gameId}, skipping computation`,
+        `Difference already computed for game ${gameId}, skipping computation`
       );
     }
 
     // Finalize game
-    const publicKeyN = BigInt('0x' + process.env.NEXT_PUBLIC_PAILLIER_N);
-    const publicKeyG = BigInt('0x' + process.env.NEXT_PUBLIC_PAILLIER_G);
+    const publicKeyN = BigInt("0x" + process.env.NEXT_PUBLIC_PAILLIER_N);
+    const publicKeyG = BigInt("0x" + process.env.NEXT_PUBLIC_PAILLIER_G);
 
-    const privateKeyLambda = BigInt('0x' + process.env.PAILLIER_LAMBDA);
-    const privateKeyMu = BigInt('0x' + process.env.PAILLIER_MU);
+    const privateKeyLambda = BigInt("0x" + process.env.PAILLIER_LAMBDA);
+    const privateKeyMu = BigInt("0x" + process.env.PAILLIER_MU);
 
     // Generate keys
     let publicKey, privateKey, decryptedDifference;
     try {
-      if (!latestDifferenceCipher || latestDifferenceCipher === '0x') {
-        throw new Error('No difference cipher available for decryption');
+      if (!latestDifferenceCipher || latestDifferenceCipher === "0x") {
+        throw new Error("No difference cipher available for decryption");
       }
 
       publicKey = new paillier.PublicKey(publicKeyN, publicKeyG);
       privateKey = new paillier.PrivateKey(
         privateKeyLambda,
         privateKeyMu,
-        publicKey,
+        publicKey
       );
 
       decryptedDifference = privateKey.decrypt(BigInt(latestDifferenceCipher));
       diffMod3 = decryptedDifference % 3n;
       console.log(
-        `Decrypted difference for game ${gameId}: ${decryptedDifference}, mod 3: ${diffMod3}`,
+        `Decrypted difference for game ${gameId}: ${decryptedDifference}, mod 3: ${diffMod3}`
       );
     } catch (error) {
-      console.error('Error during decryption:', error);
+      console.error("Error during decryption:", error);
       throw new Error(
         `Failed to decrypt game result: ${
-          error instanceof Error ? error.message : 'Unknown error'
-        }`,
+          error instanceof Error ? error.message : "Unknown error"
+        }`
       );
     }
 
@@ -596,18 +613,18 @@ export async function resolveGame(gameId: number): Promise<ResolveGameResult> {
     try {
       const currentGameData = await publicClient.readContract({
         ...gameContractConfig,
-        functionName: 'getGameInfo',
+        functionName: "getGameInfo",
         args: [BigInt(gameId)],
       });
       isFinished = currentGameData[3]; // finished is at index 3
 
       if (isFinished) {
         console.log(
-          `Game ${gameId} is already finalized, no need to call finalizeGame`,
+          `Game ${gameId} is already finalized, no need to call finalizeGame`
         );
         return {
           ...successResponse,
-          info: 'Game was already finalized',
+          info: "Game was already finalized",
         };
       }
     } catch (error) {
@@ -619,22 +636,22 @@ export async function resolveGame(gameId: number): Promise<ResolveGameResult> {
     const finalizeRequest = await retryOperation(async () => {
       const { request } = await publicClient.simulateContract({
         ...gameContractConfig,
-        functionName: 'finalizeGame',
+        functionName: "finalizeGame",
         args: [BigInt(gameId), diffMod3],
         account: walletClient.account,
       });
       return request;
-    }, 'finalizeGame simulation');
+    }, "finalizeGame simulation");
 
     const finalizeHash = await retryOperation(
       async () => walletClient.writeContract(finalizeRequest),
-      'finalizeGame transaction',
+      "finalizeGame transaction"
     );
 
     const finalizationReceipt = await retryOperation(
       async () =>
         publicClient.waitForTransactionReceipt({ hash: finalizeHash }),
-      'finalizeGame receipt',
+      "finalizeGame receipt"
     );
 
     // Update our success response with the finalization hash
@@ -645,7 +662,7 @@ export async function resolveGame(gameId: number): Promise<ResolveGameResult> {
     try {
       const finalGameData = await publicClient.readContract({
         ...gameContractConfig,
-        functionName: 'getGameInfo',
+        functionName: "getGameInfo",
         args: [BigInt(gameId)],
       });
       const finalFinished = finalGameData[3]; // finished is at index 3
@@ -660,10 +677,10 @@ export async function resolveGame(gameId: number): Promise<ResolveGameResult> {
 
     return successResponse;
   } catch (error) {
-    console.error('Error resolving game:', error);
+    console.error("Error resolving game:", error);
     return {
       success: false as const,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: error instanceof Error ? error.message : "Unknown error",
     };
   }
 }
