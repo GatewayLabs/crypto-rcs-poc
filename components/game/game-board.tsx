@@ -1,5 +1,3 @@
-"use client";
-
 import ErrorDialog from "@/components/game/error-dialog";
 import GameButton from "@/components/game/game-button";
 import GameResultView from "@/components/game/game-result";
@@ -32,8 +30,17 @@ const GAME_BUTTONS = [
 ];
 
 export default function GameBoard() {
-  const { createGame, joinGame, resetGame, isCreatingGame, isJoiningGame } =
-    useGame();
+  const {
+    createGame,
+    joinGame,
+    resetGame,
+    isCreatingGame,
+    isJoiningGame,
+    isResolutionPending,
+    pendingResult,
+    retryResolution,
+  } = useGame();
+
   const { walletAddress, isAuthenticated } = useWallet();
   const { data: balance } = useBalance({
     address: walletAddress as `0x${string}`,
@@ -51,6 +58,7 @@ export default function GameBoard() {
     error,
     gameId,
     toasts,
+    transactionHash,
     isTransactionModalOpen,
     transactionType,
     addToast,
@@ -135,6 +143,12 @@ export default function GameBoard() {
     addToast("Starting new game!", "info");
   };
 
+  const handleRetryResolution = () => {
+    if (!gameId) return;
+    addToast("Retrying game resolution...", "info");
+    retryResolution(gameId);
+  };
+
   if (
     phase === GamePhase.FINISHED &&
     playerMove &&
@@ -172,6 +186,7 @@ export default function GameBoard() {
             Wager your $MON
           </div>
         </div>
+
         <div className="text-white mt-8 text-2xl font-bold leading-none tracking-[-0.6px] max-md:max-w-full">
           Add your bet
         </div>
@@ -191,7 +206,10 @@ export default function GameBoard() {
               imageSrc={button.imageSrc}
               onClick={() => handleMove(button.label as Move)}
               disabled={
-                isCreatingGame || isJoiningGame || phase !== GamePhase.CHOOSING
+                isCreatingGame ||
+                isJoiningGame ||
+                isResolutionPending ||
+                phase !== GamePhase.CHOOSING
               }
               aria-selected={
                 typeof playerMove === "string" && playerMove === button.label
@@ -201,10 +219,14 @@ export default function GameBoard() {
         </div>
       </div>
 
+      {/* Enhanced Transaction Modal with retry functionality */}
       <TransactionModal
         isOpen={isTransactionModalOpen}
         type={transactionType}
+        txHash={transactionHash}
+        onRetry={gameId ? () => handleRetryResolution() : undefined}
       />
+
       <ErrorDialog isOpen={!!error} onClose={resetGame} error={error || ""} />
       <ToastContainer
         toasts={toasts.filter((t: GameToast) => t.type !== "error")}

@@ -1,18 +1,21 @@
-import { playHouseMove, resolveGame } from '@/app/actions/house';
-import { Move } from '@/lib/crypto';
-import { useGameUIStore } from '@/stores/game-ui-store';
-import { GamePhase, GameResult } from '@/types/game';
-import { useMutation } from '@tanstack/react-query';
-import { useCallback, useEffect } from 'react';
-import { formatEther } from 'viem';
-import { useAccount } from 'wagmi';
+import {
+  checkTransactionStatus,
+  getGameResult,
+  playHouseMove,
+  resolveGameAsync,
+} from "@/app/actions/house";
+import { Move } from "@/lib/crypto";
+import { useGameUIStore } from "@/stores/game-ui-store";
+import { GamePhase, GameResult } from "@/types/game";
+import { useMutation } from "@tanstack/react-query";
+import { useCallback, useEffect, useState } from "react";
 import {
   DEFAULT_BET_AMOUNT,
   DEFAULT_BET_AMOUNT_WEI,
   useGameContract,
-} from './use-game-contract';
-import { useLeaderboard } from './use-leaderboard';
-import { useMatches } from './use-matches';
+} from "./use-game-contract";
+import { useLeaderboard } from "./use-leaderboard";
+import { useMatches } from "./use-matches";
 
 export function useGame() {
   const {
@@ -24,9 +27,8 @@ export function useGame() {
     gameInfo,
   } = useGameContract();
 
-  const { address } = useAccount();
-  const { updateLeaderboard, updateLocalLeaderboard } = useLeaderboard();
-  const { addMatch, addLocalMatch } = useMatches();
+  const { updateLeaderboard } = useLeaderboard();
+  const { addMatch } = useMatches();
 
   const gameUIState = useGameUIStore();
   const {
@@ -37,8 +39,12 @@ export function useGame() {
     setError,
     setGameId,
     setTransactionHash,
+    setTransactionModal,
     resetGameState,
   } = useGameUIStore();
+
+  const [isResolutionPending, setIsResolutionPending] = useState(false);
+  const [pendingResult, setPendingResult] = useState<number | null>(null);
 
   const updateStats = useCallback(async () => {
     try {
@@ -48,22 +54,21 @@ export function useGame() {
       ]);
 
       results.forEach((result, index) => {
-        if (result.status === 'rejected') {
+        if (result.status === "rejected") {
           console.error(`Error in update operation ${index}:`, result.reason);
         }
       });
 
-      if (results.every((result) => result.status === 'fulfilled')) {
-        console.log('Game stats updated successfully');
+      if (results.every((result) => result.status === "fulfilled")) {
+        console.log("Game stats updated successfully");
       } else {
-        console.warn('Some game stats updates failed');
+        console.warn("Some game stats updates failed");
       }
     } catch (error) {
-      console.error('Error updating game stats:', error);
+      console.error("Error updating game stats:", error);
     }
   }, [updateLeaderboard, addMatch]);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function determineGamePhase(gameInfo: any) {
     if (!gameInfo) return GamePhase.CHOOSING;
 
@@ -77,7 +82,7 @@ export function useGame() {
       return GamePhase.REVEALING;
     }
 
-    if (playerB !== '0x0000000000000000000000000000000000000000') {
+    if (playerB !== "0x0000000000000000000000000000000000000000") {
       return GamePhase.WAITING;
     }
 
@@ -86,22 +91,147 @@ export function useGame() {
 
   function inferHouseMove(gameResult: GameResult, userMove: Move) {
     if (gameResult === GameResult.WIN) {
-      return userMove === 'ROCK'
-        ? 'SCISSORS'
-        : userMove === 'PAPER'
-        ? 'ROCK'
-        : 'PAPER';
+      return userMove === "ROCK"
+        ? "SCISSORS"
+        : userMove === "PAPER"
+        ? "ROCK"
+        : "PAPER";
     }
 
     if (gameResult === GameResult.LOSE) {
-      return userMove === 'ROCK'
-        ? 'PAPER'
-        : userMove === 'PAPER'
-        ? 'SCISSORS'
-        : 'ROCK';
+      return userMove === "ROCK"
+        ? "PAPER"
+        : userMove === "PAPER"
+        ? "SCISSORS"
+        : "ROCK";
     }
 
     return userMove;
+  }
+
+  const resolveGameAsyncMutation = useMutation({
+    mutationFn: async (gameId: number) => {
+      setIsResolutionPending(true);
+
+      try {
+        const currentTxHash = gameUIState.transactionHash;
+        if (currentTxHash) {
+          const { confirmed } = await checkTransactionStatus(currentTxHash);
+
+          if (!confirmed) {
+            return {
+              success: true,
+              gameId,
+              txHash: currentTxHash,
+              isPending: true,
+              pendingResult,
+            };
+          }
+
+          const gameResult = await getGameResult(gameId);
+
+          if (gameResult.success && gameResult.finished) {
+            const resultValue = gameResult.result || 0;
+            const gameOutcome = getResultFromDiff(resultValue);
+
+            setPhase(GamePhase.FINISHED);
+            setResult(gameOutcome);
+
+            if (gameUIState.playerMove) {
+              setHouseMove(
+                inferHouseMove(gameOutcome, gameUIState.playerMove as Move)
+              );
+            }
+
+            setIsResolutionPending(false);
+            setTransactionHash(null);
+            setTransactionModal(false);
+
+            updateStats();
+
+            return {
+              success: true,
+              gameId,
+              isComplete: true,
+              result: gameOutcome,
+            };
+          }
+        }
+
+        const resolution = await resolveGameAsync(gameId);
+
+        if (!resolution.success) {
+          throw new Error(resolution.error || "Failed to resolve game");
+        }
+
+        if (resolution.txHash) {
+          setTransactionHash(resolution.txHash);
+        }
+
+        if (
+          resolution.pendingResult !== undefined &&
+          resolution.pendingResult >= 0
+        ) {
+          setPendingResult(resolution.pendingResult);
+
+          const gameResult = await getGameResult(gameId);
+          if (gameResult.success && gameResult.finished) {
+            const resultValue = gameResult.result || 0;
+            const gameOutcome = getResultFromDiff(resultValue);
+
+            setPhase(GamePhase.FINISHED);
+            setResult(gameOutcome);
+
+            if (gameUIState.playerMove) {
+              setHouseMove(
+                inferHouseMove(gameOutcome, gameUIState.playerMove as Move)
+              );
+            }
+
+            setIsResolutionPending(false);
+            setTransactionHash(null);
+            setTransactionModal(false);
+
+            updateStats();
+
+            return {
+              success: true,
+              gameId,
+              isComplete: true,
+              result: gameOutcome,
+            };
+          }
+        }
+
+        return {
+          success: true,
+          gameId,
+          txHash: resolution.txHash,
+          isPending: true,
+          pendingResult: resolution.pendingResult,
+        };
+      } catch (error) {
+        setIsResolutionPending(false);
+        if (error instanceof Error) {
+          setError(error.message);
+        } else {
+          setError("Failed to resolve game");
+        }
+        setPhase(GamePhase.ERROR);
+        throw error;
+      }
+    },
+  });
+
+  function getResultFromDiff(diff: number | undefined) {
+    if (diff === undefined) return GameResult.DRAW;
+
+    // Normalize the diff modulo 3
+    const normalizedDiff = ((diff % 3) + 3) % 3;
+
+    if (normalizedDiff === 0) return GameResult.DRAW;
+    if (normalizedDiff === 1) return GameResult.WIN;
+    return GameResult.LOSE;
   }
 
   const createGameMutation = useMutation({
@@ -116,65 +246,20 @@ export function useGame() {
 
         const houseResult = await playHouseMove(gameId, betAmount);
         if (!houseResult.success) {
-          throw new Error(houseResult.error || 'Failed to play house move');
+          throw new Error(houseResult.error || "Failed to play house move");
         }
 
+        // Start async resolution
         setPhase(GamePhase.REVEALING);
-        const resolveResult = await resolveGame(gameId);
-        if (!resolveResult.success) {
-          throw new Error(resolveResult.error || 'Failed to resolve game');
-        }
-
-        const gameResult =
-          resolveResult.result === 0
-            ? GameResult.DRAW
-            : resolveResult.result === 1
-            ? GameResult.WIN
-            : GameResult.LOSE;
-
-        setHouseMove(inferHouseMove(gameResult, move));
-        setResult(gameResult);
-        setPhase(GamePhase.FINISHED);
-
-        const txHash = resolveResult.hash || '';
-        if (txHash) {
-          setTransactionHash(txHash);
-        }
-
-        // Update local leaderboard
-        if (address) {
-          updateLocalLeaderboard(
-            address,
-            gameResult as unknown as 'WIN' | 'LOSE' | 'DRAW',
-            Number(formatEther(betAmount)),
-          );
-
-          addLocalMatch({
-            gameId,
-            playerMove: move,
-            result: gameResult,
-            transactionHash: txHash,
-            houseMove: inferHouseMove(gameResult, move),
-            betAmount,
-          });
-        }
-
-        return {
-          gameId,
-          playerMove: move,
-          phase: GamePhase.FINISHED,
-          result: gameResult,
-          transactionHash: txHash,
-          houseMove: inferHouseMove(gameResult, move),
-          betAmount,
-        };
+        return resolveGameAsyncMutation.mutateAsync(gameId);
       } catch (error) {
+        // Error handling same as before
         if (error instanceof Error) {
-          if (!error.message.includes('rejected the request')) {
+          if (!error.message.includes("rejected the request")) {
             setError(error.message);
           }
         } else {
-          setError('Failed to create game');
+          setError("Failed to create game");
         }
         setPhase(GamePhase.ERROR);
         throw error;
@@ -198,41 +283,15 @@ export function useGame() {
 
         await contractJoinGame(gameId, move, betAmount);
 
-        const resolveResult = await resolveGame(gameId);
-        if (!resolveResult.success) {
-          throw new Error(resolveResult.error || 'Failed to resolve game');
-        }
-
-        const gameResult =
-          resolveResult.result === 0
-            ? GameResult.DRAW
-            : resolveResult.result === 1
-            ? GameResult.WIN
-            : GameResult.LOSE;
-
-        setHouseMove(inferHouseMove(gameResult, move));
-        setResult(gameResult);
-        setPhase(GamePhase.FINISHED);
-
-        const txHash = resolveResult.hash || '';
-        if (txHash) {
-          setTransactionHash(txHash);
-        }
-
-        return {
-          gameId,
-          playerMove: move,
-          phase: GamePhase.FINISHED,
-          result: gameResult,
-          transactionHash: txHash,
-          houseMove: inferHouseMove(gameResult, move),
-          betAmount,
-        };
+        // Start async resolution
+        setPhase(GamePhase.REVEALING);
+        return resolveGameAsyncMutation.mutateAsync(gameId);
       } catch (error) {
+        // Error handling
         if (error instanceof Error) {
           setError(error.message);
         } else {
-          setError('Failed to join game');
+          setError("Failed to join game");
         }
         setPhase(GamePhase.ERROR);
         throw error;
@@ -240,38 +299,23 @@ export function useGame() {
     },
   });
 
-  const revealGameMutation = useMutation({
-    mutationFn: async (gameId: number) => {
-      setPhase(GamePhase.REVEALING);
-      await submitMoves(gameId);
-      return { gameId };
-    },
-  });
+  useEffect(() => {
+    if (!isResolutionPending || !gameUIState.gameId) {
+      return;
+    }
 
-  const computeDifferenceMutation = useMutation({
-    mutationFn: async (gameId: number) => {
-      await computeDifference(gameId);
-      return { gameId };
-    },
-  });
+    const pollInterval = setInterval(async () => {
+      try {
+        await resolveGameAsyncMutation.mutateAsync(
+          gameUIState.gameId as number
+        );
+      } catch (error) {
+        console.error("Error in polling resolution:", error);
+      }
+    }, 5000);
 
-  const finalizeGameMutation = useMutation({
-    mutationFn: async ({
-      gameId,
-      diffMod3,
-    }: {
-      gameId: number;
-      diffMod3: number;
-    }) => {
-      await finalizeGame(gameId, diffMod3);
-      await updateStats();
-      return { gameId, diffMod3 };
-    },
-  });
-
-  const resetGame = useCallback(() => {
-    resetGameState();
-  }, [resetGameState]);
+    return () => clearInterval(pollInterval);
+  }, [isResolutionPending, gameUIState.gameId]);
 
   useEffect(() => {
     if (!gameInfo || !gameUIState.gameId) return;
@@ -292,7 +336,7 @@ export function useGame() {
 
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && gameUIState.gameId) {
+      if (document.visibilityState === "visible" && gameUIState.gameId) {
         if (
           gameUIState.phase === GamePhase.REVEALING ||
           gameUIState.phase === GamePhase.WAITING
@@ -300,23 +344,32 @@ export function useGame() {
           if (gameUIState.result) {
             setPhase(GamePhase.FINISHED);
             updateStats();
+          } else if (isResolutionPending) {
+            resolveGameAsyncMutation.mutate(gameUIState.gameId);
           }
         }
       }
     };
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [
     gameUIState.gameId,
     gameUIState.phase,
     gameUIState.result,
+    isResolutionPending,
     setPhase,
     updateStats,
   ]);
+
+  const resetGame = useCallback(() => {
+    setIsResolutionPending(false);
+    setPendingResult(null);
+    resetGameState();
+  }, [resetGameState]);
 
   return {
     gameState: gameUIState,
@@ -326,21 +379,23 @@ export function useGame() {
     joinGame: (
       gameId: number,
       move: Move,
-      betAmount = DEFAULT_BET_AMOUNT_WEI,
+      betAmount = DEFAULT_BET_AMOUNT_WEI
     ) => joinGameMutation.mutate({ gameId, move, betAmount }),
-    submitMoves: (gameId: number) => revealGameMutation.mutate(gameId),
-    computeDifference: (gameId: number) =>
-      computeDifferenceMutation.mutate(gameId),
-    finalizeGame: (gameId: number, diffMod3: number) =>
-      finalizeGameMutation.mutate({ gameId, diffMod3 }),
+    submitMoves,
+    computeDifference,
+    finalizeGame,
     resetGame,
     defaultBetAmount: DEFAULT_BET_AMOUNT,
     defaultBetAmountWei: DEFAULT_BET_AMOUNT_WEI,
     isCreatingGame: createGameMutation.isPending,
     isJoiningGame: joinGameMutation.isPending,
-    isRevealingGame: revealGameMutation.isPending,
-    isComputingDifference: computeDifferenceMutation.isPending,
-    isFinalizingGame: finalizeGameMutation.isPending,
+    isRevealingGame: isResolutionPending,
+    isComputingDifference: resolveGameAsyncMutation.isPending,
+    isFinalizingGame: resolveGameAsyncMutation.isPending,
+    isResolutionPending,
+    pendingResult,
+    retryResolution: (gameId: number) =>
+      resolveGameAsyncMutation.mutate(gameId),
     updateStats,
   };
 }
