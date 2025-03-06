@@ -46,6 +46,18 @@ export function useGame() {
   const [isResolutionPending, setIsResolutionPending] = useState(false);
   const [pendingResult, setPendingResult] = useState<number | null>(null);
 
+  const [pollingState, setPollingState] = useState<{
+    isPolling: boolean;
+    pollCount: number;
+    lastTxHash: string | null;
+    pollStartTime: number;
+  }>({
+    isPolling: false,
+    pollCount: 0,
+    lastTxHash: null,
+    pollStartTime: 0,
+  });
+
   const updateStats = useCallback(async () => {
     try {
       const results = await Promise.allSettled([
@@ -111,28 +123,28 @@ export function useGame() {
 
   const resolveGameAsyncMutation = useMutation({
     mutationFn: async (gameId: number) => {
-      setIsResolutionPending(true);
-
       try {
-        const currentTxHash = gameUIState.transactionHash;
-        if (currentTxHash) {
-          const { confirmed } = await checkTransactionStatus(currentTxHash);
+        // Call the server action
+        const result = await resolveGameAsync(gameId);
 
-          if (!confirmed) {
-            return {
-              success: true,
-              gameId,
-              txHash: currentTxHash,
-              isPending: true,
-              pendingResult,
-            };
-          }
+        if (!result.success) {
+          throw new Error(result.error || "Failed to resolve game");
+        }
 
-          const gameResult = await getGameResult(gameId);
+        // Store transaction hash for polling
+        if (result.txHash) {
+          setTransactionHash(result.txHash);
+          // Update polling with new hash
+          startOrUpdatePolling(result.txHash);
+        }
 
-          if (gameResult.success && gameResult.finished) {
-            const resultValue = gameResult.result || 0;
-            const gameOutcome = getResultFromDiff(resultValue);
+        // If there's a pending result
+        if (result.pendingResult !== undefined && result.pendingResult >= 0) {
+          setPendingResult(result.pendingResult);
+
+          // Check if we're done
+          if (result.status === "completed") {
+            const gameOutcome = getResultFromDiff(result.pendingResult);
 
             setPhase(GamePhase.FINISHED);
             setResult(gameOutcome);
@@ -146,52 +158,9 @@ export function useGame() {
             setIsResolutionPending(false);
             setTransactionHash(null);
             setTransactionModal(false);
+            stopPolling();
 
-            updateStats();
-
-            return {
-              success: true,
-              gameId,
-              isComplete: true,
-              result: gameOutcome,
-            };
-          }
-        }
-
-        const resolution = await resolveGameAsync(gameId);
-
-        if (!resolution.success) {
-          throw new Error(resolution.error || "Failed to resolve game");
-        }
-
-        if (resolution.txHash) {
-          setTransactionHash(resolution.txHash);
-        }
-
-        if (
-          resolution.pendingResult !== undefined &&
-          resolution.pendingResult >= 0
-        ) {
-          setPendingResult(resolution.pendingResult);
-
-          const gameResult = await getGameResult(gameId);
-          if (gameResult.success && gameResult.finished) {
-            const resultValue = gameResult.result || 0;
-            const gameOutcome = getResultFromDiff(resultValue);
-
-            setPhase(GamePhase.FINISHED);
-            setResult(gameOutcome);
-
-            if (gameUIState.playerMove) {
-              setHouseMove(
-                inferHouseMove(gameOutcome, gameUIState.playerMove as Move)
-              );
-            }
-
-            setIsResolutionPending(false);
-            setTransactionHash(null);
-            setTransactionModal(false);
-
+            // Update stats
             updateStats();
 
             return {
@@ -206,18 +175,26 @@ export function useGame() {
         return {
           success: true,
           gameId,
-          txHash: resolution.txHash,
+          txHash: result.txHash,
           isPending: true,
-          pendingResult: resolution.pendingResult,
+          pendingResult: result.pendingResult,
         };
       } catch (error) {
-        setIsResolutionPending(false);
+        // Handle specific error cases
         if (error instanceof Error) {
+          // If game not joined yet, keep polling
+          if (error.message.includes("Player B has not joined yet")) {
+            console.log("Waiting for player to join...");
+            return { success: true, gameId, waitingForJoin: true };
+          }
+
           setError(error.message);
         } else {
           setError("Failed to resolve game");
         }
+
         setPhase(GamePhase.ERROR);
+        stopPolling();
         throw error;
       }
     },
@@ -249,9 +226,21 @@ export function useGame() {
           throw new Error(houseResult.error || "Failed to play house move");
         }
 
-        // Start async resolution
+        // Start polling with the transaction hash
+        startOrUpdatePolling(houseResult.hash);
+
+        // Set phase to revealing
         setPhase(GamePhase.REVEALING);
-        return resolveGameAsyncMutation.mutateAsync(gameId);
+
+        // Start the async resolution but don't wait for it to complete
+        resolveGameAsyncMutation.mutate(gameId);
+
+        return {
+          success: true,
+          gameId,
+          txHash: houseResult.hash,
+          move: houseResult.move,
+        };
       } catch (error) {
         // Error handling same as before
         if (error instanceof Error) {
@@ -299,23 +288,99 @@ export function useGame() {
     },
   });
 
+  // Add this adaptive polling function
+  const startOrUpdatePolling = useCallback((txHash: string | null = null) => {
+    setPollingState((prev) => {
+      const now = Date.now();
+      const isNew = !prev.isPolling || txHash !== prev.lastTxHash;
+
+      // Reset poll count if this is a new transaction or we weren't polling before
+      const pollCount = isNew ? 0 : prev.pollCount + 1;
+
+      return {
+        isPolling: true,
+        pollCount,
+        lastTxHash: txHash || prev.lastTxHash,
+        // Reset start time if this is a new transaction
+        pollStartTime: isNew ? now : prev.pollStartTime,
+      };
+    });
+  }, []);
+
+  const stopPolling = useCallback(() => {
+    setPollingState((prev) => ({
+      ...prev,
+      isPolling: false,
+    }));
+  }, []);
+
   useEffect(() => {
-    if (!isResolutionPending || !gameUIState.gameId) {
+    if (!pollingState.isPolling || !gameUIState.gameId) {
       return;
     }
 
-    const pollInterval = setInterval(async () => {
+    // Calculate adaptive polling interval based on how long we've been polling
+    // Start with fast polls, then gradually slow down
+    const elapsedTimeMs = Date.now() - pollingState.pollStartTime;
+    let pollIntervalMs: number;
+
+    if (elapsedTimeMs < 5000) {
+      // First 5 seconds: poll very quickly (every 1s)
+      pollIntervalMs = 1000;
+    } else if (elapsedTimeMs < 15000) {
+      // 5-15 seconds: poll every 2s
+      pollIntervalMs = 2000;
+    } else if (elapsedTimeMs < 30000) {
+      // 15-30 seconds: poll every 3s
+      pollIntervalMs = 3000;
+    } else {
+      // After 30 seconds: slow down to every 5s
+      pollIntervalMs = 5000;
+    }
+
+    // Add some jitter to prevent exact simultaneous calls
+    const jitter = Math.random() * 300; // Up to 300ms of jitter
+    const finalInterval = pollIntervalMs + jitter;
+
+    console.log(
+      `Polling for game ${gameUIState.gameId} (poll #${
+        pollingState.pollCount
+      }) in ${Math.round(finalInterval)}ms`
+    );
+
+    const timeoutId = setTimeout(async () => {
       try {
-        await resolveGameAsyncMutation.mutateAsync(
-          gameUIState.gameId as number
-        );
+        if (!gameUIState.gameId) return;
+
+        // Only poll if we're still in an unfinished state
+        if (
+          gameUIState.phase !== GamePhase.FINISHED &&
+          gameUIState.phase !== GamePhase.ERROR
+        ) {
+          await resolveGameAsyncMutation.mutateAsync(gameUIState.gameId);
+        } else {
+          // Game is finished or errored, stop polling
+          stopPolling();
+        }
       } catch (error) {
         console.error("Error in polling resolution:", error);
-      }
-    }, 5000);
 
-    return () => clearInterval(pollInterval);
-  }, [isResolutionPending, gameUIState.gameId]);
+        // If we've been polling for more than 60 seconds, give up
+        if (Date.now() - pollingState.pollStartTime > 60000) {
+          stopPolling();
+          setError("Game resolution timed out. Please try again later.");
+        }
+      }
+    }, finalInterval);
+
+    return () => clearTimeout(timeoutId);
+  }, [
+    pollingState.isPolling,
+    pollingState.pollCount,
+    pollingState.pollStartTime,
+    gameUIState.gameId,
+    gameUIState.phase,
+  ]);
 
   useEffect(() => {
     if (!gameInfo || !gameUIState.gameId) return;
