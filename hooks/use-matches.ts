@@ -1,13 +1,13 @@
-import { useWallet } from '@/contexts/wallet-context';
-import { Move } from '@/lib/crypto';
+import { useWallet } from "@/contexts/wallet-context";
+import { Move } from "@/lib/crypto";
 import {
   GameHistory,
   GameResult,
   SubgraphGamesResponse,
   SubgraphPlayerStats,
-} from '@/types/game';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { formatEther } from 'viem';
+} from "@/types/game";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { formatEther } from "viem";
 
 const SUBGRAPH_URL = process.env.NEXT_PUBLIC_SUBGRAPH_URL as string;
 
@@ -79,7 +79,7 @@ export function useMatches() {
     isLoading,
     refetch,
   } = useQuery({
-    queryKey: ['matches', address],
+    queryKey: ["matches", address],
     queryFn: async () => {
       if (!address) return { matches: [], totalEarnings: 0, playerStats: null };
 
@@ -87,9 +87,9 @@ export function useMatches() {
         const normalizedAddress = address.toLowerCase();
 
         const response = await fetch(SUBGRAPH_URL, {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
             query: PLAYER_GAMES_QUERY,
@@ -108,8 +108,8 @@ export function useMatches() {
         const data = (await response.json()) as SubgraphGamesResponse;
 
         if (data.errors) {
-          console.error('GraphQL errors:', data.errors);
-          throw new Error('GraphQL query failed');
+          console.error("GraphQL errors:", data.errors);
+          throw new Error("GraphQL query failed");
         }
 
         const userMatches: GameHistory[] = [];
@@ -131,7 +131,7 @@ export function useMatches() {
             diffMod3Value,
             true,
             game.winner?.toLowerCase() === normalizedAddress,
-            betAmount,
+            betAmount
           );
 
           totalEarnings += betValue;
@@ -163,7 +163,7 @@ export function useMatches() {
             diffMod3Value,
             false,
             game.winner?.toLowerCase() === normalizedAddress,
-            betAmount,
+            betAmount
           );
 
           totalEarnings += betValue;
@@ -185,7 +185,7 @@ export function useMatches() {
 
         if (data.data.playerStats?.netProfitLoss) {
           totalEarnings = Number(
-            formatEther(BigInt(data.data.playerStats.netProfitLoss)),
+            formatEther(BigInt(data.data.playerStats.netProfitLoss))
           );
         }
 
@@ -195,12 +195,11 @@ export function useMatches() {
           playerStats: data.data.playerStats,
         };
       } catch (error) {
-        console.error('Error fetching matches:', error);
+        console.error("Error fetching matches:", error);
         return { matches: [], totalEarnings: 0, playerStats: null };
       }
     },
     enabled: !!address,
-    refetchInterval: 60000,
     staleTime: 5000,
   });
 
@@ -211,7 +210,7 @@ export function useMatches() {
     diffMod3Value: number,
     isPlayerA: boolean,
     isWinner: boolean,
-    betAmount: number,
+    betAmount: number
   ): {
     playerMove: Move;
     houseMove: Move;
@@ -224,7 +223,7 @@ export function useMatches() {
     let betValue: number = 0;
 
     if (diffMod3Value === 0) {
-      const drawMoves: Move[] = ['ROCK', 'PAPER', 'SCISSORS'];
+      const drawMoves: Move[] = ["ROCK", "PAPER", "SCISSORS"];
       const randomDrawMove =
         drawMoves[Math.floor(Math.random() * drawMoves.length)];
       playerMove = randomDrawMove;
@@ -234,26 +233,26 @@ export function useMatches() {
     } else if (diffMod3Value === 1) {
       // Player A wins
       if (isPlayerA) {
-        playerMove = 'ROCK';
-        houseMove = 'SCISSORS';
+        playerMove = "ROCK";
+        houseMove = "SCISSORS";
         result = GameResult.WIN;
         betValue = betAmount;
       } else {
-        playerMove = 'SCISSORS';
-        houseMove = 'ROCK';
+        playerMove = "SCISSORS";
+        houseMove = "ROCK";
         result = GameResult.LOSE;
         betValue = -betAmount;
       }
     } else {
       // Player B wins
       if (!isPlayerA) {
-        playerMove = 'ROCK';
-        houseMove = 'SCISSORS';
+        playerMove = "ROCK";
+        houseMove = "SCISSORS";
         result = GameResult.WIN;
         betValue = betAmount;
       } else {
-        playerMove = 'SCISSORS';
-        houseMove = 'ROCK';
+        playerMove = "SCISSORS";
+        houseMove = "ROCK";
         result = GameResult.LOSE;
         betValue = -betAmount;
       }
@@ -265,7 +264,7 @@ export function useMatches() {
       (result === GameResult.LOSE && isWinner)
     ) {
       console.warn(
-        'Game result logic mismatch with winner field, using winner field',
+        "Game result logic mismatch with winner field, using winner field"
       );
       if (isWinner) {
         result = GameResult.WIN;
@@ -283,7 +282,7 @@ export function useMatches() {
     try {
       await refetch();
     } catch (error) {
-      console.error('Error refetching match history:', error);
+      console.error("Error refetching match history:", error);
     }
   };
 
@@ -317,7 +316,7 @@ export function useMatches() {
     };
 
     queryClient.setQueryData(
-      ['matches', address],
+      ["matches", address],
       (
         oldData:
           | {
@@ -325,7 +324,7 @@ export function useMatches() {
               totalEarnings: number;
               playerStats: SubgraphPlayerStats | null;
             }
-          | undefined,
+          | undefined
       ) => {
         if (!oldData)
           return {
@@ -335,7 +334,7 @@ export function useMatches() {
           };
 
         const existingMatch = oldData.matches.find(
-          (match) => match.gameId === gameData.gameId,
+          (match) => match.gameId === gameData.gameId
         );
         if (existingMatch) return oldData;
 
@@ -347,13 +346,13 @@ export function useMatches() {
           totalEarnings: newTotalEarnings,
           playerStats: oldData.playerStats,
         };
-      },
+      }
     );
   };
 
   const clearHistoryMutation = async () => {
     if (address) {
-      queryClient.setQueryData(['matches', address], {
+      queryClient.setQueryData(["matches", address], {
         matches: [],
         totalEarnings: 0,
         playerStats: null,
