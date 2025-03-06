@@ -34,7 +34,7 @@ class SoundEffects {
     if (this.audioContext) {
       this.backgroundMusicGain = this.audioContext.createGain();
       this.backgroundMusicGain.connect(this.audioContext.destination);
-      this.backgroundMusicGain.gain.value = this.isMuted ? 0 : 0.5; // 50% volume or 0 if muted
+      this.backgroundMusicGain.gain.value = this.isMuted ? 0 : 0.2;
     }
   }
 
@@ -177,9 +177,8 @@ class SoundEffects {
     if (this.gain && this.isMuted) {
       this.gain.gain.value = this.previousVolume;
 
-      // Also unmute background music
       if (this.backgroundMusicGain) {
-        this.backgroundMusicGain.gain.value = 0.5; // 50% volume
+        this.backgroundMusicGain.gain.value = 0.2;
       }
 
       this.isMuted = false;
