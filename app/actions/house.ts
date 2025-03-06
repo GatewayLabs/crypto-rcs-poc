@@ -7,7 +7,6 @@ import { parseEventLogs } from "viem";
 import * as paillier from "paillier-bigint";
 import { DEFAULT_BET_AMOUNT_WEI } from "@/hooks/use-game-contract";
 
-// Define return types for our functions
 export type PlayHouseMoveSuccessResult = {
   success: true;
   hash: `0x${string}`;
@@ -41,14 +40,8 @@ export type ResolveGameResult =
 
 function generateHouseMove(): Move {
   const moves: Move[] = ["ROCK", "PAPER", "SCISSORS"];
-  const weights = [0.4, 0.3, 0.3];
-  const random = Math.random();
-  let sum = 0;
-  for (let i = 0; i < weights.length; i++) {
-    sum += weights[i];
-    if (random <= sum) return moves[i];
-  }
-  return "ROCK";
+  const randomIndex = Math.floor(Math.random() * moves.length);
+  return moves[randomIndex];
 }
 
 export async function playHouseMove(
