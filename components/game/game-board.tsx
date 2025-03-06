@@ -5,6 +5,7 @@ import GameButton from "@/components/game/game-button";
 import GameResultView from "@/components/game/game-result";
 import TransactionModal from "@/components/game/transaction-modal";
 import { ToastContainer } from "@/components/ui/toast";
+import { useWallet } from "@/contexts/wallet-context";
 import { useGame } from "@/hooks/use-game";
 import { Move } from "@/lib/crypto";
 import { soundEffects } from "@/lib/sounds/sound-effects";
@@ -12,9 +13,8 @@ import { GameToast, useGameUIStore } from "@/stores/game-ui-store";
 import { GamePhase } from "@/types/game";
 import { formatEther } from "ethers";
 import { useEffect, useState } from "react";
-import { useAccount, useBalance } from "wagmi";
+import { useBalance } from "wagmi";
 import GameBet from "./game-bet";
-import { useWallet } from "@/contexts/wallet-context";
 
 const GAME_BUTTONS = [
   {
