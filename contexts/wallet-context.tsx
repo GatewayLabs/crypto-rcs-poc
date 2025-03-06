@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import {
   createContext,
@@ -6,10 +6,10 @@ import {
   ReactNode,
   useState,
   useEffect,
-} from 'react';
-import { usePrivy, useWallets } from '@privy-io/react-auth';
-import { useSetActiveWallet } from '@privy-io/wagmi';
-import { monad } from '@/config/chains';
+} from "react";
+import { usePrivy, useWallets } from "@privy-io/react-auth";
+import { useSetActiveWallet } from "@privy-io/wagmi";
+import { monad } from "@/config/chains";
 
 interface EmbeddedWallet {
   address: string;
@@ -23,12 +23,13 @@ interface WalletContextType {
   walletAddress: string | undefined;
   walletError: string | null;
   embeddedWallet: EmbeddedWallet | undefined;
+  login: () => void;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
-  const { ready, authenticated } = usePrivy();
+  const { ready, authenticated, login } = usePrivy();
   const { wallets } = useWallets();
   const { setActiveWallet } = useSetActiveWallet();
 
@@ -36,7 +37,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [walletError, setWalletError] = useState<string | null>(null);
 
   const embeddedWallet = wallets.find(
-    (wallet) => wallet.walletClientType === 'privy',
+    (wallet) => wallet.walletClientType === "privy"
   );
   const walletAddress = embeddedWallet?.address;
   const isAuthenticated = ready && authenticated && !!walletAddress;
@@ -55,9 +56,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setIsWalletReady(true);
         setWalletError(null);
       } catch (error) {
-        console.error('Error activating wallet:', error);
+        console.error("Error activating wallet:", error);
         setWalletError(
-          error instanceof Error ? error.message : 'Unknown wallet error',
+          error instanceof Error ? error.message : "Unknown wallet error"
         );
         setIsWalletReady(false);
       }
@@ -72,6 +73,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     walletAddress,
     walletError,
     embeddedWallet,
+    login,
   };
 
   return (
@@ -82,7 +84,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 export function useWallet() {
   const context = useContext(WalletContext);
   if (context === undefined) {
-    throw new Error('useWallet must be used within a WalletProvider');
+    throw new Error("useWallet must be used within a WalletProvider");
   }
   return context;
 }
