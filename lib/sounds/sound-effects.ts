@@ -5,6 +5,8 @@ class SoundEffects {
   private gain: GainNode | null = null;
   private isMuted: boolean = false;
   private previousVolume: number = 0.2;
+  private backgroundMusic: HTMLAudioElement | null = null;
+  private backgroundMusicGain: GainNode | null = null;
 
   constructor() {
     // Initialize on first user interaction
@@ -14,6 +16,7 @@ class SoundEffects {
         () => {
           if (!this.audioContext) {
             this.initAudio();
+            this.playBackgroundMusic();
           }
         },
         { once: true }
@@ -26,11 +29,39 @@ class SoundEffects {
     this.gain = this.audioContext.createGain();
     this.gain.connect(this.audioContext.destination);
     this.gain.gain.value = this.isMuted ? 0 : this.previousVolume; // Set default volume or 0 if muted
+
+    // Initialize background music gain node
+    if (this.audioContext) {
+      this.backgroundMusicGain = this.audioContext.createGain();
+      this.backgroundMusicGain.connect(this.audioContext.destination);
+      this.backgroundMusicGain.gain.value = this.isMuted ? 0 : 0.5; // 50% volume or 0 if muted
+    }
   }
 
   private ensureContext() {
     if (!this.audioContext || this.audioContext.state === "suspended") {
       this.initAudio();
+    }
+  }
+
+  // Start all audio features including background music
+  startAudio() {
+    try {
+      this.ensureContext();
+
+      // Play a silent sound to unlock audio on iOS
+      this.playTone(0, 0.1, "sine", 0, 0);
+
+      // Start background music
+      if (this.audioContext) {
+        this.playBackgroundMusic();
+        return true; // Successfully initialized
+      }
+
+      return false; // Failed to initialize audio context
+    } catch (error) {
+      console.error("Error starting audio:", error);
+      return false; // Error during initialization
     }
   }
 
@@ -86,7 +117,7 @@ class SoundEffects {
 
   // Selection effect
   async select() {
-    const now = this.audioContext?.currentTime || 0;
+    // const now = this.audioContext?.currentTime || 0;
     await this.playTone(880, 0.1, "triangle", 0.01, 0.1);
     setTimeout(() => this.playTone(1320, 0.1, "triangle", 0.01, 0.1), 100);
   }
@@ -121,27 +152,42 @@ class SoundEffects {
     });
   }
 
+  // Mute all sound effects
   mute() {
     this.ensureContext();
 
     if (this.gain && !this.isMuted) {
       this.previousVolume = this.gain.gain.value;
       this.gain.gain.value = 0;
+
+      // Also mute background music
+      if (this.backgroundMusicGain) {
+        this.backgroundMusicGain.gain.value = 0;
+      }
+
       this.isMuted = true;
     }
     return this.isMuted;
   }
 
+  // Unmute sound effects and restore previous volume
   unmute() {
     this.ensureContext();
 
     if (this.gain && this.isMuted) {
       this.gain.gain.value = this.previousVolume;
+
+      // Also unmute background music
+      if (this.backgroundMusicGain) {
+        this.backgroundMusicGain.gain.value = 0.5; // 50% volume
+      }
+
       this.isMuted = false;
     }
     return this.isMuted;
   }
 
+  // Toggle mute state
   toggleMute() {
     this.ensureContext();
 
@@ -154,10 +200,12 @@ class SoundEffects {
     return result;
   }
 
+  // Check if sound is currently muted
   isSoundMuted() {
     return this.isMuted;
   }
 
+  // Set volume (0.0 to 1.0)
   setVolume(volume: number) {
     if (this.gain) {
       const clampedVolume = Math.max(0, Math.min(1, volume));
@@ -165,6 +213,57 @@ class SoundEffects {
 
       if (!this.isMuted) {
         this.gain.gain.value = clampedVolume;
+      }
+    }
+  }
+
+  playBackgroundMusic(path: string = "/sounds/sound1.mp3") {
+    this.ensureContext();
+    this.stopBackgroundMusic();
+
+    try {
+      this.backgroundMusic = new Audio(path);
+      this.backgroundMusic.loop = true;
+
+      if (this.audioContext && this.backgroundMusicGain) {
+        const source = this.audioContext.createMediaElementSource(
+          this.backgroundMusic
+        );
+        source.connect(this.backgroundMusicGain);
+        this.backgroundMusicGain.gain.value = this.isMuted ? 0 : 0.2;
+        this.backgroundMusic.addEventListener("play", () => {
+          console.log("Background music started playing");
+        });
+        this.backgroundMusic.addEventListener("error", (e) => {
+          console.error("Background music error:", e);
+        });
+      }
+
+      const playPromise = this.backgroundMusic.play();
+
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            console.log("Background music playback started successfully");
+          })
+          .catch((err) => {
+            console.error("Error playing background music:", err);
+          });
+      }
+    } catch (error) {
+      console.error("Error setting up background music:", error);
+    }
+  }
+
+  // Stop background music
+  stopBackgroundMusic() {
+    if (this.backgroundMusic) {
+      try {
+        this.backgroundMusic.pause();
+        this.backgroundMusic.currentTime = 0;
+        this.backgroundMusic = null;
+      } catch (error) {
+        console.error("Error stopping background music:", error);
       }
     }
   }
