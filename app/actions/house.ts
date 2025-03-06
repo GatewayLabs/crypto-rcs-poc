@@ -2,7 +2,7 @@
 
 import { Move, encryptMove } from "@/lib/crypto";
 import { gameContractConfig } from "@/config/contracts";
-import { publicClient, walletClient } from "@/config/server";
+import { publicClient } from "@/config/server";
 import * as paillier from "paillier-bigint";
 import { DEFAULT_BET_AMOUNT_WEI } from "@/hooks/use-game-contract";
 import { executeContractFunction } from "@/lib/wallet-utils";
@@ -172,7 +172,7 @@ export async function resolveGameAsync(gameId: number): Promise<{
 
     console.log(`Starting to resolve game ${gameId}`);
 
-    // OPTIMIZATION: Quick first check to see if game is already finished
+    // Quick first check to see if game is already finished
     try {
       const quickCheckData = await publicClient.readContract({
         ...gameContractConfig,
@@ -197,59 +197,83 @@ export async function resolveGameAsync(gameId: number): Promise<{
       console.log(`Quick check for finished game failed: ${error}`);
     }
 
-    // Function to execute a transaction and optionally wait for confirmation
-    // OPTIMIZATION: Made waiting for confirmation optional (default: false)
+    // Function to execute a transaction and handle specific errors
     const executeTransaction = async (
       functionName: string,
       args: any[],
       options: {
         waitForConfirmation?: boolean;
         maxWaitTimeMs?: number;
+        expectedErrors?: { [key: string]: string }; // Map error messages to statuses
       } = {}
-    ): Promise<{ txHash: string; confirmed: boolean }> => {
+    ): Promise<{ txHash: string; confirmed: boolean; status?: string }> => {
       const {
         waitForConfirmation = false,
         maxWaitTimeMs = 30000, // 30 seconds max wait
+        expectedErrors = {},
       } = options;
 
-      // Execute the transaction
-      const txHash = await executeContractFunction(
-        gameContractConfig,
-        functionName,
-        args,
-        {
-          retries: 2, // OPTIMIZATION: Reduced retries from 3 to 2
-          logPrefix: `${functionName} (async) for game ${gameId}`,
-        }
-      );
-
-      // Return early if we don't need to wait for confirmation
-      if (!waitForConfirmation) {
-        return { txHash, confirmed: false };
-      }
-
-      // Wait for transaction confirmation with timeout
-      console.log(
-        `Waiting for ${functionName} transaction ${txHash} to be confirmed...`
-      );
       try {
-        const startTime = Date.now();
-        await publicClient.waitForTransactionReceipt({
-          hash: txHash,
-          timeout: maxWaitTimeMs,
-          confirmations: 1,
-        });
+        // Execute the transaction
+        const txHash = await executeContractFunction(
+          gameContractConfig,
+          functionName,
+          args,
+          {
+            retries: 2,
+            logPrefix: `${functionName} (async) for game ${gameId}`,
+          }
+        );
 
-        const timeElapsed = Date.now() - startTime;
+        // Return early if we don't need to wait for confirmation
+        if (!waitForConfirmation) {
+          return { txHash, confirmed: false };
+        }
+
+        // Wait for transaction confirmation with timeout
         console.log(
-          `${functionName} transaction confirmed in ${timeElapsed}ms`
+          `Waiting for ${functionName} transaction ${txHash} to be confirmed...`
         );
-        return { txHash, confirmed: true };
+        try {
+          const startTime = Date.now();
+          await publicClient.waitForTransactionReceipt({
+            hash: txHash,
+            timeout: maxWaitTimeMs,
+            confirmations: 1,
+          });
+
+          const timeElapsed = Date.now() - startTime;
+          console.log(
+            `${functionName} transaction confirmed in ${timeElapsed}ms`
+          );
+          return { txHash, confirmed: true };
+        } catch (error) {
+          console.warn(
+            `Warning: Couldn't confirm ${functionName} transaction within ${maxWaitTimeMs}ms: ${error}`
+          );
+          return { txHash, confirmed: false };
+        }
       } catch (error) {
-        console.warn(
-          `Warning: Couldn't confirm ${functionName} transaction within ${maxWaitTimeMs}ms: ${error}`
-        );
-        return { txHash, confirmed: false };
+        // Check if this is an expected error
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+
+        // Check all the expected error messages
+        for (const [errorPattern, status] of Object.entries(expectedErrors)) {
+          if (errorMessage.includes(errorPattern)) {
+            console.log(
+              `${functionName} encountered expected error: ${errorPattern}`
+            );
+            return {
+              txHash: "0x", // Dummy hash
+              confirmed: true, // Treat as confirmed
+              status, // Return the mapped status
+            };
+          }
+        }
+
+        // If not an expected error, rethrow
+        throw error;
       }
     };
 
@@ -318,7 +342,7 @@ export async function resolveGameAsync(gameId: number): Promise<{
       };
     }
 
-    // OPTIMIZATION: For checking if players have joined, we make one retry after a short delay
+    // For checking if players have joined, we make one retry after a short delay
     if (
       gameState.playerA === "0x0000000000000000000000000000000000000000" ||
       gameState.playerB === "0x0000000000000000000000000000000000000000"
@@ -355,37 +379,98 @@ export async function resolveGameAsync(gameId: number): Promise<{
     }
 
     // Submit moves if not already submitted
+    // Handle "Moves already submitted" error
     if (!gameState.bothCommitted) {
-      const { txHash } = await executeTransaction("submitMoves", [
-        BigInt(gameId),
-      ]);
+      const { txHash, status } = await executeTransaction(
+        "submitMoves",
+        [BigInt(gameId)],
+        {
+          expectedErrors: {
+            "Moves already submitted": "moves_already_submitted",
+          },
+        }
+      );
 
-      // Return early - client will poll for updates
-      return {
-        success: true,
-        txHash,
-        pendingResult: -1,
-        status: "submitting_moves",
-      };
+      if (status === "moves_already_submitted") {
+        console.log(
+          `Moves for game ${gameId} were already submitted, continuing to next step`
+        );
+        // Update our local game state
+        gameState.bothCommitted = true;
+      } else if (status === "game_already_finalized") {
+        console.log(
+          `Game ${gameId} was already finalized, retrieving final result`
+        );
+
+        try {
+          const finalGameState = await getGameState();
+          return {
+            success: true,
+            pendingResult: Number(finalGameState.revealedDiff),
+            status: "completed",
+          };
+        } catch (error) {
+          console.warn(
+            `Could not get final game state after finding it was already finalized: ${error}`
+          );
+        }
+      } else {
+        // Normal case - return early with hash for client polling
+        return {
+          success: true,
+          txHash,
+          pendingResult: -1,
+          status: "submitting_moves",
+        };
+      }
     }
 
     // Check if we need to compute difference
+    // Handle "Difference already computed" error
     if (!gameState.differenceCipher || gameState.differenceCipher === "0x") {
-      const { txHash } = await executeTransaction("computeDifference", [
-        BigInt(gameId),
-      ]);
+      const { txHash, status } = await executeTransaction(
+        "computeDifference",
+        [BigInt(gameId)],
+        {
+          expectedErrors: {
+            "Difference already computed": "difference_already_computed",
+          },
+        }
+      );
 
-      // Return early - client will poll for updates
+      if (status === "difference_already_computed") {
+        console.log(
+          `Difference for game ${gameId} was already computed, continuing to next step`
+        );
+        // Refresh game state to get the difference cipher
+        try {
+          gameState = await getGameState();
+        } catch (error) {
+          console.error("Error fetching updated game state:", error);
+        }
+      } else {
+        // Normal case - return early with hash for client polling
+        return {
+          success: true,
+          txHash,
+          pendingResult: -1,
+          status: "computing_difference",
+        };
+      }
+    }
+
+    // If we still don't have the difference cipher, return with error
+    if (!gameState.differenceCipher || gameState.differenceCipher === "0x") {
+      console.error(
+        `No difference cipher available for game ${gameId} after compute step`
+      );
       return {
-        success: true,
-        txHash,
-        pendingResult: -1,
-        status: "computing_difference",
+        success: false,
+        error: "Failed to compute difference cipher",
       };
     }
 
     // Now we should have the difference cipher, so decrypt it
-    // OPTIMIZATION: Moved Paillier setup to the top for better organization
     // Paillier Key Setup
     const publicKeyN = BigInt("0x" + process.env.NEXT_PUBLIC_PAILLIER_N);
     const publicKeyG = BigInt("0x" + process.env.NEXT_PUBLIC_PAILLIER_G);
@@ -434,11 +519,17 @@ export async function resolveGameAsync(gameId: number): Promise<{
       console.warn(`Could not check if game is already finalized:`, error);
     }
 
-    // Finalize the game
-    const { txHash } = await executeTransaction("finalizeGame", [
-      BigInt(gameId),
-      diffMod3,
-    ]);
+    // Finalize the game - handle "Game already finalized" error
+    const { txHash } = await executeTransaction(
+      "finalizeGame",
+      [BigInt(gameId), diffMod3],
+      {
+        expectedErrors: {
+          "Game already finalized": "game_already_finalized",
+          "Game is already finished": "game_already_finalized",
+        },
+      }
+    );
 
     // Return with transaction hash and the pending result
     return {
