@@ -1,9 +1,4 @@
-import {
-  checkTransactionStatus,
-  getGameResult,
-  playHouseMove,
-  resolveGameAsync,
-} from "@/app/actions/house";
+import { playHouseMove, resolveGameAsync } from "@/app/actions/house";
 import { Move } from "@/lib/crypto";
 import { useGameUIStore } from "@/stores/game-ui-store";
 import { GamePhase, GameResult } from "@/types/game";
@@ -18,12 +13,12 @@ import { useLeaderboard } from "./use-leaderboard";
 import { useMatches } from "./use-matches";
 
 export function useGame() {
+  //-----------------------------------------------------------------------
+  // Dependencies & State
+  //-----------------------------------------------------------------------
   const {
     createGame: contractCreateGame,
     joinGame: contractJoinGame,
-    submitMoves,
-    computeDifference,
-    finalizeGame,
     gameInfo,
   } = useGameContract();
 
@@ -43,33 +38,29 @@ export function useGame() {
     resetGameState,
   } = useGameUIStore();
 
+  // Game resolution state
   const [isResolutionPending, setIsResolutionPending] = useState(false);
   const [pendingResult, setPendingResult] = useState<number | null>(null);
 
-  const [pollingState, setPollingState] = useState<{
-    isPolling: boolean;
-    pollCount: number;
-    lastTxHash: string | null;
-    pollStartTime: number;
-  }>({
+  // Polling state
+  const [pollingState, setPollingState] = useState({
     isPolling: false,
     pollCount: 0,
-    lastTxHash: null,
+    lastTxHash: null as string | null,
     pollStartTime: 0,
   });
 
+  //-----------------------------------------------------------------------
+  // Utility Functions
+  //-----------------------------------------------------------------------
+
+  // Update leaderboard and match history stats
   const updateStats = useCallback(async () => {
     try {
       const results = await Promise.allSettled([
         updateLeaderboard(),
         addMatch(),
       ]);
-
-      results.forEach((result, index) => {
-        if (result.status === "rejected") {
-          console.error(`Error in update operation ${index}:`, result.reason);
-        }
-      });
 
       if (results.every((result) => result.status === "fulfilled")) {
         console.log("Game stats updated successfully");
@@ -81,26 +72,21 @@ export function useGame() {
     }
   }, [updateLeaderboard, addMatch]);
 
+  // Determine game phase from contract data
   function determineGamePhase(gameInfo: any) {
     if (!gameInfo) return GamePhase.CHOOSING;
 
     const [playerB, finished, bothCommitted] = gameInfo;
 
-    if (finished) {
-      return GamePhase.FINISHED;
-    }
-
-    if (bothCommitted) {
-      return GamePhase.REVEALING;
-    }
-
-    if (playerB !== "0x0000000000000000000000000000000000000000") {
+    if (finished) return GamePhase.FINISHED;
+    if (bothCommitted) return GamePhase.REVEALING;
+    if (playerB !== "0x0000000000000000000000000000000000000000")
       return GamePhase.WAITING;
-    }
 
     return GamePhase.SELECTED;
   }
 
+  // Infer house move based on player move and result
   function inferHouseMove(gameResult: GameResult, userMove: Move) {
     if (gameResult === GameResult.WIN) {
       return userMove === "ROCK"
@@ -118,34 +104,76 @@ export function useGame() {
         : "ROCK";
     }
 
-    return userMove;
+    return userMove; // For DRAW
   }
+
+  // Convert game difference to result
+  function getResultFromDiff(diff: number | undefined) {
+    if (diff === undefined) return GameResult.DRAW;
+
+    // Normalize the diff modulo 3
+    const normalizedDiff = ((diff % 3) + 3) % 3;
+
+    if (normalizedDiff === 0) return GameResult.DRAW;
+    if (normalizedDiff === 1) return GameResult.WIN;
+    return GameResult.LOSE;
+  }
+
+  //-----------------------------------------------------------------------
+  // Polling Management
+  //-----------------------------------------------------------------------
+
+  const startOrUpdatePolling = useCallback((txHash: string | null = null) => {
+    setIsResolutionPending(true);
+    setPollingState((prev) => {
+      const now = Date.now();
+      const isNew = !prev.isPolling || txHash !== prev.lastTxHash;
+      const pollCount = isNew ? 0 : prev.pollCount + 1;
+
+      return {
+        isPolling: true,
+        pollCount,
+        lastTxHash: txHash || prev.lastTxHash,
+        pollStartTime: isNew ? now : prev.pollStartTime,
+      };
+    });
+  }, []);
+
+  const stopPolling = useCallback(() => {
+    setIsResolutionPending(false);
+    setPollingState((prev) => ({
+      ...prev,
+      isPolling: false,
+    }));
+  }, []);
+
+  //-----------------------------------------------------------------------
+  // Game Resolution Mutation
+  //-----------------------------------------------------------------------
 
   const resolveGameAsyncMutation = useMutation({
     mutationFn: async (gameId: number) => {
       try {
-        // Call the server action
         const result = await resolveGameAsync(gameId);
 
         if (!result.success) {
           throw new Error(result.error || "Failed to resolve game");
         }
 
-        // Store transaction hash for polling
+        // Update transaction hash for polling
         if (result.txHash) {
           setTransactionHash(result.txHash);
-          // Update polling with new hash
           startOrUpdatePolling(result.txHash);
         }
 
-        // If there's a pending result
+        // Handle completion or pending results
         if (result.pendingResult !== undefined && result.pendingResult >= 0) {
           setPendingResult(result.pendingResult);
 
-          // Check if we're done
           if (result.status === "completed") {
             const gameOutcome = getResultFromDiff(result.pendingResult);
 
+            // Update game state to finished
             setPhase(GamePhase.FINISHED);
             setResult(gameOutcome);
 
@@ -155,12 +183,13 @@ export function useGame() {
               );
             }
 
+            // Clean up state
             setIsResolutionPending(false);
             setTransactionHash(null);
             setTransactionModal(false);
             stopPolling();
 
-            // Update stats
+            // Update leaderboard and match history
             updateStats();
 
             return {
@@ -182,12 +211,10 @@ export function useGame() {
       } catch (error) {
         // Handle specific error cases
         if (error instanceof Error) {
-          // If game not joined yet, keep polling
           if (error.message.includes("Player B has not joined yet")) {
             console.log("Waiting for player to join...");
             return { success: true, gameId, waitingForJoin: true };
           }
-
           setError(error.message);
         } else {
           setError("Failed to resolve game");
@@ -200,39 +227,31 @@ export function useGame() {
     },
   });
 
-  function getResultFromDiff(diff: number | undefined) {
-    if (diff === undefined) return GameResult.DRAW;
-
-    // Normalize the diff modulo 3
-    const normalizedDiff = ((diff % 3) + 3) % 3;
-
-    if (normalizedDiff === 0) return GameResult.DRAW;
-    if (normalizedDiff === 1) return GameResult.WIN;
-    return GameResult.LOSE;
-  }
+  //-----------------------------------------------------------------------
+  // Create Game Mutation
+  //-----------------------------------------------------------------------
 
   const createGameMutation = useMutation({
     mutationFn: async (params: { move: Move; betAmount?: bigint }) => {
       const { move, betAmount = DEFAULT_BET_AMOUNT_WEI } = params;
       try {
+        // Set initial state
         setPlayerMove(move);
         setPhase(GamePhase.SELECTED);
 
+        // Create game on-chain
         const gameId = await contractCreateGame(move, betAmount);
         setGameId(gameId);
 
+        // Let house make its move
         const houseResult = await playHouseMove(gameId, betAmount);
         if (!houseResult.success) {
           throw new Error(houseResult.error || "Failed to play house move");
         }
 
-        // Start polling with the transaction hash
+        // Start resolution process
         startOrUpdatePolling(houseResult.hash);
-
-        // Set phase to revealing
         setPhase(GamePhase.REVEALING);
-
-        // Start the async resolution but don't wait for it to complete
         resolveGameAsyncMutation.mutate(gameId);
 
         return {
@@ -242,7 +261,7 @@ export function useGame() {
           move: houseResult.move,
         };
       } catch (error) {
-        // Error handling same as before
+        // Handle errors
         if (error instanceof Error) {
           if (!error.message.includes("rejected the request")) {
             setError(error.message);
@@ -256,6 +275,10 @@ export function useGame() {
     },
   });
 
+  //-----------------------------------------------------------------------
+  // Join Game Mutation
+  //-----------------------------------------------------------------------
+
   const joinGameMutation = useMutation({
     mutationFn: async ({
       gameId,
@@ -267,16 +290,18 @@ export function useGame() {
       betAmount?: bigint;
     }) => {
       try {
+        // Set initial state
         setPlayerMove(move);
         setPhase(GamePhase.WAITING);
 
+        // Join game on-chain
         await contractJoinGame(gameId, move, betAmount);
 
-        // Start async resolution
+        // Start resolution process
         setPhase(GamePhase.REVEALING);
         return resolveGameAsyncMutation.mutateAsync(gameId);
       } catch (error) {
-        // Error handling
+        // Handle errors
         if (error instanceof Error) {
           setError(error.message);
         } else {
@@ -288,84 +313,51 @@ export function useGame() {
     },
   });
 
-  // Add this adaptive polling function
-  const startOrUpdatePolling = useCallback((txHash: string | null = null) => {
-    setPollingState((prev) => {
-      const now = Date.now();
-      const isNew = !prev.isPolling || txHash !== prev.lastTxHash;
+  //-----------------------------------------------------------------------
+  // Side Effects
+  //-----------------------------------------------------------------------
 
-      // Reset poll count if this is a new transaction or we weren't polling before
-      const pollCount = isNew ? 0 : prev.pollCount + 1;
-
-      return {
-        isPolling: true,
-        pollCount,
-        lastTxHash: txHash || prev.lastTxHash,
-        // Reset start time if this is a new transaction
-        pollStartTime: isNew ? now : prev.pollStartTime,
-      };
-    });
-  }, []);
-
-  const stopPolling = useCallback(() => {
-    setPollingState((prev) => ({
-      ...prev,
-      isPolling: false,
-    }));
-  }, []);
-
+  // Adaptive polling based on elapsed time
   useEffect(() => {
     if (!pollingState.isPolling || !gameUIState.gameId) {
       return;
     }
 
-    // Calculate adaptive polling interval based on how long we've been polling
-    // Start with fast polls, then gradually slow down
+    // Calculate adaptive polling interval
     const elapsedTimeMs = Date.now() - pollingState.pollStartTime;
     let pollIntervalMs: number;
 
     if (elapsedTimeMs < 5000) {
-      // First 5 seconds: poll very quickly (every 1s)
-      pollIntervalMs = 1000;
+      pollIntervalMs = 1000; // 0-5 seconds: poll every 1s
     } else if (elapsedTimeMs < 15000) {
-      // 5-15 seconds: poll every 2s
-      pollIntervalMs = 2000;
+      pollIntervalMs = 2000; // 5-15 seconds: poll every 2s
     } else if (elapsedTimeMs < 30000) {
-      // 15-30 seconds: poll every 3s
-      pollIntervalMs = 3000;
+      pollIntervalMs = 3000; // 15-30 seconds: poll every 3s
     } else {
-      // After 30 seconds: slow down to every 5s
-      pollIntervalMs = 5000;
+      pollIntervalMs = 5000; // After 30 seconds: poll every 5s
     }
 
-    // Add some jitter to prevent exact simultaneous calls
-    const jitter = Math.random() * 300; // Up to 300ms of jitter
+    // Add jitter to prevent synchronization
+    const jitter = Math.random() * 300;
     const finalInterval = pollIntervalMs + jitter;
-
-    console.log(
-      `Polling for game ${gameUIState.gameId} (poll #${
-        pollingState.pollCount
-      }) in ${Math.round(finalInterval)}ms`
-    );
 
     const timeoutId = setTimeout(async () => {
       try {
         if (!gameUIState.gameId) return;
 
-        // Only poll if we're still in an unfinished state
+        // Only poll if game is still active
         if (
           gameUIState.phase !== GamePhase.FINISHED &&
           gameUIState.phase !== GamePhase.ERROR
         ) {
           await resolveGameAsyncMutation.mutateAsync(gameUIState.gameId);
         } else {
-          // Game is finished or errored, stop polling
           stopPolling();
         }
       } catch (error) {
         console.error("Error in polling resolution:", error);
 
-        // If we've been polling for more than 60 seconds, give up
+        // Time out after 60 seconds of polling
         if (Date.now() - pollingState.pollStartTime > 60000) {
           stopPolling();
           setError("Game resolution timed out. Please try again later.");
@@ -382,6 +374,7 @@ export function useGame() {
     gameUIState.phase,
   ]);
 
+  // Monitor contract game state changes
   useEffect(() => {
     if (!gameInfo || !gameUIState.gameId) return;
 
@@ -399,6 +392,7 @@ export function useGame() {
     }
   }, [gameInfo, gameUIState.gameId, gameUIState.phase, setPhase, updateStats]);
 
+  // Handle visibility changes (tab switching)
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible" && gameUIState.gameId) {
@@ -417,7 +411,6 @@ export function useGame() {
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
-
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
@@ -430,15 +423,23 @@ export function useGame() {
     updateStats,
   ]);
 
+  // Reset game state
   const resetGame = useCallback(() => {
     setIsResolutionPending(false);
     setPendingResult(null);
     resetGameState();
   }, [resetGameState]);
 
+  //-----------------------------------------------------------------------
+  // Return hook API
+  //-----------------------------------------------------------------------
+
   return {
+    // Game state
     gameState: gameUIState,
     phase: gameUIState.phase,
+
+    // Game actions
     createGame: (move: Move, betAmount = DEFAULT_BET_AMOUNT_WEI) =>
       createGameMutation.mutate({ move, betAmount }),
     joinGame: (
@@ -446,21 +447,23 @@ export function useGame() {
       move: Move,
       betAmount = DEFAULT_BET_AMOUNT_WEI
     ) => joinGameMutation.mutate({ gameId, move, betAmount }),
-    submitMoves,
-    computeDifference,
-    finalizeGame,
     resetGame,
-    defaultBetAmount: DEFAULT_BET_AMOUNT,
-    defaultBetAmountWei: DEFAULT_BET_AMOUNT_WEI,
+    retryResolution: (gameId: number) =>
+      resolveGameAsyncMutation.mutate(gameId),
+
+    // Loading states
     isCreatingGame: createGameMutation.isPending,
     isJoiningGame: joinGameMutation.isPending,
+    isResolutionPending,
     isRevealingGame: isResolutionPending,
     isComputingDifference: resolveGameAsyncMutation.isPending,
     isFinalizingGame: resolveGameAsyncMutation.isPending,
-    isResolutionPending,
+
+    // Bet defaults
+    defaultBetAmount: DEFAULT_BET_AMOUNT,
+    defaultBetAmountWei: DEFAULT_BET_AMOUNT_WEI,
+
+    // Game result info
     pendingResult,
-    retryResolution: (gameId: number) =>
-      resolveGameAsyncMutation.mutate(gameId),
-    updateStats,
   };
 }
