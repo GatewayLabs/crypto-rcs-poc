@@ -581,7 +581,15 @@ export async function resolveGame(gameId: number): Promise<ResolveGameResult> {
       );
 
       decryptedDifference = privateKey.decrypt(BigInt(latestDifferenceCipher));
-      diffMod3 = decryptedDifference % 3n;
+
+      // Handle negative numbers properly in modular arithmetic
+      const halfN = publicKey.n / 2n;
+      if (decryptedDifference > halfN) {
+        decryptedDifference = decryptedDifference - publicKey.n;
+      }
+
+      const mod = (n: bigint, m: bigint) => ((n % m) + m) % m;
+      diffMod3 = BigInt(mod(decryptedDifference, 3n));
       console.log(
         `Decrypted difference for game ${gameId}: ${decryptedDifference}, mod 3: ${diffMod3}`
       );
