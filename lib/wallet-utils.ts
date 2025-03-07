@@ -9,15 +9,6 @@ interface ExecuteTransactionOptions {
   value?: bigint;
 }
 
-/**
- * Execute a contract function with proper nonce management and retry logic
- *
- * @param config Contract config
- * @param functionName Function to call
- * @param args Arguments to pass
- * @param options Retry options
- * @returns Transaction hash
- */
 export async function executeContractFunction(
   config: any,
   functionName: string,
@@ -31,41 +22,28 @@ export async function executeContractFunction(
     value,
   } = options;
 
-  // Track the last error for nonce management
+  // Track the last error and nonce as numbers
   let lastError: any = null;
-  let lastNonce: bigint | null = null;
+  let lastNonce: number | null = null;
 
   return retry(
     async () => {
-      // Get a fresh nonce each time, but increment it if we had a nonce error
-      let nonce;
+      // Fetch a fresh nonce, which is a number
+      let nonce = await publicClient.getTransactionCount({
+        address: walletClient.account.address,
+      });
 
-      // If last error was a nonce error, get a fresh nonce
+      // Handle nonce increment if previous attempt failed due to "nonce too low"
       if (
         lastError &&
         typeof lastError === "object" &&
         "message" in lastError &&
-        typeof lastError.message === "string" &&
         lastError.message.includes("nonce too low")
       ) {
-        // Force refresh nonce with a small delay to allow blockchain to sync
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        nonce = await publicClient.getTransactionCount({
-          address: walletClient.account.address,
-        });
-        // Increment nonce manually if needed
-        if (lastNonce !== null && nonce <= lastNonce) {
-          nonce = lastNonce + 1n;
+        if (lastNonce !== null) {
+          nonce = Math.max(nonce, lastNonce + 1); // Both are numbers
         }
-      } else {
-        // Normal case - just get the current nonce
-        nonce = await publicClient.getTransactionCount({
-          address: walletClient.account.address,
-        });
       }
-
-      // Save the nonce for potential next retry
-      lastNonce = BigInt(nonce);
 
       console.log(
         `${logPrefix}: Preparing with nonce ${nonce}${
@@ -78,21 +56,21 @@ export async function executeContractFunction(
         functionName,
         args,
         account: walletClient.account,
-        nonce,
+        nonce, // Expects number
         value,
       } as SimulateContractParameters);
 
       try {
         const txHash = await walletClient.writeContract({
           ...request,
-          nonce,
+          nonce, // Expects number
           value,
         } as WriteContractParameters);
 
         console.log(`${logPrefix}: Transaction ${txHash} sent successfully`);
+        lastNonce = nonce; // Store as number
         return txHash;
       } catch (error) {
-        // Save the error for the next retry attempt
         lastError = error;
         throw error;
       }
@@ -104,8 +82,6 @@ export async function executeContractFunction(
         const errorMessage =
           error instanceof Error ? error.message : String(error);
         lastError = error;
-
-        // Retry on nonce issues, replacement transaction underpriced, or network errors
         return (
           errorMessage.includes("nonce too low") ||
           errorMessage.includes("replacement transaction underpriced") ||
