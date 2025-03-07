@@ -341,13 +341,45 @@ export function useMatches() {
         // Update total earnings
         const newTotalEarnings = oldData.totalEarnings + betValue;
 
-        return {
+        const newData = {
           matches: [newMatch, ...oldData.matches],
           totalEarnings: newTotalEarnings,
-          playerStats: oldData.playerStats,
+          playerStats: oldData.playerStats
+            ? {
+                ...oldData.playerStats,
+                // Update player stats optimistically
+                totalGamesPlayed:
+                  (oldData.playerStats.totalGamesPlayed || 0) + 1,
+                wins:
+                  gameData.result === GameResult.WIN
+                    ? (oldData.playerStats.wins || 0) + 1
+                    : oldData.playerStats.wins || 0,
+                losses:
+                  gameData.result === GameResult.LOSE
+                    ? (oldData.playerStats.losses || 0) + 1
+                    : oldData.playerStats.losses || 0,
+                draws:
+                  gameData.result === GameResult.DRAW
+                    ? (oldData.playerStats.draws || 0) + 1
+                    : oldData.playerStats.draws || 0,
+                netProfitLoss: `${
+                  BigInt(oldData.playerStats.netProfitLoss || "0") +
+                  (betValue >= 0
+                    ? BigInt(Math.floor(betValue * 10 ** 18))
+                    : -BigInt(Math.floor(Math.abs(betValue) * 10 ** 18)))
+                }`,
+              }
+            : null,
         };
+        return newData;
       }
     );
+
+    queryClient.invalidateQueries({
+      queryKey: ["matches", address],
+      exact: true,
+      refetchType: "none",
+    });
   };
 
   const clearHistoryMutation = async () => {

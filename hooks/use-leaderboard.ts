@@ -134,7 +134,19 @@ export function useLeaderboard() {
     queryClient.setQueryData(
       ["leaderboard"],
       (oldData: LeaderboardEntry[] | undefined) => {
-        if (!oldData) return [];
+        if (!oldData) {
+          const newEntry = {
+            address,
+            gamesPlayed: 1,
+            wins: result === "WIN" ? 1 : 0,
+            losses: result === "LOSE" ? 1 : 0,
+            draws: result === "DRAW" ? 1 : 0,
+            score: result === "WIN" ? 1 : result === "LOSE" ? -1 : 0,
+            earnings:
+              result === "WIN" ? betAmount : result === "LOSE" ? -betAmount : 0,
+          };
+          return [newEntry];
+        }
 
         const newData = [...oldData];
 
@@ -177,6 +189,12 @@ export function useLeaderboard() {
         return newData;
       }
     );
+
+    queryClient.invalidateQueries({
+      queryKey: ["leaderboard"],
+      exact: true,
+      refetchType: "none",
+    });
   };
 
   return {
