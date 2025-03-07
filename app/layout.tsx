@@ -7,9 +7,9 @@ const Providers = dynamic(() => import("./providers"), {
 });
 
 export const metadata: Metadata = {
-  title: "Crypto Rock Paper Scissors",
+  title: "ERPS - Wager your $MON on Encrypted RPS",
   description:
-    "A decentralized Rock Paper Scissors game using Paillier encryption",
+    "A provably fair version of Rock-Paper-Scissors built with Gateway's GVM architecture on Monad. Wager your $MON and climb the leaderboard!",
 };
 
 export default function RootLayout({
