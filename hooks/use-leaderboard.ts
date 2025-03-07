@@ -188,7 +188,7 @@ export function useLeaderboard() {
         } else if (result === "LOSE") {
           playerEntry.losses += 1;
           playerEntry.score -= 1;
-          playerEntry.earnings -= betAmount;
+          playerEntry.earnings += betAmount;
         } else if (result === "DRAW") {
           playerEntry.draws += 1;
         }
