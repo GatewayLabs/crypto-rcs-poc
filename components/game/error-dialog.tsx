@@ -1,5 +1,3 @@
-"use client";
-
 import {
   Dialog,
   DialogContent,
@@ -13,18 +11,17 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { useGameUIStore } from "@/stores/game-ui-store";
 
 interface ErrorDialogProps {
-  isOpen: boolean;
   onClose: () => void;
-  error: string;
 }
 
-export default function ErrorDialog({
-  isOpen,
-  onClose,
-  error,
-}: ErrorDialogProps) {
+export default function ErrorDialog({ onClose }: ErrorDialogProps) {
+  const { error } = useGameUIStore();
+
+  const isOpen = !!error;
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent>

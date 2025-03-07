@@ -30,7 +30,6 @@ const GAME_BUTTONS = [
 ];
 
 export default function GameBoard() {
-  // Get game actions from useGame hook
   const { createGame, joinGame, resetGame, retryResolution } = useGame();
 
   // Get state from the store
@@ -39,19 +38,13 @@ export default function GameBoard() {
     houseMove,
     phase,
     result,
-    error,
     gameId,
     toasts,
-    transactionHash,
-    isTransactionModalOpen,
-    transactionType,
     isCreatingGame,
     isJoiningGame,
     isResolutionPending,
     addToast,
     dismissToast,
-    setTransactionModal,
-    setBetValue: setStoreBetValue,
   } = useGameUIStore();
 
   const { walletAddress, isAuthenticated } = useWallet();
@@ -65,13 +58,6 @@ export default function GameBoard() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const limit = 1;
 
-  // Update store when bet value changes
-  useEffect(() => {
-    if (betValue > 0) {
-      setStoreBetValue(BigInt(betValue * 10 ** 18));
-    }
-  }, [betValue, setStoreBetValue]);
-
   useEffect(() => {
     if (phase === GamePhase.FINISHED && result) {
       if (result === "WIN") soundEffects.win();
@@ -83,17 +69,6 @@ export default function GameBoard() {
   useEffect(() => {
     setErrorMessage(null);
   }, [betValue]);
-
-  useEffect(() => {
-    // Show transaction modal based on phase
-    if (phase === GamePhase.SELECTED) {
-      setTransactionModal(true, "approve");
-    } else if (phase === GamePhase.WAITING || phase === GamePhase.REVEALING) {
-      setTransactionModal(true, "validate");
-    } else {
-      setTransactionModal(false);
-    }
-  }, [phase, setTransactionModal]);
 
   const validateBetValue = (): boolean => {
     if (betValue === 0) {
@@ -167,10 +142,8 @@ export default function GameBoard() {
       <GameResultView
         playerMove={playerMove}
         houseMove={houseMove}
-        result={result}
         gameId={String(gameId)}
         onPlayAgain={handlePlayAgain}
-        value={betValue}
       />
     );
   }
@@ -225,15 +198,11 @@ export default function GameBoard() {
         </div>
       </div>
 
-      {/* Enhanced Transaction Modal with retry functionality */}
       <TransactionModal
-        isOpen={isTransactionModalOpen}
-        type={transactionType}
-        txHash={transactionHash}
         onRetry={gameId ? () => handleRetryResolution() : undefined}
       />
+      <ErrorDialog onClose={resetGame} />
 
-      <ErrorDialog isOpen={!!error} onClose={resetGame} error={error || ""} />
       <ToastContainer
         toasts={toasts.filter((t: GameToast) => t.type !== "error")}
         onDismiss={dismissToast}

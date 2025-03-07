@@ -1,5 +1,7 @@
 import { Move } from "@/lib/crypto";
+import { useGameUIStore } from "@/stores/game-ui-store";
 import { GameResult } from "@/types/game";
+import { formatEther } from "viem";
 import GameBetResult from "./game-bet-result";
 
 const MOVE_IMAGES = {
@@ -59,20 +61,17 @@ const customStyles = `
 interface GameResultViewProps {
   playerMove: Move;
   houseMove: Move;
-  result: GameResult;
   gameId: string;
   onPlayAgain: () => void;
-  value: number;
 }
 
-export default function GameResultView({
-  playerMove,
-  houseMove,
-  result,
-  gameId,
-  onPlayAgain,
-  value,
-}: GameResultViewProps) {
+export default function GameResultView({ onPlayAgain }: GameResultViewProps) {
+  // Get bet value from the store
+  const { betValue, result, playerMove, houseMove, gameId } = useGameUIStore();
+
+  // Convert betValue from bigint to number for display
+  const betValueNumber = betValue ? Number(formatEther(betValue)) : 0;
+
   // Color schemes based on result
   const colorSchemes = {
     DRAW: {
@@ -98,7 +97,7 @@ export default function GameResultView({
     },
   };
 
-  const playerResult = result;
+  const playerResult = result!;
   const houseResult =
     result === GameResult.DRAW
       ? "DRAW"
@@ -130,7 +129,7 @@ export default function GameResultView({
           {result === GameResult.DRAW && "It's a draw!"}
         </h1>
 
-        <GameBetResult gameResult={result!} value={value} />
+        <GameBetResult gameResult={result!} value={betValueNumber} />
 
         {/* Game Cards */}
         <div className="flex items-center gap-16 font-mono group max-md:gap-6 max-md:flex-col max-md:w-full">
@@ -144,9 +143,9 @@ export default function GameResultView({
             >
               <img
                 loading="lazy"
-                srcSet={MOVE_IMAGES[playerMove][result]}
+                srcSet={MOVE_IMAGES[playerMove!][playerResult]}
                 className="aspect-[1.27] object-contain w-[162px] max-md:w-[80px] flex-grow max-md:flex-grow-0 transition-transform duration-300 group-hover:scale-95 hover:!scale-100"
-                alt={playerMove}
+                alt={playerMove!}
               />
               <div className="flex flex-col items-center max-md:items-end gap-1 mt-4 max-md:mt-0 max-md:ml-4">
                 <div
@@ -181,9 +180,9 @@ export default function GameResultView({
             >
               <img
                 loading="lazy"
-                srcSet={MOVE_IMAGES[houseMove][houseResult]}
+                srcSet={MOVE_IMAGES[houseMove!][houseResult]}
                 className="aspect-[1.27] object-contain w-[162px] max-md:w-[80px] flex-grow max-md:flex-grow-0 transition-transform duration-300 group-hover:scale-95 hover:!scale-100"
-                alt={houseMove}
+                alt={houseMove!}
               />
               <div className="flex flex-col items-center max-md:items-end gap-1 mt-4 max-md:mt-0 max-md:ml-4">
                 <div

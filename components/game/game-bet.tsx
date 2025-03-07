@@ -1,4 +1,5 @@
-import { Dispatch, SetStateAction } from "react";
+import { useGameUIStore } from "@/stores/game-ui-store";
+import { Dispatch, SetStateAction, useEffect } from "react";
 
 interface GameBetProps {
   onBet: Dispatch<SetStateAction<number>>;
@@ -7,6 +8,16 @@ interface GameBetProps {
 }
 
 export default function GameBet({ onBet, value, errorMessage }: GameBetProps) {
+  const { setBetValue } = useGameUIStore();
+
+  useEffect(() => {
+    if (value > 0) {
+      setBetValue(BigInt(value * 10 ** 18));
+    } else {
+      setBetValue(null);
+    }
+  }, [value, setBetValue]);
+
   return (
     <>
       <div
