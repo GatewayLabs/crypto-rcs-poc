@@ -189,6 +189,35 @@ export function useMatches() {
           );
         }
 
+        const previousData = queryClient.getQueryData(["matches", address]) as
+          | {
+              matches: GameHistory[];
+              totalEarnings: number;
+              playerStats: SubgraphPlayerStats | null;
+            }
+          | undefined;
+
+        if (previousData?.matches) {
+          const localMatches = previousData.matches.filter((match) =>
+            match.id.startsWith("local-")
+          );
+
+          for (const localMatch of localMatches) {
+            const matchExistsInServer = userMatches.some(
+              (serverMatch) => serverMatch.gameId === localMatch.gameId
+            );
+
+            if (!matchExistsInServer) {
+              console.log(
+                `Preserving local match for gameId ${localMatch.gameId} that doesn't exist on server yet`
+              );
+              userMatches.push(localMatch);
+            }
+          }
+
+          userMatches.sort((a, b) => b.timestamp - a.timestamp);
+        }
+
         return {
           matches: userMatches,
           totalEarnings,
@@ -295,7 +324,12 @@ export function useMatches() {
     houseMove: Move;
     betAmount: bigint;
   }) => {
-    if (!address) return;
+    if (!address) {
+      console.log("Cannot add local match: wallet address not available");
+      return;
+    }
+
+    console.log("Adding local match:", gameData);
 
     const betValue =
       gameData.result === GameResult.WIN
@@ -304,8 +338,10 @@ export function useMatches() {
         ? Number(formatEther(gameData.betAmount)) * -1
         : 0;
 
+    const localMatchId = `local-${gameData.gameId}`;
+
     const newMatch: GameHistory = {
-      id: `local-${gameData.gameId}-${Date.now()}`,
+      id: localMatchId,
       gameId: gameData.gameId,
       timestamp: Date.now(),
       playerMove: gameData.playerMove,
@@ -327,52 +363,52 @@ export function useMatches() {
             }
           | undefined
       ) => {
-        if (!oldData)
+        if (!oldData) {
+          console.log("No existing matches data, creating new");
           return {
             matches: [newMatch],
             totalEarnings: betValue,
             playerStats: null,
           };
+        }
 
-        const existingMatch = oldData.matches.find(
+        const existingMatchIndex = oldData.matches.findIndex(
           (match) => match.gameId === gameData.gameId
         );
-        if (existingMatch) return oldData;
 
-        // Update total earnings
-        const newTotalEarnings = oldData.totalEarnings + betValue;
+        if (existingMatchIndex === -1) {
+          console.log("No existing match found, adding new one");
+          return {
+            matches: [newMatch, ...oldData.matches],
+            totalEarnings: oldData.totalEarnings + betValue,
+            playerStats: updatePlayerStats(
+              oldData.playerStats,
+              gameData.result,
+              betValue
+            ),
+          };
+        }
 
-        const newData = {
-          matches: [newMatch, ...oldData.matches],
-          totalEarnings: newTotalEarnings,
-          playerStats: oldData.playerStats
-            ? {
-                ...oldData.playerStats,
-                // Update player stats optimistically
-                totalGamesPlayed:
-                  (oldData.playerStats.totalGamesPlayed || 0) + 1,
-                wins:
-                  gameData.result === GameResult.WIN
-                    ? (oldData.playerStats.wins || 0) + 1
-                    : oldData.playerStats.wins || 0,
-                losses:
-                  gameData.result === GameResult.LOSE
-                    ? (oldData.playerStats.losses || 0) + 1
-                    : oldData.playerStats.losses || 0,
-                draws:
-                  gameData.result === GameResult.DRAW
-                    ? (oldData.playerStats.draws || 0) + 1
-                    : oldData.playerStats.draws || 0,
-                netProfitLoss: `${
-                  BigInt(oldData.playerStats.netProfitLoss || "0") +
-                  (betValue >= 0
-                    ? BigInt(Math.floor(betValue * 10 ** 18))
-                    : -BigInt(Math.floor(Math.abs(betValue) * 10 ** 18)))
-                }`,
-              }
-            : null,
-        };
-        return newData;
+        const isLocalOrIncomplete =
+          oldData.matches[existingMatchIndex].id.startsWith("local-") ||
+          !oldData.matches[existingMatchIndex].transactionHash;
+
+        if (isLocalOrIncomplete) {
+          console.log(
+            "Replacing existing local/incomplete match with updated data"
+          );
+          const updatedMatches = [...oldData.matches];
+          updatedMatches[existingMatchIndex] = newMatch;
+
+          return {
+            matches: updatedMatches,
+            totalEarnings: oldData.totalEarnings,
+            playerStats: oldData.playerStats,
+          };
+        }
+
+        console.log("Match from server already exists, not replacing");
+        return oldData;
       }
     );
 
@@ -382,6 +418,37 @@ export function useMatches() {
       refetchType: "none",
     });
   };
+
+  function updatePlayerStats(
+    currentStats: SubgraphPlayerStats | null,
+    result: GameResult,
+    betValue: number
+  ) {
+    if (!currentStats) return null;
+
+    return {
+      ...currentStats,
+      totalGamesPlayed: (currentStats.totalGamesPlayed || 0) + 1,
+      wins:
+        result === GameResult.WIN
+          ? (currentStats.wins || 0) + 1
+          : currentStats.wins || 0,
+      losses:
+        result === GameResult.LOSE
+          ? (currentStats.losses || 0) + 1
+          : currentStats.losses || 0,
+      draws:
+        result === GameResult.DRAW
+          ? (currentStats.draws || 0) + 1
+          : currentStats.draws || 0,
+      netProfitLoss: `${
+        BigInt(currentStats.netProfitLoss || "0") +
+        (betValue >= 0
+          ? BigInt(Math.floor(betValue * 10 ** 18))
+          : -BigInt(Math.floor(Math.abs(betValue) * 10 ** 18)))
+      }`,
+    };
+  }
 
   const clearHistoryMutation = async () => {
     if (address) {
