@@ -116,7 +116,10 @@ export default function TransactionModal({
 
           {showRetry && (
             <button
-              onClick={onRetry}
+              onClick={() => {
+                onRetry?.();
+                setElapsedTime(0);
+              }}
               className="mt-4 flex items-center gap-2 bg-indigo-700 hover:bg-indigo-600 text-white px-4 py-2 rounded-md transition-colors text-sm"
             >
               <RefreshCw size={16} />
