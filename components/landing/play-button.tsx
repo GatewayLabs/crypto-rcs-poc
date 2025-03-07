@@ -5,9 +5,9 @@ import React from "react";
 
 export default function PlayButton() {
   return (
-    <Link href="/play">
+    <Link href="/play" className="max-lg:w-full">
       <button
-        className="bg-[rgba(141,12,255,1)] flex min-h-44 flex-col overflow-hidden items-center text-neutral-50 justify-center w-[171px] h-[174px] px-3 rounded-md hover:opacity-90 transition-opacity"
+        className="bg-[#8D0CFF] w-full lg:w-[171px] lg:h-[174px] flex items-center justify-center gap-2 p-4 lg:py-0 lg:flex-col rounded-md hover:opacity-90 transition-opacity text-white"
         aria-label="Play game"
       >
         <img
