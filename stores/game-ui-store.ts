@@ -19,6 +19,11 @@ interface GameUIState {
   transactionHash: string | null;
   playerRank: number | null;
   playerSummary: LeaderboardEntry | null;
+  betValue: bigint | null;
+  isCreatingGame: boolean;
+  isJoiningGame: boolean;
+  isResolutionPending: boolean;
+  pendingResult: number | null;
 
   // Transaction modal state
   isTransactionModalOpen: boolean;
@@ -37,6 +42,13 @@ interface GameUIState {
   setPlayerRank: (rank: number | null) => void;
   setPlayerSummary: (summary: LeaderboardEntry | null) => void;
   setTransactionHash: (hash: string | null) => void;
+
+  // Actions for new states
+  setBetValue: (value: bigint | null) => void;
+  setIsCreatingGame: (isCreating: boolean) => void;
+  setIsJoiningGame: (isJoining: boolean) => void;
+  setIsResolutionPending: (isPending: boolean) => void;
+  setPendingResult: (result: number | null) => void;
 
   // Transaction modal actions
   setTransactionModal: (isOpen: boolean, type?: "approve" | "validate") => void;
@@ -62,6 +74,13 @@ export const useGameUIStore = create<GameUIState>((set) => ({
   playerRank: null,
   playerSummary: null,
 
+  // Initial states moved from useGame
+  betValue: null,
+  isCreatingGame: false,
+  isJoiningGame: false,
+  isResolutionPending: false,
+  pendingResult: null,
+
   // Transaction modal initial state
   isTransactionModalOpen: false,
   transactionType: "approve" as const,
@@ -80,6 +99,15 @@ export const useGameUIStore = create<GameUIState>((set) => ({
   setPlayerRank: (rank: number | null) => set({ playerRank: rank }),
   setPlayerSummary: (summary: LeaderboardEntry | null) =>
     set({ playerSummary: summary }),
+
+  // Actions for the new states
+  setBetValue: (value: bigint | null) => set({ betValue: value }),
+  setIsCreatingGame: (isCreating: boolean) =>
+    set({ isCreatingGame: isCreating }),
+  setIsJoiningGame: (isJoining: boolean) => set({ isJoiningGame: isJoining }),
+  setIsResolutionPending: (isPending: boolean) =>
+    set({ isResolutionPending: isPending }),
+  setPendingResult: (result: number | null) => set({ pendingResult: result }),
 
   // Transaction modal actions
   setTransactionModal: (
@@ -118,6 +146,10 @@ export const useGameUIStore = create<GameUIState>((set) => ({
       gameId: null,
       transactionHash: null,
       isTransactionModalOpen: false,
+      isCreatingGame: false,
+      isJoiningGame: false,
+      isResolutionPending: false,
+      pendingResult: null,
     }),
 
   updateGameState: (updates: Partial<GameUIState>) =>

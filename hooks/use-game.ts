@@ -28,8 +28,23 @@ export function useGame() {
   const { addLocalMatch, addMatch } = useMatches();
   const { walletAddress: address } = useWallet();
 
-  const gameUIState = useGameUIStore();
+  // Use the game UI store for state management
   const {
+    playerMove,
+    houseMove,
+    phase,
+    result,
+    gameId,
+    transactionHash,
+
+    // New states from the store
+    betValue,
+    isCreatingGame,
+    isJoiningGame,
+    isResolutionPending,
+    pendingResult,
+
+    // Actions
     setPlayerMove,
     setHouseMove,
     setPhase,
@@ -39,14 +54,17 @@ export function useGame() {
     setTransactionHash,
     setTransactionModal,
     resetGameState,
+
+    // Actions for new states
+    setBetValue,
+    setIsCreatingGame,
+    setIsJoiningGame,
+    setIsResolutionPending,
+    setPendingResult,
+    addToast,
   } = useGameUIStore();
 
-  // Game resolution state
-  const [isResolutionPending, setIsResolutionPending] = useState(false);
-  const [pendingResult, setPendingResult] = useState<number | null>(null);
-  const [betValue, setBetValue] = useState<bigint>(DEFAULT_BET_AMOUNT_WEI);
-
-  // Polling state
+  // Polling state (internal to the hook)
   const [pollingState, setPollingState] = useState({
     isPolling: false,
     pollCount: 0,
@@ -127,21 +145,24 @@ export function useGame() {
   // Polling Management
   //-----------------------------------------------------------------------
 
-  const startOrUpdatePolling = useCallback((txHash: string | null = null) => {
-    setIsResolutionPending(true);
-    setPollingState((prev) => {
-      const now = Date.now();
-      const isNew = !prev.isPolling || txHash !== prev.lastTxHash;
-      const pollCount = isNew ? 0 : prev.pollCount + 1;
+  const startOrUpdatePolling = useCallback(
+    (txHash: string | null = null) => {
+      setIsResolutionPending(true);
+      setPollingState((prev) => {
+        const now = Date.now();
+        const isNew = !prev.isPolling || txHash !== prev.lastTxHash;
+        const pollCount = isNew ? 0 : prev.pollCount + 1;
 
-      return {
-        isPolling: true,
-        pollCount,
-        lastTxHash: txHash || prev.lastTxHash,
-        pollStartTime: isNew ? now : prev.pollStartTime,
-      };
-    });
-  }, []);
+        return {
+          isPolling: true,
+          pollCount,
+          lastTxHash: txHash || prev.lastTxHash,
+          pollStartTime: isNew ? now : prev.pollStartTime,
+        };
+      });
+    },
+    [setIsResolutionPending]
+  );
 
   const stopPolling = useCallback(() => {
     setIsResolutionPending(false);
@@ -149,7 +170,7 @@ export function useGame() {
       ...prev,
       isPolling: false,
     }));
-  }, []);
+  }, [setIsResolutionPending]);
 
   //-----------------------------------------------------------------------
   // Game Resolution Mutation
@@ -183,19 +204,19 @@ export function useGame() {
             setPhase(GamePhase.FINISHED);
             setResult(gameOutcome);
 
-            const houseMove = gameUIState.playerMove
-              ? inferHouseMove(gameOutcome, gameUIState.playerMove as Move)
+            const inferredHouseMove = playerMove
+              ? inferHouseMove(gameOutcome, playerMove as Move)
               : ("ROCK" as Move);
 
-            setHouseMove(houseMove);
+            setHouseMove(inferredHouseMove);
 
-            if (address && gameUIState.playerMove) {
+            if (address && playerMove && betValue !== null) {
               let betValueChange = 0n;
 
               if (gameOutcome === GameResult.WIN) {
-                betValueChange = BigInt(betValue);
+                betValueChange = betValue;
               } else if (gameOutcome === GameResult.LOSE) {
-                betValueChange = BigInt(-betValue);
+                betValueChange = -betValue;
               }
 
               updateLocalLeaderboard(
@@ -206,11 +227,11 @@ export function useGame() {
 
               addLocalMatch({
                 gameId: gameId,
-                playerMove: gameUIState.playerMove as Move,
-                houseMove: houseMove,
+                playerMove: playerMove as Move,
+                houseMove: inferredHouseMove,
                 result: gameOutcome,
-                transactionHash: gameUIState.transactionHash || "",
-                betAmount: betValueChange,
+                transactionHash: transactionHash || "",
+                betAmount: betValue,
               });
             }
 
@@ -262,6 +283,7 @@ export function useGame() {
     mutationFn: async (params: { move: Move; betAmount?: bigint }) => {
       const { move, betAmount = DEFAULT_BET_AMOUNT_WEI } = params;
       setBetValue(betAmount);
+      setIsCreatingGame(true);
 
       try {
         // Set initial state
@@ -300,6 +322,8 @@ export function useGame() {
         }
         setPhase(GamePhase.ERROR);
         throw error;
+      } finally {
+        setIsCreatingGame(false);
       }
     },
   });
@@ -320,6 +344,7 @@ export function useGame() {
     }) => {
       try {
         setBetValue(betAmount);
+        setIsJoiningGame(true);
 
         // Set initial state
         setPlayerMove(move);
@@ -340,6 +365,8 @@ export function useGame() {
         }
         setPhase(GamePhase.ERROR);
         throw error;
+      } finally {
+        setIsJoiningGame(false);
       }
     },
   });
@@ -350,7 +377,7 @@ export function useGame() {
 
   // Adaptive polling based on elapsed time
   useEffect(() => {
-    if (!pollingState.isPolling || !gameUIState.gameId) {
+    if (!pollingState.isPolling || !gameId) {
       return;
     }
 
@@ -374,14 +401,11 @@ export function useGame() {
 
     const timeoutId = setTimeout(async () => {
       try {
-        if (!gameUIState.gameId) return;
+        if (!gameId) return;
 
         // Only poll if game is still active
-        if (
-          gameUIState.phase !== GamePhase.FINISHED &&
-          gameUIState.phase !== GamePhase.ERROR
-        ) {
-          await resolveGameAsyncMutation.mutateAsync(gameUIState.gameId);
+        if (phase !== GamePhase.FINISHED && phase !== GamePhase.ERROR) {
+          await resolveGameAsyncMutation.mutateAsync(gameId);
         } else {
           stopPolling();
         }
@@ -401,41 +425,38 @@ export function useGame() {
     pollingState.isPolling,
     pollingState.pollCount,
     pollingState.pollStartTime,
-    gameUIState.gameId,
-    gameUIState.phase,
+    gameId,
+    phase,
+    stopPolling,
+    setError,
+    resolveGameAsyncMutation,
   ]);
 
   // Monitor contract game state changes
   useEffect(() => {
-    if (!gameInfo || !gameUIState.gameId) return;
+    if (!gameInfo || !gameId) return;
 
     const currentPhase = determineGamePhase(gameInfo);
 
-    if (currentPhase !== gameUIState.phase) {
+    if (currentPhase !== phase) {
       setPhase(currentPhase);
 
-      if (
-        currentPhase === GamePhase.FINISHED &&
-        gameUIState.phase !== GamePhase.FINISHED
-      ) {
+      if (currentPhase === GamePhase.FINISHED && phase !== GamePhase.FINISHED) {
         updateStats();
       }
     }
-  }, [gameInfo, gameUIState.gameId, gameUIState.phase, setPhase, updateStats]);
+  }, [gameInfo, gameId, phase, setPhase, updateStats]);
 
   // Handle visibility changes (tab switching)
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible" && gameUIState.gameId) {
-        if (
-          gameUIState.phase === GamePhase.REVEALING ||
-          gameUIState.phase === GamePhase.WAITING
-        ) {
-          if (gameUIState.result) {
+      if (document.visibilityState === "visible" && gameId) {
+        if (phase === GamePhase.REVEALING || phase === GamePhase.WAITING) {
+          if (result) {
             setPhase(GamePhase.FINISHED);
             updateStats();
           } else if (isResolutionPending) {
-            resolveGameAsyncMutation.mutate(gameUIState.gameId);
+            resolveGameAsyncMutation.mutate(gameId);
           }
         }
       }
@@ -446,30 +467,20 @@ export function useGame() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [
-    gameUIState.gameId,
-    gameUIState.phase,
-    gameUIState.result,
+    gameId,
+    phase,
+    result,
     isResolutionPending,
     setPhase,
     updateStats,
+    resolveGameAsyncMutation,
   ]);
-
-  // Reset game state
-  const resetGame = useCallback(() => {
-    setIsResolutionPending(false);
-    setPendingResult(null);
-    resetGameState();
-  }, [resetGameState]);
 
   //-----------------------------------------------------------------------
   // Return hook API
   //-----------------------------------------------------------------------
 
   return {
-    // Game state
-    gameState: gameUIState,
-    phase: gameUIState.phase,
-
     // Game actions
     createGame: (move: Move, betAmount = DEFAULT_BET_AMOUNT_WEI) =>
       createGameMutation.mutate({ move, betAmount }),
@@ -478,14 +489,16 @@ export function useGame() {
       move: Move,
       betAmount = DEFAULT_BET_AMOUNT_WEI
     ) => joinGameMutation.mutate({ gameId, move, betAmount }),
-    resetGame,
+    resetGame: resetGameState,
     retryResolution: (gameId: number) =>
       resolveGameAsyncMutation.mutate(gameId),
 
-    // Loading states
-    isCreatingGame: createGameMutation.isPending,
-    isJoiningGame: joinGameMutation.isPending,
+    // Loading states from store
+    isCreatingGame,
+    isJoiningGame,
     isResolutionPending,
+
+    // Computed states
     isRevealingGame: isResolutionPending,
     isComputingDifference: resolveGameAsyncMutation.isPending,
     isFinalizingGame: resolveGameAsyncMutation.isPending,
@@ -494,7 +507,8 @@ export function useGame() {
     defaultBetAmount: DEFAULT_BET_AMOUNT,
     defaultBetAmountWei: DEFAULT_BET_AMOUNT_WEI,
 
-    // Game result info
+    // Game result info from store
     pendingResult,
+    betValue,
   };
 }

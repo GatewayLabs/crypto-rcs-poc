@@ -300,7 +300,7 @@ export function useMatches() {
       gameData.result === GameResult.WIN
         ? Number(formatEther(gameData.betAmount))
         : gameData.result === GameResult.LOSE
-        ? -Number(formatEther(gameData.betAmount))
+        ? Number(formatEther(gameData.betAmount)) * -1
         : 0;
 
     const newMatch: GameHistory = {

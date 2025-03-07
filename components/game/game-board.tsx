@@ -30,26 +30,10 @@ const GAME_BUTTONS = [
 ];
 
 export default function GameBoard() {
-  const {
-    createGame,
-    joinGame,
-    resetGame,
-    isCreatingGame,
-    isJoiningGame,
-    isResolutionPending,
-    pendingResult,
-    retryResolution,
-  } = useGame();
+  // Get game actions from useGame hook
+  const { createGame, joinGame, resetGame, retryResolution } = useGame();
 
-  const { walletAddress, isAuthenticated } = useWallet();
-  const { data: balance } = useBalance({
-    address: walletAddress as `0x${string}`,
-    query: { enabled: !!walletAddress },
-  });
-  const [betValue, setBetValue] = useState(0);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const limit = 1;
-
+  // Get state from the store
   const {
     playerMove,
     houseMove,
@@ -61,10 +45,32 @@ export default function GameBoard() {
     transactionHash,
     isTransactionModalOpen,
     transactionType,
+    isCreatingGame,
+    isJoiningGame,
+    isResolutionPending,
     addToast,
     dismissToast,
     setTransactionModal,
+    setBetValue: setStoreBetValue,
   } = useGameUIStore();
+
+  const { walletAddress, isAuthenticated } = useWallet();
+  const { data: balance } = useBalance({
+    address: walletAddress as `0x${string}`,
+    query: { enabled: !!walletAddress },
+  });
+
+  // Local component state
+  const [betValue, setBetValue] = useState(0);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const limit = 1;
+
+  // Update store when bet value changes
+  useEffect(() => {
+    if (betValue > 0) {
+      setStoreBetValue(BigInt(betValue * 10 ** 18));
+    }
+  }, [betValue, setStoreBetValue]);
 
   useEffect(() => {
     if (phase === GamePhase.FINISHED && result) {
