@@ -37,7 +37,7 @@ export default function GameBet({ onBet, value, errorMessage }: GameBetProps) {
             MON
           </div>
         </div>
-        <div className="flex gap-4">
+        <div className="flex flex-wrap gap-4">
           {[0.1, 0.25, 0.5, 1].map((amount) => (
             <button
               key={amount}
