@@ -1,19 +1,18 @@
-import { Move } from '@/lib/crypto';
-import { GameError } from '@/lib/errors';
+import { Move } from "@/lib/crypto";
 
 export enum GamePhase {
-  CHOOSING = 'CHOOSING',
-  SELECTED = 'SELECTED',
-  WAITING = 'WAITING',
-  REVEALING = 'REVEALING',
-  FINISHED = 'FINISHED',
-  ERROR = 'ERROR',
+  CHOOSING = "CHOOSING",
+  SELECTED = "SELECTED",
+  WAITING = "WAITING",
+  REVEALING = "REVEALING",
+  FINISHED = "FINISHED",
+  ERROR = "ERROR",
 }
 
 export enum GameResult {
-  WIN = 'WIN',
-  LOSE = 'LOSE',
-  DRAW = 'DRAW',
+  WIN = "WIN",
+  LOSE = "LOSE",
+  DRAW = "DRAW",
 }
 
 export interface GameHistory {
@@ -36,6 +35,7 @@ export interface LeaderboardEntry {
   losses: number;
   draws: number;
   earnings?: number;
+  lastGameId?: number;
 }
 
 export interface SubgraphGame {

@@ -245,7 +245,8 @@ export function useGame() {
               updateLocalLeaderboard(
                 address,
                 gameOutcome,
-                Number(formatEther(betValueChange))
+                Number(formatEther(betValueChange)),
+                gameId
               );
 
               addLocalMatch({

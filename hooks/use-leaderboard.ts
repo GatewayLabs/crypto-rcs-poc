@@ -130,7 +130,8 @@ export function useLeaderboard() {
   const updateLocalLeaderboard = (
     address: string,
     result: "WIN" | "LOSE" | "DRAW",
-    betAmount: number
+    betAmount: number,
+    gameId: number
   ) => {
     queryClient.setQueryData(
       ["leaderboard"],
@@ -145,6 +146,7 @@ export function useLeaderboard() {
             score: result === "WIN" ? 1 : result === "LOSE" ? -1 : 0,
             earnings:
               result === "WIN" ? betAmount : result === "LOSE" ? -betAmount : 0,
+            lastGameId: gameId,
           };
           return [newEntry];
         }
@@ -168,11 +170,16 @@ export function useLeaderboard() {
           newData.push(playerEntry);
         }
 
+        if (playerEntry.lastGameId === gameId) {
+          return newData;
+        }
+
         if (playerEntry.earnings === undefined) {
           playerEntry.earnings = 0;
         }
 
         playerEntry.gamesPlayed += 1;
+        playerEntry.lastGameId = gameId;
 
         if (result === "WIN") {
           playerEntry.wins += 1;
