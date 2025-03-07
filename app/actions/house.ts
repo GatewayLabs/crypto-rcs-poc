@@ -6,6 +6,7 @@ import { publicClient } from "@/config/server";
 import * as paillier from "paillier-bigint";
 import { DEFAULT_BET_AMOUNT_WEI } from "@/hooks/use-game-contract";
 import { executeContractFunction } from "@/lib/wallet-utils";
+import { retry } from "@/lib/utils";
 
 export type PlayHouseMoveSuccessResult = {
   success: true;
@@ -60,13 +61,35 @@ export async function playHouseMove(
         ? betAmount
         : DEFAULT_BET_AMOUNT_WEI;
 
+    // Using retry for reading contract
     let gameData;
     try {
-      gameData = await publicClient.readContract({
-        ...gameContractConfig,
-        functionName: "getGameInfo",
-        args: [BigInt(gameId)],
-      });
+      gameData = await retry(
+        () =>
+          publicClient.readContract({
+            ...gameContractConfig,
+            functionName: "getGameInfo",
+            args: [BigInt(gameId)],
+          }),
+        {
+          retries: 3,
+          backoffMs: 1000,
+          shouldRetry: (error) => {
+            const errorMessage =
+              error instanceof Error ? error.message : String(error);
+            return (
+              errorMessage.includes("network") ||
+              errorMessage.includes("timeout") ||
+              errorMessage.includes("connection")
+            );
+          },
+          onRetry: (error, attempt) => {
+            console.log(
+              `Retry attempt ${attempt} for reading game data: ${error}`
+            );
+          },
+        }
+      );
     } catch (error) {
       console.error("Error fetching game data:", error);
       throw new Error(
@@ -174,11 +197,31 @@ export async function resolveGameAsync(gameId: number): Promise<{
 
     // Quick first check to see if game is already finished
     try {
-      const quickCheckData = await publicClient.readContract({
-        ...gameContractConfig,
-        functionName: "getGameInfo",
-        args: [BigInt(gameId)],
-      });
+      const quickCheckData = await retry(
+        () =>
+          publicClient.readContract({
+            ...gameContractConfig,
+            functionName: "getGameInfo",
+            args: [BigInt(gameId)],
+          }),
+        {
+          retries: 2,
+          backoffMs: 500,
+          shouldRetry: (error) => {
+            const errorMessage =
+              error instanceof Error ? error.message : String(error);
+            return (
+              errorMessage.includes("network") ||
+              errorMessage.includes("timeout")
+            );
+          },
+          onRetry: (error, attempt) => {
+            console.log(
+              `Retry attempt ${attempt} for quick check of game: ${error}`
+            );
+          },
+        }
+      );
 
       // If game is already finished, return immediately
       if (quickCheckData[3] && quickCheckData[8] !== undefined) {
@@ -235,17 +278,36 @@ export async function resolveGameAsync(gameId: number): Promise<{
           `Waiting for ${functionName} transaction ${txHash} to be confirmed...`
         );
         try {
-          const startTime = Date.now();
-          await publicClient.waitForTransactionReceipt({
-            hash: txHash,
-            timeout: maxWaitTimeMs,
-            confirmations: 1,
-          });
-
-          const timeElapsed = Date.now() - startTime;
-          console.log(
-            `${functionName} transaction confirmed in ${timeElapsed}ms`
+          await retry(
+            async () => {
+              await publicClient.waitForTransactionReceipt({
+                hash: txHash,
+                timeout: maxWaitTimeMs,
+                confirmations: 1,
+              });
+              return true;
+            },
+            {
+              retries: 3,
+              backoffMs: 2000,
+              shouldRetry: (error) => {
+                const errorMessage =
+                  error instanceof Error ? error.message : String(error);
+                return (
+                  errorMessage.includes("timeout") ||
+                  errorMessage.includes("not found") ||
+                  errorMessage.includes("network")
+                );
+              },
+              onRetry: (error, attempt) => {
+                console.log(
+                  `Retry attempt ${attempt} waiting for transaction confirmation: ${error}`
+                );
+              },
+            }
           );
+
+          console.log(`${functionName} transaction confirmed`);
           return { txHash, confirmed: true };
         } catch (error) {
           console.warn(
@@ -279,11 +341,32 @@ export async function resolveGameAsync(gameId: number): Promise<{
 
     // Helper function to get game state
     const getGameState = async () => {
-      const data = await publicClient.readContract({
-        ...gameContractConfig,
-        functionName: "getGameInfo",
-        args: [BigInt(gameId)],
-      });
+      const data = await retry(
+        () =>
+          publicClient.readContract({
+            ...gameContractConfig,
+            functionName: "getGameInfo",
+            args: [BigInt(gameId)],
+          }),
+        {
+          retries: 3,
+          backoffMs: 1000,
+          shouldRetry: (error) => {
+            const errorMessage =
+              error instanceof Error ? error.message : String(error);
+            return (
+              errorMessage.includes("network") ||
+              errorMessage.includes("timeout") ||
+              errorMessage.includes("connection")
+            );
+          },
+          onRetry: (error, attempt) => {
+            console.log(
+              `Retry attempt ${attempt} for getting game state: ${error}`
+            );
+          },
+        }
+      );
 
       // Destructure for clarity
       const [
@@ -557,9 +640,32 @@ export async function checkTransactionStatus(txHash: string): Promise<{
     }
 
     console.log(`Checking transaction status for ${txHash}`);
-    await publicClient.getTransactionReceipt({
-      hash: txHash as `0x${string}`,
-    });
+
+    // Use retry for checking transaction status
+    await retry(
+      () =>
+        publicClient.getTransactionReceipt({
+          hash: txHash as `0x${string}`,
+        }),
+      {
+        retries: 3,
+        backoffMs: 1000,
+        shouldRetry: (error) => {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          return (
+            errorMessage.includes("network") ||
+            errorMessage.includes("timeout") ||
+            errorMessage.includes("not found") // Transaction might still be pending
+          );
+        },
+        onRetry: (error, attempt) => {
+          console.log(
+            `Retry attempt ${attempt} for checking transaction status: ${error}`
+          );
+        },
+      }
+    );
 
     return { confirmed: true };
   } catch (error) {
@@ -575,11 +681,33 @@ export async function getGameResult(gameId: number): Promise<{
   error?: string;
 }> {
   try {
-    const gameData = await publicClient.readContract({
-      ...gameContractConfig,
-      functionName: "getGameInfo",
-      args: [BigInt(gameId)],
-    });
+    // Use retry for getting game result
+    const gameData = await retry(
+      () =>
+        publicClient.readContract({
+          ...gameContractConfig,
+          functionName: "getGameInfo",
+          args: [BigInt(gameId)],
+        }),
+      {
+        retries: 3,
+        backoffMs: 1000,
+        shouldRetry: (error) => {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          return (
+            errorMessage.includes("network") ||
+            errorMessage.includes("timeout") ||
+            errorMessage.includes("connection")
+          );
+        },
+        onRetry: (error, attempt) => {
+          console.log(
+            `Retry attempt ${attempt} for getting game result: ${error}`
+          );
+        },
+      }
+    );
 
     const [, , winner, finished, , , , , revealedDiff] = gameData;
 

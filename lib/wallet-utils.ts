@@ -1,4 +1,5 @@
 import { publicClient, walletClient } from "@/config/server";
+import { retry } from "@/lib/utils";
 import { SimulateContractParameters, WriteContractParameters } from "viem";
 
 interface ExecuteTransactionOptions {
@@ -9,7 +10,7 @@ interface ExecuteTransactionOptions {
 }
 
 /**
- * Execute a contract function with proper nonce management
+ * Execute a contract function with proper nonce management and retry logic
  *
  * @param config Contract config
  * @param functionName Function to call
@@ -30,68 +31,59 @@ export async function executeContractFunction(
     value,
   } = options;
 
-  let attempt = 0;
+  const txFunction = async () => {
+    const nonce = await publicClient.getTransactionCount({
+      address: walletClient.account.address,
+    });
 
-  while (attempt < retries) {
-    try {
-      const nonce = await publicClient.getTransactionCount({
-        address: walletClient.account.address,
-      });
+    console.log(
+      `${logPrefix}: Preparing with nonce ${nonce}${
+        value ? `, value ${value}` : ""
+      }`
+    );
 
-      console.log(
-        `${logPrefix}: Preparing with nonce ${nonce}, attempt ${attempt + 1} ${
-          value ? `with value ${value}` : ""
-        }`
-      );
+    const { request } = await publicClient.simulateContract({
+      ...config,
+      functionName,
+      args,
+      account: walletClient.account,
+      nonce,
+      value,
+    } as SimulateContractParameters);
 
-      const { request } = await publicClient.simulateContract({
-        ...config,
-        functionName,
-        args,
-        account: walletClient.account,
-        nonce,
-        value,
-      } as SimulateContractParameters);
+    const txHash = await walletClient.writeContract({
+      ...request,
+      nonce,
+      value,
+    } as WriteContractParameters);
 
-      const txHash = await walletClient.writeContract({
-        ...request,
-        nonce,
-        value,
-      } as WriteContractParameters);
+    console.log(`${logPrefix}: Transaction ${txHash} sent successfully`);
+    return txHash;
+  };
 
-      console.log(`${logPrefix}: Transaction ${txHash} sent successfully`);
-      return txHash;
-    } catch (error) {
-      attempt++;
+  return retry(txFunction, {
+    retries,
+    backoffMs,
+    shouldRetry: (error) => {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
 
-      if (
+      // Retry on nonce issues, replacement transaction underpriced, or network errors
+      return (
         errorMessage.includes("nonce too low") ||
         errorMessage.includes("replacement transaction underpriced") ||
-        errorMessage.includes("already known")
-      ) {
-        console.log(
-          `${logPrefix}: Nonce error detected, retrying with fresh nonce (attempt ${attempt})`
-        );
-        await new Promise((r) => setTimeout(r, backoffMs * attempt));
-        continue;
-      }
-
-      if (attempt < retries) {
-        console.log(
-          `${logPrefix}: Error, retrying (attempt ${attempt}): ${errorMessage}`
-        );
-        await new Promise((r) => setTimeout(r, backoffMs * attempt));
-        continue;
-      }
-
-      console.error(
-        `${logPrefix}: Failed after ${retries} attempts: ${errorMessage}`
+        errorMessage.includes("already known") ||
+        errorMessage.includes("network") ||
+        errorMessage.includes("timeout") ||
+        errorMessage.includes("connection")
       );
-      throw error;
-    }
-  }
-
-  throw new Error(`${logPrefix}: Failed after ${retries} attempts`);
+    },
+    onRetry: (error, attempt) => {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      console.log(
+        `${logPrefix}: Retry attempt ${attempt} after error: ${errorMessage}`
+      );
+    },
+  });
 }
