@@ -22,82 +22,53 @@ export async function executeContractFunction(
     value,
   } = options;
 
-  // Track the last error and nonce as numbers
-  let lastError: any = null;
-  let lastNonce: number | null = null;
+  let attempt = 0;
+  let lastError: any;
 
-  return retry(
-    async () => {
-      // Fetch a fresh nonce, which is a number
-      let nonce = await publicClient.getTransactionCount({
+  while (attempt < retries) {
+    try {
+      const nonce = await publicClient.getTransactionCount({
         address: walletClient.account.address,
+        blockTag: "pending",
       });
 
-      // Handle nonce increment if previous attempt failed due to "nonce too low"
-      if (
-        lastError &&
-        typeof lastError === "object" &&
-        "message" in lastError &&
-        lastError.message.includes("nonce too low")
-      ) {
-        if (lastNonce !== null) {
-          nonce = Math.max(nonce, lastNonce + 1); // Both are numbers
-        }
-      }
+      console.log(`${logPrefix}: Attempt ${attempt + 1} with nonce ${nonce}`);
 
-      console.log(
-        `${logPrefix}: Preparing with nonce ${nonce}${
-          value ? `, value ${value}` : ""
-        }`
-      );
-
+      // Simulate the contract call
       const { request } = await publicClient.simulateContract({
-        ...config,
+        address: config.address,
+        abi: config.abi,
         functionName,
         args,
         account: walletClient.account,
-        nonce, // Expects number
+        nonce,
         value,
-      } as SimulateContractParameters);
+      });
 
-      try {
-        const txHash = await walletClient.writeContract({
-          ...request,
-          nonce, // Expects number
-          value,
-        } as WriteContractParameters);
+      // Submit the transaction
+      const txHash = await walletClient.writeContract({
+        ...request,
+        nonce,
+        value,
+      });
 
-        console.log(`${logPrefix}: Transaction ${txHash} sent successfully`);
-        lastNonce = nonce; // Store as number
-        return txHash;
-      } catch (error) {
-        lastError = error;
-        throw error;
+      console.log(`${logPrefix}: Transaction ${txHash} sent successfully`);
+      return txHash;
+    } catch (error: any) {
+      lastError = error;
+      const errorMessage = error.message || String(error);
+
+      if (errorMessage.includes("nonce too low")) {
+        console.warn(`${logPrefix}: Nonce too low detected, retrying...`);
+        attempt++;
+        await new Promise((resolve) =>
+          setTimeout(resolve, backoffMs * (attempt + 1))
+        ); // Exponential backoff
+      } else {
+        throw error; // Rethrow non-nonce errors
       }
-    },
-    {
-      retries,
-      backoffMs,
-      shouldRetry: (error) => {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        lastError = error;
-        return (
-          errorMessage.includes("nonce too low") ||
-          errorMessage.includes("replacement transaction underpriced") ||
-          errorMessage.includes("already known") ||
-          errorMessage.includes("network") ||
-          errorMessage.includes("timeout") ||
-          errorMessage.includes("connection")
-        );
-      },
-      onRetry: (error, attempt) => {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        console.log(
-          `${logPrefix}: Retry attempt ${attempt} after error: ${errorMessage}`
-        );
-      },
     }
-  );
+  }
+
+  throw new Error(`Failed after ${retries} attempts: ${lastError.message}`);
 }
