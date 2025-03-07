@@ -45,7 +45,6 @@ export default function TransactionModal({ onRetry }: TransactionModalProps) {
 
   useEffect(() => {
     if (!isTransactionModalOpen) return;
-    if (phase !== GamePhase.WAITING && phase !== GamePhase.REVEALING) return;
 
     const interval = setInterval(() => {
       setElapsedTime((prev) => prev + 1);
