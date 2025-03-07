@@ -113,6 +113,7 @@ export function useLeaderboard() {
       }
     },
     staleTime: 5000,
+    refetchInterval: 60000,
   });
 
   const updateLeaderboard = async () => {
