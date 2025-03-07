@@ -1,14 +1,13 @@
-import type { PrivyClientConfig } from '@privy-io/react-auth';
-import { monad } from './chains';
+import type { PrivyClientConfig } from "@privy-io/react-auth";
+import { monad } from "./chains";
 
 export const privyConfig: PrivyClientConfig = {
   embeddedWallets: {
-    createOnLogin: 'all-users',
+    createOnLogin: "all-users",
   },
-  loginMethods: ['wallet', 'email', 'sms'],
   appearance: {
     showWalletLoginFirst: true,
-    theme: 'dark',
+    theme: "dark",
   },
   supportedChains: [monad],
 };
