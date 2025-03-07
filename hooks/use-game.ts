@@ -1,9 +1,12 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { playHouseMove, resolveGameAsync } from "@/app/actions/house";
+import { useWallet } from "@/contexts/wallet-context";
 import { Move } from "@/lib/crypto";
 import { useGameUIStore } from "@/stores/game-ui-store";
 import { GamePhase, GameResult } from "@/types/game";
 import { useMutation } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
+import { formatEther } from "viem";
 import {
   DEFAULT_BET_AMOUNT,
   DEFAULT_BET_AMOUNT_WEI,
@@ -11,8 +14,6 @@ import {
 } from "./use-game-contract";
 import { useLeaderboard } from "./use-leaderboard";
 import { useMatches } from "./use-matches";
-import { formatEther } from "viem";
-import { useWallet } from "@/contexts/wallet-context";
 
 export function useGame() {
   //-----------------------------------------------------------------------
@@ -31,7 +32,6 @@ export function useGame() {
   // Use the game UI store for state management
   const {
     playerMove,
-    houseMove,
     phase,
     result,
     gameId,
@@ -61,7 +61,6 @@ export function useGame() {
     setIsJoiningGame,
     setIsResolutionPending,
     setPendingResult,
-    addToast,
   } = useGameUIStore();
 
   // Polling state (internal to the hook)
@@ -195,6 +194,16 @@ export function useGame() {
       try {
         // Call the server action
         const result = await resolveGameAsync(gameId);
+
+        if (phase === GamePhase.FINISHED && result) {
+          console.log("Game already finished, skipping resolution");
+          return {
+            success: true,
+            gameId,
+            isComplete: true,
+            result: result,
+          };
+        }
 
         if (!result.success) {
           throw new Error(result.error || "Failed to resolve game");
@@ -391,7 +400,7 @@ export function useGame() {
 
   // Adaptive polling based on elapsed time
   useEffect(() => {
-    if (!pollingState.isPolling || !gameId) {
+    if (!pollingState.isPolling || !gameId || phase === GamePhase.FINISHED) {
       return;
     }
 
@@ -418,7 +427,7 @@ export function useGame() {
         if (!gameId) return;
 
         // Only poll if game is still active
-        if (phase !== GamePhase.FINISHED && phase !== GamePhase.ERROR) {
+        if (phase !== GamePhase.ERROR) {
           await resolveGameAsyncMutation.mutateAsync(gameId);
         } else {
           stopPolling();

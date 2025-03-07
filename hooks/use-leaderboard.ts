@@ -113,6 +113,7 @@ export function useLeaderboard() {
       }
     },
     staleTime: 5000,
+    refetchInterval: 60000,
   });
 
   const updateLeaderboard = async () => {
@@ -165,12 +166,13 @@ export function useLeaderboard() {
             earnings: 0,
           };
           newData.push(playerEntry);
-        } else if (playerEntry.earnings === undefined) {
+        }
+
+        if (playerEntry.earnings === undefined) {
           playerEntry.earnings = 0;
         }
 
         playerEntry.gamesPlayed += 1;
-        playerEntry.earnings = playerEntry.earnings || 0;
 
         if (result === "WIN") {
           playerEntry.wins += 1;

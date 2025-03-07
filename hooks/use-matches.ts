@@ -443,8 +443,8 @@ export function useMatches() {
       netProfitLoss: `${
         BigInt(currentStats.netProfitLoss || "0") +
         (betValue >= 0
-          ? BigInt(Math.floor(betValue * 10 ** 18))
-          : -BigInt(Math.floor(Math.abs(betValue) * 10 ** 18)))
+          ? BigInt(betValue * 10 ** 18)
+          : -BigInt(Math.abs(betValue) * 10 ** 18))
       }`,
     };
   }
