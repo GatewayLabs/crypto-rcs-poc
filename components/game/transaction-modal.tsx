@@ -12,29 +12,26 @@ import { useEffect, useState } from "react";
 
 interface TransactionModalProps {
   onRetry?: () => void;
+  onCancel?: () => void;
 }
 
-export default function TransactionModal({ onRetry }: TransactionModalProps) {
+export default function TransactionModal({
+  onRetry,
+  onCancel,
+}: TransactionModalProps) {
   const [elapsedTime, setElapsedTime] = useState(0);
 
+  // Get state from the store
   const {
     phase,
     isTransactionModalOpen,
     transactionType,
     transactionHash,
     setTransactionModal,
+    setPhase,
   } = useGameUIStore();
 
-  useEffect(() => {
-    if (phase === GamePhase.SELECTED) {
-      setTransactionModal(true, "approve");
-    } else if (phase === GamePhase.WAITING || phase === GamePhase.REVEALING) {
-      setTransactionModal(true, "validate");
-    } else {
-      setTransactionModal(false);
-    }
-  }, [phase, setTransactionModal]);
-
+  // Reset timer when modal opens/closes
   useEffect(() => {
     if (isTransactionModalOpen) {
       setElapsedTime(0);
@@ -43,6 +40,7 @@ export default function TransactionModal({ onRetry }: TransactionModalProps) {
     }
   }, [isTransactionModalOpen]);
 
+  // Start timer when modal is open
   useEffect(() => {
     if (!isTransactionModalOpen) return;
 
@@ -85,8 +83,24 @@ export default function TransactionModal({ onRetry }: TransactionModalProps) {
     transactionType === "validate" && elapsedTime > 30 && onRetry;
   const showExplorer = transactionType === "validate" && transactionHash;
 
+  const handleOpenChange = (open: boolean) => {
+    // If modal is being closed and we're in SELECTED or WAITING phase
+    if (
+      !open &&
+      (phase === GamePhase.SELECTED || phase === GamePhase.WAITING)
+    ) {
+      // Call onCancel to reset the game state
+      if (onCancel) {
+        onCancel();
+      }
+    }
+
+    // Update modal state in the store
+    setTransactionModal(open, transactionType);
+  };
+
   return (
-    <Dialog open={isTransactionModalOpen}>
+    <Dialog open={isTransactionModalOpen} onOpenChange={handleOpenChange}>
       <DialogContent>
         <DialogHeader className="flex flex-col items-center text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-2 border-t-transparent border-white mb-4" />

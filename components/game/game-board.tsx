@@ -30,6 +30,7 @@ const GAME_BUTTONS = [
 ];
 
 export default function GameBoard() {
+  // Get game actions from useGame hook
   const { createGame, joinGame, resetGame, retryResolution } = useGame();
 
   // Get state from the store
@@ -43,8 +44,12 @@ export default function GameBoard() {
     isCreatingGame,
     isJoiningGame,
     isResolutionPending,
+    error,
     addToast,
     dismissToast,
+    setTransactionModal,
+    setPhase,
+    resetGameState,
   } = useGameUIStore();
 
   const { walletAddress, isAuthenticated } = useWallet();
@@ -58,6 +63,7 @@ export default function GameBoard() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const limit = 1;
 
+  // Sound effects for game outcomes
   useEffect(() => {
     if (phase === GamePhase.FINISHED && result) {
       if (result === "WIN") soundEffects.win();
@@ -66,9 +72,22 @@ export default function GameBoard() {
     }
   }, [phase, result]);
 
+  // Clear error message when bet value changes
   useEffect(() => {
     setErrorMessage(null);
   }, [betValue]);
+
+  // Control transaction modal visibility based on game phase
+  useEffect(() => {
+    // Show transaction modal based on phase
+    if (phase === GamePhase.SELECTED) {
+      setTransactionModal(true, "approve");
+    } else if (phase === GamePhase.WAITING || phase === GamePhase.REVEALING) {
+      setTransactionModal(true, "validate");
+    } else {
+      setTransactionModal(false);
+    }
+  }, [phase, setTransactionModal]);
 
   const validateBetValue = (): boolean => {
     if (betValue === 0) {
@@ -89,7 +108,7 @@ export default function GameBoard() {
   };
 
   const handleMove = async (move: Move) => {
-    if (phase !== GamePhase.CHOOSING) return;
+    if (phase !== GamePhase.CHOOSING && phase !== GamePhase.ERROR) return;
 
     if (!isAuthenticated) {
       addToast("Please connect your wallet to play", "info");
@@ -101,6 +120,10 @@ export default function GameBoard() {
     }
 
     try {
+      if (phase === GamePhase.ERROR) {
+        resetGameState();
+      }
+
       soundEffects.select();
 
       if (!gameId) {
@@ -113,8 +136,13 @@ export default function GameBoard() {
         addToast("Joined game!", "success");
       }
     } catch (error) {
-      addToast("Error processing move", "info");
-      console.error("Error making move:", error);
+      if (error instanceof Error && error.message.includes("user rejected")) {
+        addToast("Transaction cancelled", "info");
+        setPhase(GamePhase.CHOOSING);
+      } else {
+        addToast("Error processing move", "error");
+        console.error("Error making move:", error);
+      }
     }
   };
 
@@ -129,6 +157,17 @@ export default function GameBoard() {
     addToast("Retrying game resolution...", "info");
     retryResolution(gameId);
   };
+
+  const handleCancelTransaction = () => {
+    setPhase(GamePhase.CHOOSING);
+    addToast("Transaction cancelled", "info");
+  };
+
+  const areButtonsDisabled =
+    (phase !== GamePhase.CHOOSING && phase !== GamePhase.ERROR) ||
+    isCreatingGame ||
+    isJoiningGame ||
+    isResolutionPending;
 
   if (
     phase === GamePhase.FINISHED &&
@@ -155,6 +194,8 @@ export default function GameBoard() {
           <div className="text-zinc-400 text-sm leading-none max-md:max-w-full">
             {!walletAddress
               ? "Connect your wallet to play"
+              : phase === GamePhase.ERROR
+              ? "Something went wrong. Choose your move to try again."
               : phase === GamePhase.CHOOSING
               ? gameId
                 ? "Join the game..."
@@ -184,12 +225,7 @@ export default function GameBoard() {
               label={button.label}
               imageSrc={button.imageSrc}
               onClick={() => handleMove(button.label as Move)}
-              disabled={
-                isCreatingGame ||
-                isJoiningGame ||
-                isResolutionPending ||
-                phase !== GamePhase.CHOOSING
-              }
+              disabled={areButtonsDisabled}
               aria-selected={
                 typeof playerMove === "string" && playerMove === button.label
               }
@@ -198,10 +234,16 @@ export default function GameBoard() {
         </div>
       </div>
 
+      {/* Transaction modal with cancel handler */}
       <TransactionModal
         onRetry={gameId ? () => handleRetryResolution() : undefined}
+        onCancel={handleCancelTransaction}
       />
-      <ErrorDialog onClose={resetGame} />
+
+      {/* Only show error dialog for non-cancellation errors */}
+      {error && !error.includes("user rejected") && (
+        <ErrorDialog onClose={() => setPhase(GamePhase.CHOOSING)} />
+      )}
 
       <ToastContainer
         toasts={toasts.filter((t: GameToast) => t.type !== "error")}

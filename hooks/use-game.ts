@@ -94,6 +94,20 @@ export function useGame() {
     }
   }, [updateLeaderboard, addMatch]);
 
+  const revertToChoosing = useCallback(() => {
+    setPhase(GamePhase.CHOOSING);
+    setIsCreatingGame(false);
+    setIsJoiningGame(false);
+    setIsResolutionPending(false);
+    setError(null);
+  }, [
+    setPhase,
+    setIsCreatingGame,
+    setIsJoiningGame,
+    setIsResolutionPending,
+    setError,
+  ]);
+
   // Determine game phase from contract data
   function determineGamePhase(gameInfo: any) {
     if (!gameInfo) return GamePhase.CHOOSING;
@@ -492,7 +506,7 @@ export function useGame() {
     resetGame: resetGameState,
     retryResolution: (gameId: number) =>
       resolveGameAsyncMutation.mutate(gameId),
-
+    revertToChoosing,
     // Loading states from store
     isCreatingGame,
     isJoiningGame,
