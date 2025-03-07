@@ -407,6 +407,7 @@ export async function resolveGameAsync(gameId: number): Promise<{
           return {
             success: true,
             pendingResult: Number(finalGameState.revealedDiff),
+            txHash,
             status: "completed",
           };
         } catch (error) {
@@ -531,7 +532,6 @@ export async function resolveGameAsync(gameId: number): Promise<{
       }
     );
 
-    // Return with transaction hash and the pending result
     return {
       success: true,
       txHash,

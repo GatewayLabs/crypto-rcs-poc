@@ -11,6 +11,8 @@ import {
 } from "./use-game-contract";
 import { useLeaderboard } from "./use-leaderboard";
 import { useMatches } from "./use-matches";
+import { formatEther } from "viem";
+import { useWallet } from "@/contexts/wallet-context";
 
 export function useGame() {
   //-----------------------------------------------------------------------
@@ -22,8 +24,9 @@ export function useGame() {
     gameInfo,
   } = useGameContract();
 
-  const { updateLeaderboard } = useLeaderboard();
-  const { addMatch } = useMatches();
+  const { updateLocalLeaderboard, updateLeaderboard } = useLeaderboard();
+  const { addLocalMatch, addMatch } = useMatches();
+  const { walletAddress: address } = useWallet();
 
   const gameUIState = useGameUIStore();
   const {
@@ -41,6 +44,7 @@ export function useGame() {
   // Game resolution state
   const [isResolutionPending, setIsResolutionPending] = useState(false);
   const [pendingResult, setPendingResult] = useState<number | null>(null);
+  const [betValue, setBetValue] = useState<bigint>(DEFAULT_BET_AMOUNT_WEI);
 
   // Polling state
   const [pollingState, setPollingState] = useState({
@@ -154,43 +158,66 @@ export function useGame() {
   const resolveGameAsyncMutation = useMutation({
     mutationFn: async (gameId: number) => {
       try {
+        // Call the server action
         const result = await resolveGameAsync(gameId);
 
         if (!result.success) {
           throw new Error(result.error || "Failed to resolve game");
         }
 
-        // Update transaction hash for polling
+        // Store transaction hash for polling
         if (result.txHash) {
           setTransactionHash(result.txHash);
+          // Update polling with new hash
           startOrUpdatePolling(result.txHash);
         }
 
-        // Handle completion or pending results
+        // If there's a pending result
         if (result.pendingResult !== undefined && result.pendingResult >= 0) {
           setPendingResult(result.pendingResult);
 
+          // Check if we're done
           if (result.status === "completed") {
             const gameOutcome = getResultFromDiff(result.pendingResult);
 
-            // Update game state to finished
             setPhase(GamePhase.FINISHED);
             setResult(gameOutcome);
 
-            if (gameUIState.playerMove) {
-              setHouseMove(
-                inferHouseMove(gameOutcome, gameUIState.playerMove as Move)
+            const houseMove = gameUIState.playerMove
+              ? inferHouseMove(gameOutcome, gameUIState.playerMove as Move)
+              : ("ROCK" as Move);
+
+            setHouseMove(houseMove);
+
+            if (address && gameUIState.playerMove) {
+              let betValueChange = 0n;
+
+              if (gameOutcome === GameResult.WIN) {
+                betValueChange = BigInt(betValue);
+              } else if (gameOutcome === GameResult.LOSE) {
+                betValueChange = BigInt(-betValue);
+              }
+
+              updateLocalLeaderboard(
+                address,
+                gameOutcome,
+                Number(formatEther(betValueChange))
               );
+
+              addLocalMatch({
+                gameId: gameId,
+                playerMove: gameUIState.playerMove as Move,
+                houseMove: houseMove,
+                result: gameOutcome,
+                transactionHash: gameUIState.transactionHash || "",
+                betAmount: betValueChange,
+              });
             }
 
-            // Clean up state
             setIsResolutionPending(false);
             setTransactionHash(null);
             setTransactionModal(false);
             stopPolling();
-
-            // Update leaderboard and match history
-            updateStats();
 
             return {
               success: true,
@@ -209,12 +236,12 @@ export function useGame() {
           pendingResult: result.pendingResult,
         };
       } catch (error) {
-        // Handle specific error cases
         if (error instanceof Error) {
           if (error.message.includes("Player B has not joined yet")) {
             console.log("Waiting for player to join...");
             return { success: true, gameId, waitingForJoin: true };
           }
+
           setError(error.message);
         } else {
           setError("Failed to resolve game");
@@ -234,6 +261,8 @@ export function useGame() {
   const createGameMutation = useMutation({
     mutationFn: async (params: { move: Move; betAmount?: bigint }) => {
       const { move, betAmount = DEFAULT_BET_AMOUNT_WEI } = params;
+      setBetValue(betAmount);
+
       try {
         // Set initial state
         setPlayerMove(move);
@@ -290,6 +319,8 @@ export function useGame() {
       betAmount?: bigint;
     }) => {
       try {
+        setBetValue(betAmount);
+
         // Set initial state
         setPlayerMove(move);
         setPhase(GamePhase.WAITING);
