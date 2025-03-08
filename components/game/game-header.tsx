@@ -5,9 +5,11 @@ import Image from "next/image";
 import BalanceButton from "./balance-button";
 import SoundButton from "./sound-button";
 import WalletButton from "./wallet-button";
+import { useOdyssey } from "@/contexts/odyssey-context";
 
 export default function Header() {
   const { walletAddress } = useWallet();
+  const isOdysseyConnected = useOdyssey();
 
   return (
     <>
@@ -19,7 +21,7 @@ export default function Header() {
           <div className="flex items-center gap-2 text-neutral-50 font-normal">
             <SoundButton />
             {walletAddress && <BalanceButton />}
-            <WalletButton />
+            {!isOdysseyConnected && <WalletButton />}
           </div>
         </div>
       </div>
