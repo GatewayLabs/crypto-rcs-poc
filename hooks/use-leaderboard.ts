@@ -33,7 +33,7 @@ interface SubgraphResponse {
 // GraphQL query for players data
 const PLAYERS_QUERY = `
   query GetPlayers {
-    players(orderBy: netProfitLoss, orderDirection: desc, first: 100) {
+    players(orderBy: netProfitLoss, orderDirection: desc, first: 1000) {
       id
       address
       totalGamesPlayed
