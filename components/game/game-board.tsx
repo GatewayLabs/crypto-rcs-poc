@@ -2,12 +2,11 @@ import ErrorDialog from "@/components/game/error-dialog";
 import GameButton from "@/components/game/game-button";
 import GameResultView from "@/components/game/game-result";
 import TransactionModal from "@/components/game/transaction-modal";
-import { ToastContainer } from "@/components/ui/toast";
 import { useWallet } from "@/contexts/wallet-context";
 import { useGame } from "@/hooks/use-game";
 import { Move } from "@/lib/crypto";
 import { soundEffects } from "@/lib/sounds/sound-effects";
-import { GameToast, useGameUIStore } from "@/stores/game-ui-store";
+import { useGameUIStore } from "@/stores/game-ui-store";
 import { GamePhase } from "@/types/game";
 import { formatEther } from "ethers";
 import { useEffect, useState } from "react";
@@ -40,13 +39,10 @@ export default function GameBoard() {
     phase,
     result,
     gameId,
-    toasts,
     isCreatingGame,
     isJoiningGame,
     isResolutionPending,
     error,
-    addToast,
-    dismissToast,
     setTransactionModal,
     setPhase,
     resetGameState,
@@ -112,7 +108,6 @@ export default function GameBoard() {
     if (phase !== GamePhase.CHOOSING && phase !== GamePhase.ERROR) return;
 
     if (!isAuthenticated) {
-      addToast("Please connect your wallet to play", "info");
       return;
     }
 
@@ -128,20 +123,14 @@ export default function GameBoard() {
       soundEffects.select();
 
       if (!gameId) {
-        addToast("Creating new game...", "info");
         await createGame(move, BigInt(betValue * 10 ** 18));
-        addToast("Game created! Waiting for opponent...", "success");
       } else {
-        addToast("Joining game...", "info");
         await joinGame(gameId, move, BigInt(betValue * 10 ** 18));
-        addToast("Joined game!", "success");
       }
     } catch (error) {
       if (error instanceof Error && error.message.includes("user rejected")) {
-        addToast("Transaction cancelled", "info");
         setPhase(GamePhase.CHOOSING);
       } else {
-        addToast("Error processing move", "error");
         console.error("Error making move:", error);
       }
     }
@@ -150,18 +139,15 @@ export default function GameBoard() {
   const handlePlayAgain = () => {
     soundEffects.click();
     resetGame();
-    addToast("Starting new game!", "info");
   };
 
   const handleRetryResolution = () => {
     if (!gameId) return;
-    addToast("Retrying game resolution...", "info");
     retryResolution(gameId);
   };
 
   const handleCancelTransaction = () => {
     setPhase(GamePhase.CHOOSING);
-    addToast("Transaction cancelled", "info");
   };
 
   const areButtonsDisabled =
@@ -251,11 +237,6 @@ export default function GameBoard() {
           }}
         />
       )}
-
-      <ToastContainer
-        toasts={toasts.filter((t: GameToast) => t.type !== "error")}
-        onDismiss={dismissToast}
-      />
     </>
   );
 }
