@@ -8,6 +8,35 @@ import { DEFAULT_BET_AMOUNT_WEI } from "@/hooks/use-game-contract";
 import { executeContractFunction } from "@/lib/wallet-utils";
 import { retry } from "@/lib/utils";
 
+interface GameProcessingState {
+  status: "processing" | "completed";
+  step:
+    | "joining"
+    | "submitting_moves"
+    | "computing_difference"
+    | "finalizing"
+    | "done";
+  result?: number;
+  timestamp: number;
+  txHash?: string;
+}
+
+// Updated cache
+const processedGamesCache = new Map<number, GameProcessingState>();
+
+// Clear old cache entries periodically
+function cleanupCache() {
+  const now = Date.now();
+  const expiryTime = 5 * 60 * 1000; // 5 minutes
+
+  for (const [gameId, data] of processedGamesCache.entries()) {
+    if (now - data.timestamp > expiryTime) {
+      processedGamesCache.delete(gameId);
+    }
+  }
+}
+
+// Types (keeping existing types)
 export type PlayHouseMoveSuccessResult = {
   success: true;
   hash: `0x${string}`;
@@ -43,6 +72,79 @@ function generateHouseMove(): Move {
   const moves: Move[] = ["ROCK", "PAPER", "SCISSORS"];
   const randomIndex = Math.floor(Math.random() * moves.length);
   return moves[randomIndex];
+}
+
+function getGameProcessingStatus(gameId: number): {
+  isProcessed: boolean;
+  state?: GameProcessingState;
+} {
+  // Clean up old entries first
+  cleanupCache();
+
+  const entry = processedGamesCache.get(gameId);
+  if (!entry) {
+    return { isProcessed: false };
+  }
+
+  // Check for stale processing - if it's been more than 30 seconds since the last update
+  const isStale =
+    entry.status === "processing" && Date.now() - entry.timestamp > 30000;
+
+  if (isStale) {
+    console.log(`Game ${gameId} processing state is stale, allowing retry`);
+    return { isProcessed: false };
+  }
+
+  return {
+    isProcessed: true,
+    state: entry,
+  };
+}
+
+function updateGameProcessingStep(
+  gameId: number,
+  step: GameProcessingState["step"],
+  txHash?: string
+) {
+  const existing = processedGamesCache.get(gameId);
+
+  // Only update txHash if a new one is provided
+  const newTxHash = txHash || existing?.txHash;
+
+  processedGamesCache.set(gameId, {
+    status: "processing",
+    step,
+    timestamp: Date.now(),
+    result: existing?.result,
+    txHash: newTxHash,
+  });
+
+  console.log(
+    `Updated game ${gameId} processing step to: ${step}${
+      newTxHash ? ` with txHash: ${newTxHash}` : ""
+    }`
+  );
+}
+
+function markGameAsCompleted(gameId: number, result: number, txHash?: string) {
+  const existing = processedGamesCache.get(gameId);
+
+  // Keep the existing txHash if a new one is not provided
+  const finalTxHash = txHash || existing?.txHash;
+
+  processedGamesCache.set(gameId, {
+    status: "completed",
+    step: "done",
+    result,
+    timestamp: Date.now(),
+    txHash: finalTxHash,
+  });
+
+  console.log(
+    `Marked game ${gameId} as completed with result: ${result}${
+      finalTxHash ? ` and txHash: ${finalTxHash}` : ""
+    }`
+  );
 }
 
 export async function playHouseMove(
@@ -157,7 +259,7 @@ export async function playHouseMove(
       {
         retries: 3,
         logPrefix: `JoinGame for game ${gameId}`,
-        value: validBetAmount, // Pass the bet amount as value
+        value: validBetAmount,
       }
     );
 
@@ -195,6 +297,32 @@ export async function resolveGameAsync(gameId: number): Promise<{
 
     console.log(`Starting to resolve game ${gameId}`);
 
+    // Check if this game is already being processed or completed
+    const cachedStatus = getGameProcessingStatus(gameId);
+
+    if (cachedStatus.isProcessed) {
+      const state = cachedStatus.state!;
+
+      if (state.status === "completed" && state.result !== undefined) {
+        console.log(`Using cached result for game ${gameId}: ${state.result}`);
+        return {
+          success: true,
+          pendingResult: state.result,
+          status: "completed",
+          txHash: state.txHash, // Always include the transaction hash
+        };
+      } else if (state.status === "processing") {
+        // Return information about which step is being processed
+        console.log(`Game ${gameId} is being processed at step: ${state.step}`);
+        return {
+          success: true,
+          txHash: state.txHash, // Return the latest transaction hash
+          pendingResult: -1,
+          status: mapStepToStatus(state.step),
+        };
+      }
+    }
+
     // Quick first check to see if game is already finished
     try {
       const quickCheckData = await retry(
@@ -215,129 +343,25 @@ export async function resolveGameAsync(gameId: number): Promise<{
               errorMessage.includes("timeout")
             );
           },
-          onRetry: (error, attempt) => {
-            console.log(
-              `Retry attempt ${attempt} for quick check of game: ${error}`
-            );
-          },
         }
       );
 
       // If game is already finished, return immediately
       if (quickCheckData[3] && quickCheckData[8] !== undefined) {
-        // finished && revealedDiff
-        console.log(
-          `Game ${gameId} is already finished with result: ${quickCheckData[8]}`
-        );
+        const result = Number(quickCheckData[8]);
+        const existingState = processedGamesCache.get(gameId);
+        markGameAsCompleted(gameId, result, existingState?.txHash);
+
         return {
           success: true,
-          pendingResult: Number(quickCheckData[8]),
+          pendingResult: result,
           status: "completed",
+          txHash: existingState?.txHash,
         };
       }
     } catch (error) {
-      // Just log and continue with normal flow
       console.log(`Quick check for finished game failed: ${error}`);
     }
-
-    // Function to execute a transaction and handle specific errors
-    const executeTransaction = async (
-      functionName: string,
-      args: any[],
-      options: {
-        waitForConfirmation?: boolean;
-        maxWaitTimeMs?: number;
-        expectedErrors?: { [key: string]: string }; // Map error messages to statuses
-      } = {}
-    ): Promise<{ txHash: string; confirmed: boolean; status?: string }> => {
-      const {
-        waitForConfirmation = false,
-        maxWaitTimeMs = 30000, // 30 seconds max wait
-        expectedErrors = {},
-      } = options;
-
-      try {
-        // Execute the transaction
-        const txHash = await executeContractFunction(
-          gameContractConfig,
-          functionName,
-          args,
-          {
-            retries: 2,
-            logPrefix: `${functionName} (async) for game ${gameId}`,
-          }
-        );
-
-        // Return early if we don't need to wait for confirmation
-        if (!waitForConfirmation) {
-          return { txHash, confirmed: false };
-        }
-
-        // Wait for transaction confirmation with timeout
-        console.log(
-          `Waiting for ${functionName} transaction ${txHash} to be confirmed...`
-        );
-        try {
-          await retry(
-            async () => {
-              await publicClient.waitForTransactionReceipt({
-                hash: txHash,
-                timeout: maxWaitTimeMs,
-                confirmations: 1,
-              });
-              return true;
-            },
-            {
-              retries: 3,
-              backoffMs: 2000,
-              shouldRetry: (error) => {
-                const errorMessage =
-                  error instanceof Error ? error.message : String(error);
-                return (
-                  errorMessage.includes("timeout") ||
-                  errorMessage.includes("not found") ||
-                  errorMessage.includes("network")
-                );
-              },
-              onRetry: (error, attempt) => {
-                console.log(
-                  `Retry attempt ${attempt} waiting for transaction confirmation: ${error}`
-                );
-              },
-            }
-          );
-
-          console.log(`${functionName} transaction confirmed`);
-          return { txHash, confirmed: true };
-        } catch (error) {
-          console.warn(
-            `Warning: Couldn't confirm ${functionName} transaction within ${maxWaitTimeMs}ms: ${error}`
-          );
-          return { txHash, confirmed: false };
-        }
-      } catch (error) {
-        // Check if this is an expected error
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-
-        // Check all the expected error messages
-        for (const [errorPattern, status] of Object.entries(expectedErrors)) {
-          if (errorMessage.includes(errorPattern)) {
-            console.log(
-              `${functionName} encountered expected error: ${errorPattern}`
-            );
-            return {
-              txHash: "0x", // Dummy hash
-              confirmed: true, // Treat as confirmed
-              status, // Return the mapped status
-            };
-          }
-        }
-
-        // If not an expected error, rethrow
-        throw error;
-      }
-    };
 
     // Helper function to get game state
     const getGameState = async () => {
@@ -417,11 +441,17 @@ export async function resolveGameAsync(gameId: number): Promise<{
       gameState.revealedDiff !== null &&
       gameState.revealedDiff !== undefined
     ) {
+      const result = Number(gameState.revealedDiff);
+
+      // Keep existing transaction hash
+      const existingState = processedGamesCache.get(gameId);
+      markGameAsCompleted(gameId, result, existingState?.txHash);
+
       return {
         success: true,
-        pendingResult: Number(gameState.revealedDiff),
-        txHash: "",
+        pendingResult: result,
         status: "completed",
+        txHash: existingState?.txHash,
       };
     }
 
@@ -461,100 +491,129 @@ export async function resolveGameAsync(gameId: number): Promise<{
       }
     }
 
-    // Submit moves if not already submitted
-    // Handle "Moves already submitted" error
+    // Determine where to start the resolution process based on game state
+    let currentStep: GameProcessingState["step"] = "joining";
+
+    if (gameState.bothCommitted) {
+      currentStep = "computing_difference";
+    } else if (
+      gameState.playerB !== "0x0000000000000000000000000000000000000000"
+    ) {
+      currentStep = "submitting_moves";
+    }
+
+    // Mark the initial step
+    updateGameProcessingStep(gameId, currentStep);
+
+    // Step 1: Submit moves if not already done
     if (!gameState.bothCommitted) {
-      const { txHash, status } = await executeTransaction(
-        "submitMoves",
-        [BigInt(gameId)],
-        {
-          expectedErrors: {
-            "Moves already submitted": "moves_already_submitted",
-          },
-        }
-      );
-
-      if (status === "moves_already_submitted") {
-        console.log(
-          `Moves for game ${gameId} were already submitted, continuing to next step`
-        );
-        // Update our local game state
-        gameState.bothCommitted = true;
-      } else if (status === "game_already_finalized") {
-        console.log(
-          `Game ${gameId} was already finalized, retrieving final result`
+      try {
+        console.log(`Submitting moves for game ${gameId}`);
+        const submitMovesHash = await executeContractFunction(
+          gameContractConfig,
+          "submitMoves",
+          [BigInt(gameId)],
+          { retries: 3, logPrefix: `SubmitMoves:${gameId}` }
         );
 
+        // Update the step with the new transaction hash
+        updateGameProcessingStep(
+          gameId,
+          "computing_difference",
+          submitMovesHash
+        );
+
+        // Try waiting for transaction confirmation
         try {
-          const finalGameState = await getGameState();
+          await publicClient.waitForTransactionReceipt({
+            hash: submitMovesHash,
+            timeout: 15000,
+          });
+
+          // Refresh game state and continue
+          gameState = await getGameState();
+        } catch (timeoutError) {
+          // Return to client for polling, with the transaction hash
           return {
             success: true,
-            pendingResult: Number(finalGameState.revealedDiff),
-            txHash,
-            status: "completed",
+            txHash: submitMovesHash,
+            status: "submitting_moves",
           };
-        } catch (error) {
-          console.warn(
-            `Could not get final game state after finding it was already finalized: ${error}`
+        }
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+
+        if (errorMessage.includes("Moves already submitted")) {
+          console.log(
+            `Moves for game ${gameId} were already submitted, continuing to next step`
           );
-        }
-      } else {
-        // Normal case - return early with hash for client polling
-        return {
-          success: true,
-          txHash,
-          pendingResult: -1,
-          status: "submitting_moves",
-        };
-      }
-    }
-
-    // Check if we need to compute difference
-    // Handle "Difference already computed" error
-    if (!gameState.differenceCipher || gameState.differenceCipher === "0x") {
-      const { txHash, status } = await executeTransaction(
-        "computeDifference",
-        [BigInt(gameId)],
-        {
-          expectedErrors: {
-            "Difference already computed": "difference_already_computed",
-          },
-        }
-      );
-
-      if (status === "difference_already_computed") {
-        console.log(
-          `Difference for game ${gameId} was already computed, continuing to next step`
-        );
-        // Refresh game state to get the difference cipher
-        try {
+          updateGameProcessingStep(gameId, "computing_difference");
+          // Refresh game state
           gameState = await getGameState();
-        } catch (error) {
-          console.error("Error fetching updated game state:", error);
+        } else {
+          throw error;
         }
-      } else {
-        // Normal case - return early with hash for client polling
-        return {
-          success: true,
-          txHash,
-          pendingResult: -1,
-          status: "computing_difference",
-        };
       }
     }
 
-    // If we still don't have the difference cipher, return with error
+    // Step 2: Compute difference if not already done
     if (!gameState.differenceCipher || gameState.differenceCipher === "0x") {
-      console.error(
-        `No difference cipher available for game ${gameId} after compute step`
-      );
-      return {
-        success: false,
-        error: "Failed to compute difference cipher",
-      };
+      try {
+        console.log(`Computing difference for game ${gameId}`);
+        const computeDiffHash = await executeContractFunction(
+          gameContractConfig,
+          "computeDifference",
+          [BigInt(gameId)],
+          { retries: 3, logPrefix: `ComputeDiff:${gameId}` }
+        );
+
+        // Update processing step with new hash
+        updateGameProcessingStep(gameId, "finalizing", computeDiffHash);
+
+        // Wait for transaction confirmation
+        try {
+          await publicClient.waitForTransactionReceipt({
+            hash: computeDiffHash,
+            timeout: 15000,
+          });
+
+          // Refresh game state and continue
+          gameState = await getGameState();
+        } catch (timeoutError) {
+          // Return for client polling with transaction hash
+          return {
+            success: true,
+            txHash: computeDiffHash,
+            status: "computing_difference",
+          };
+        }
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+
+        if (errorMessage.includes("Difference already computed")) {
+          console.log(
+            `Difference for game ${gameId} was already computed, continuing to next step`
+          );
+          updateGameProcessingStep(gameId, "finalizing");
+          // Refresh game state
+          gameState = await getGameState();
+        } else {
+          throw error;
+        }
+      }
     }
 
-    // Now we should have the difference cipher, so decrypt it
+    // Make sure we have the difference cipher
+    if (!gameState.differenceCipher || gameState.differenceCipher === "0x") {
+      throw new Error(`Failed to compute difference cipher for game ${gameId}`);
+    }
+
+    // Step 3: Decrypt and finalize
+    // (Paillier key setup and decryption logic - same as before)
+    console.log(`Decrypting difference for game ${gameId}`);
+
     // Paillier Key Setup
     const publicKeyN = BigInt("0x" + process.env.NEXT_PUBLIC_PAILLIER_N);
     const publicKeyG = BigInt("0x" + process.env.NEXT_PUBLIC_PAILLIER_G);
@@ -569,9 +628,15 @@ export async function resolveGameAsync(gameId: number): Promise<{
     );
 
     // Decrypt the difference
-    let decryptedDifference = privateKey.decrypt(
-      BigInt(gameState.differenceCipher)
-    );
+    let decryptedDifference;
+    try {
+      decryptedDifference = privateKey.decrypt(
+        BigInt(gameState.differenceCipher)
+      );
+    } catch (error) {
+      console.error(`Error decrypting difference: ${error}`);
+      throw new Error(`Failed to decrypt difference for game ${gameId}`);
+    }
 
     // Handle negative numbers properly
     const halfN = publicKey.n / 2n;
@@ -581,48 +646,79 @@ export async function resolveGameAsync(gameId: number): Promise<{
 
     // Use a proper modulo function for negative numbers
     const mod = (n: bigint, m: bigint) => ((n % m) + m) % m;
-    const diffMod3 = BigInt(mod(decryptedDifference, 3n));
+    const diffMod3 = Number(mod(decryptedDifference, 3n));
 
     console.log(
       `Decrypted difference for game ${gameId}: ${decryptedDifference}, properly adjusted mod 3: ${diffMod3}`
     );
 
-    // Check if the game is already finalized before sending another transaction
+    // Step 4: Finalize the game
     try {
-      gameState = await getGameState();
+      console.log(`Finalizing game ${gameId} with diffMod3=${diffMod3}`);
+      const finalizeHash = await executeContractFunction(
+        gameContractConfig,
+        "finalizeGame",
+        [BigInt(gameId), BigInt(diffMod3)],
+        { retries: 3, logPrefix: `FinalizeGame:${gameId}` }
+      );
 
-      if (gameState.finished) {
-        console.log(`Game ${gameId} is already finalized.`);
-        return {
-          success: true,
-          pendingResult: Number(gameState.revealedDiff),
-          status: "completed",
-        };
-      }
+      // Mark game as completed with the finalize transaction hash
+      markGameAsCompleted(gameId, diffMod3, finalizeHash);
+
+      // Return the transaction hash to the client
+      return {
+        success: true,
+        txHash: finalizeHash,
+        pendingResult: diffMod3,
+        status: "finalizing",
+      };
     } catch (error) {
-      console.warn(`Could not check if game is already finalized:`, error);
-    }
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
 
-    // Finalize the game - handle "Game already finalized" error
-    const { txHash } = await executeTransaction(
-      "finalizeGame",
-      [BigInt(gameId), diffMod3],
-      {
-        expectedErrors: {
-          "Game already finalized": "game_already_finalized",
-          "Game is already finished": "game_already_finalized",
-        },
+      if (
+        errorMessage.includes("Game already finalized") ||
+        errorMessage.includes("Game is already finished")
+      ) {
+        console.log(
+          `Game ${gameId} was already finalized, getting final result`
+        );
+
+        const existingState = processedGamesCache.get(gameId);
+
+        if (
+          gameState.revealedDiff !== undefined &&
+          gameState.revealedDiff !== null
+        ) {
+          const result = Number(gameState.revealedDiff);
+          markGameAsCompleted(gameId, result, existingState?.txHash);
+
+          return {
+            success: true,
+            pendingResult: result,
+            status: "completed",
+            txHash: existingState?.txHash,
+          };
+        } else {
+          markGameAsCompleted(gameId, diffMod3, existingState?.txHash);
+
+          return {
+            success: true,
+            pendingResult: diffMod3,
+            status: "completed",
+            txHash: existingState?.txHash,
+          };
+        }
+      } else {
+        throw error;
       }
-    );
-
-    return {
-      success: true,
-      txHash,
-      pendingResult: Number(diffMod3),
-      status: "finalizing",
-    };
+    }
   } catch (error) {
     console.error("Error in resolveGameAsync:", error);
+
+    // Remove from processing cache if there's an error
+    processedGamesCache.delete(gameId);
+
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
@@ -674,52 +770,22 @@ export async function checkTransactionStatus(txHash: string): Promise<{
   }
 }
 
-export async function getGameResult(gameId: number): Promise<{
-  success: boolean;
-  result?: number;
-  finished?: boolean;
-  error?: string;
-}> {
-  try {
-    // Use retry for getting game result
-    const gameData = await retry(
-      () =>
-        publicClient.readContract({
-          ...gameContractConfig,
-          functionName: "getGameInfo",
-          args: [BigInt(gameId)],
-        }),
-      {
-        retries: 3,
-        backoffMs: 1000,
-        shouldRetry: (error) => {
-          const errorMessage =
-            error instanceof Error ? error.message : String(error);
-          return (
-            errorMessage.includes("network") ||
-            errorMessage.includes("timeout") ||
-            errorMessage.includes("connection")
-          );
-        },
-        onRetry: (error, attempt) => {
-          console.log(
-            `Retry attempt ${attempt} for getting game result: ${error}`
-          );
-        },
-      }
-    );
-
-    const [, , , finished, , , , , revealedDiff] = gameData;
-
-    return {
-      success: true,
-      result: Number(revealedDiff),
-      finished: finished,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
+// Helper function to map internal step to client-facing status
+function mapStepToStatus(
+  step: GameProcessingState["step"]
+): "submitting_moves" | "computing_difference" | "finalizing" | "completed" {
+  switch (step) {
+    case "joining":
+      return "submitting_moves";
+    case "submitting_moves":
+      return "submitting_moves";
+    case "computing_difference":
+      return "computing_difference";
+    case "finalizing":
+      return "finalizing";
+    case "done":
+      return "completed";
+    default:
+      return "computing_difference";
   }
 }

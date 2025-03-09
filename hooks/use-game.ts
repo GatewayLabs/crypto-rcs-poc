@@ -197,28 +197,14 @@ export function useGame() {
         // Call the server action
         const result = await resolveGameAsync(gameId);
 
-        if (phase === GamePhase.FINISHED && result) {
-          console.log("Game already finished, skipping resolution");
-          return {
-            success: true,
-            gameId,
-            isComplete: true,
-            result: result,
-          };
-        }
-
-        if (!result.success) {
-          throw new Error(result.error || "Failed to resolve game");
-        }
-
-        // Store transaction hash for polling
+        // Store transaction hash for UI/polling
         if (result.txHash) {
           setTransactionHash(result.txHash);
           // Update polling with new hash
           startOrUpdatePolling(result.txHash);
         }
 
-        // If there's a pending result
+        // If there's a pending result...
         if (result.pendingResult !== undefined && result.pendingResult >= 0) {
           setPendingResult(result.pendingResult);
 
@@ -235,6 +221,12 @@ export function useGame() {
 
             setHouseMove(inferredHouseMove);
 
+            // Make sure the transaction hash is set for history display
+            if (result.txHash) {
+              setTransactionHash(result.txHash);
+            }
+
+            // Update leaderboard and match history
             if (address && playerMove && betValue !== null) {
               let betValueChange = 0n;
 
@@ -256,7 +248,7 @@ export function useGame() {
                 playerMove: playerMove as Move,
                 houseMove: inferredHouseMove,
                 result: gameOutcome,
-                transactionHash: transactionHash || "",
+                transactionHash: result.txHash || transactionHash || "",
                 betAmount: betValue,
               });
             }
@@ -271,6 +263,7 @@ export function useGame() {
               gameId,
               isComplete: true,
               result: gameOutcome,
+              txHash: result.txHash,
             };
           }
         }
