@@ -709,7 +709,7 @@ export async function getGameResult(gameId: number): Promise<{
       }
     );
 
-    const [, , winner, finished, , , , , revealedDiff] = gameData;
+    const [, , , finished, , , , , revealedDiff] = gameData;
 
     return {
       success: true,

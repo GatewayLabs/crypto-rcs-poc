@@ -17,6 +17,9 @@ export const walletClient = createWalletClient({
 export const publicClient = createPublicClient({
   chain: monad,
   transport: http(process.env.HOUSE_MONAD_RPC_URL!),
+  batch: {
+    multicall: true,
+  },
 });
 
 // Export the account for use in server actions
