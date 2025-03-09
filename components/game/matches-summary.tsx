@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useGameUIStore } from '@/stores/game-ui-store';
-import { useMatches } from '@/hooks/use-matches';
-import { SubgraphPlayerStats } from '@/types/game';
+import { useGameUIStore } from "@/stores/game-ui-store";
+import { useMatches } from "@/hooks/use-matches";
+import { SubgraphPlayerStats } from "@/types/game";
 
 export default function MatchesSummary({
   playerStats,
@@ -25,7 +25,7 @@ export default function MatchesSummary({
 
   return (
     <div className="mt-6 w-full">
-      <div className="flex rounded-lg border border-solid border-zinc-700 overflow-hidden">
+      <div className="flex rounded-lg border border-solid border-zinc-700 overflow-x-auto">
         <div className="flex flex-col items-center justify-center p-4 flex-1">
           <span className="text-zinc-400 text-sm font-normal mb-2">Rank</span>
           <span className="text-neutral-50 text-2xl font-medium">
