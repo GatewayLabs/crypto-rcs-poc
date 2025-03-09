@@ -69,6 +69,7 @@ export function useGame() {
     pollCount: 0,
     lastTxHash: null as string | null,
     pollStartTime: 0,
+    errorCount: 0,
   });
 
   //-----------------------------------------------------------------------
@@ -171,6 +172,7 @@ export function useGame() {
           pollCount,
           lastTxHash: txHash || prev.lastTxHash,
           pollStartTime: isNew ? now : prev.pollStartTime,
+          errorCount: 0,
         };
       });
     },
@@ -405,38 +407,40 @@ export function useGame() {
       return;
     }
 
-    // Calculate adaptive polling interval
+    // Exponential backoff with jitter
     const elapsedTimeMs = Date.now() - pollingState.pollStartTime;
-    let pollIntervalMs: number;
+    const baseInterval = Math.min(
+      3000 * Math.pow(1.5, Math.floor(elapsedTimeMs / 10000)),
+      15000
+    );
 
-    if (elapsedTimeMs < 5000) {
-      pollIntervalMs = 1000; // 0-5 seconds: poll every 1s
-    } else if (elapsedTimeMs < 15000) {
-      pollIntervalMs = 2000; // 5-15 seconds: poll every 2s
-    } else if (elapsedTimeMs < 30000) {
-      pollIntervalMs = 3000; // 15-30 seconds: poll every 3s
-    } else {
-      pollIntervalMs = 5000; // After 30 seconds: poll every 5s
-    }
+    // Add jitter (±20%)
+    const jitter = baseInterval * (0.8 + Math.random() * 0.4);
 
-    // Add jitter to prevent synchronization
-    const jitter = Math.random() * 300;
-    const finalInterval = pollIntervalMs + jitter;
+    // Circuit breaker - if too many consecutive errors, slow down even more
+    const errorCount = pollingState.errorCount || 0;
+    const circuitFactor = errorCount > 3 ? 2 : 1;
+
+    const finalInterval = jitter * circuitFactor;
 
     const timeoutId = setTimeout(async () => {
       try {
         if (!gameId) return;
 
-        // Only poll if game is still active
         if (phase !== GamePhase.ERROR) {
           await resolveGameAsyncMutation.mutateAsync(gameId);
+          setPollingState((prev) => ({ ...prev, errorCount: 0 }));
         } else {
           stopPolling();
         }
       } catch (error) {
         console.error("Error in polling resolution:", error);
 
-        // Time out after 60 seconds of polling
+        setPollingState((prev) => ({
+          ...prev,
+          errorCount: (prev.errorCount || 0) + 1,
+        }));
+
         if (Date.now() - pollingState.pollStartTime > 60000) {
           stopPolling();
           setError("Game resolution timed out. Please try again later.");
@@ -449,6 +453,7 @@ export function useGame() {
     pollingState.isPolling,
     pollingState.pollCount,
     pollingState.pollStartTime,
+    pollingState.errorCount,
     gameId,
     phase,
     stopPolling,
