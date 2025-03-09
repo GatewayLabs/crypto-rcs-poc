@@ -28,7 +28,6 @@ export default function TransactionModal({
     transactionType,
     transactionHash,
     setTransactionModal,
-    setPhase,
   } = useGameUIStore();
 
   // Reset timer when modal opens/closes

@@ -319,6 +319,7 @@ export function useGame() {
         // Create game on-chain
         const gameId = await contractCreateGame(move, betAmount);
         setGameId(gameId);
+        setPhase(GamePhase.WAITING);
 
         // Let house make its move
         const houseResult = await playHouseMove(gameId, betAmount);
@@ -522,6 +523,7 @@ export function useGame() {
     retryResolution: (gameId: number) =>
       resolveGameAsyncMutation.mutate(gameId),
     revertToChoosing,
+
     // Loading states from store
     isCreatingGame,
     isJoiningGame,

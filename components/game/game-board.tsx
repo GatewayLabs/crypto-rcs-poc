@@ -30,7 +30,8 @@ const GAME_BUTTONS = [
 
 export default function GameBoard() {
   // Get game actions from useGame hook
-  const { createGame, joinGame, resetGame, retryResolution } = useGame();
+  const { createGame, joinGame, resetGame, retryResolution, revertToChoosing } =
+    useGame();
 
   // Get state from the store
   const {
@@ -231,8 +232,7 @@ export default function GameBoard() {
       {error && !error.includes("user rejected") && (
         <ErrorDialog
           onClose={() => {
-            setPhase(GamePhase.CHOOSING);
-            setErrorMessage(null);
+            revertToChoosing();
             setError(null);
           }}
         />
