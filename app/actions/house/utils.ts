@@ -2,6 +2,7 @@ import { retry } from "@/lib/utils";
 import { Move } from "@/lib/crypto";
 import { gameContractConfig } from "@/config/contracts";
 import { publicClient } from "@/config/server";
+import { isHex } from "viem";
 
 // Generate a random house move
 export function generateHouseMove(): Move {
@@ -113,6 +114,12 @@ export async function waitForTransaction(
   txHash: string,
   timeoutMs = 15000
 ): Promise<boolean> {
+  // Validate the txHash
+  if (!txHash || !isHex(txHash)) {
+    console.warn(`Invalid transaction hash provided: ${txHash}`);
+    return false;
+  }
+
   try {
     await publicClient.waitForTransactionReceipt({
       hash: txHash as `0x${string}`,
@@ -120,7 +127,9 @@ export async function waitForTransaction(
     });
     return true;
   } catch (error) {
-    console.log(`Transaction ${txHash} wait timed out after ${timeoutMs}ms`);
+    console.log(
+      `Transaction ${txHash} wait timed out after ${timeoutMs}ms: ${error}`
+    );
     return false;
   }
 }
