@@ -50,6 +50,7 @@ export default function GameBoard() {
     setTransactionModal,
     setPhase,
     resetGameState,
+    setError,
   } = useGameUIStore();
 
   const { walletAddress, isAuthenticated } = useWallet();
@@ -242,7 +243,13 @@ export default function GameBoard() {
 
       {/* Only show error dialog for non-cancellation errors */}
       {error && !error.includes("user rejected") && (
-        <ErrorDialog onClose={() => setPhase(GamePhase.CHOOSING)} />
+        <ErrorDialog
+          onClose={() => {
+            setPhase(GamePhase.CHOOSING);
+            setErrorMessage(null);
+            setError(null);
+          }}
+        />
       )}
 
       <ToastContainer
