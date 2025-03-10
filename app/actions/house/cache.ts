@@ -1,3 +1,11 @@
+import { Redis } from "@upstash/redis";
+import { isHex } from "viem";
+
+const redis = Redis.fromEnv();
+
+const REDIS_KEY_PREFIX = "erps:game:";
+const getRedisKey = (gameId: number) => `${REDIS_KEY_PREFIX}${gameId}`;
+
 // Game processing state types and cache
 export interface GameProcessingState {
   status: "processing" | "completed";
@@ -16,31 +24,12 @@ export interface GameProcessingState {
 
 export type GameStep = GameProcessingState["step"];
 
-// Local cache (will reset on serverless function cold starts)
-const processedGamesCache = new Map<number, GameProcessingState>();
-
-// Clean up stale cache entries
-export function cleanupCache() {
-  const now = Date.now();
-  const expiryTime = 5 * 60 * 1000; // 5 minutes
-
-  for (const [gameId, data] of processedGamesCache.entries()) {
-    if (now - data.timestamp > expiryTime) {
-      console.log(`Cleaning up stale cache entry for game ${gameId}`);
-      processedGamesCache.delete(gameId);
-    }
-  }
-}
-
 // Check if game is being processed
-export function getGameProcessingStatus(gameId: number): {
+export async function getGameProcessingStatus(gameId: number): Promise<{
   isProcessed: boolean;
   state?: GameProcessingState;
-} {
-  // Clean up old entries first
-  cleanupCache();
-
-  const entry = processedGamesCache.get(gameId);
+}> {
+  const entry = (await redis.get(getRedisKey(gameId))) as GameProcessingState;
   if (!entry) {
     return { isProcessed: false };
   }
@@ -63,26 +52,34 @@ export function getGameProcessingStatus(gameId: number): {
 }
 
 // Update game processing step
-export function updateGameProcessingStep(
+export async function updateGameProcessingStep(
   gameId: number,
   step: GameStep,
   txHash?: string
 ) {
-  const existing = processedGamesCache.get(gameId);
+  const existing = (await redis.get(
+    getRedisKey(gameId)
+  )) as GameProcessingState;
 
   // Only use txHash if it's a valid hash
   const newTxHash =
     txHash && txHash.startsWith("0x") ? txHash : existing?.txHash;
 
-  processedGamesCache.set(gameId, {
-    status: "processing",
-    step,
-    timestamp: Date.now(),
-    result: existing?.result,
-    txHash: newTxHash,
-    waitingForConfirmation: existing?.waitingForConfirmation,
-    retryCount: existing?.retryCount || 0,
-  });
+  await redis.set(
+    getRedisKey(gameId),
+    {
+      status: "processing",
+      step,
+      timestamp: Date.now(),
+      result: existing?.result,
+      txHash: newTxHash,
+      waitingForConfirmation: existing?.waitingForConfirmation,
+      retryCount: existing?.retryCount || 0,
+    },
+    {
+      ex: 60,
+    }
+  );
 
   console.log(
     `Updated game ${gameId} processing step to: ${step}${
@@ -92,24 +89,35 @@ export function updateGameProcessingStep(
 }
 
 // Mark game as waiting for join
-export function markGameAsWaitingForJoin(gameId: number, txHash?: string) {
-  const existing = processedGamesCache.get(gameId);
+export async function markGameAsWaitingForJoin(
+  gameId: number,
+  txHash?: string
+) {
+  const existing = (await redis.get(
+    getRedisKey(gameId)
+  )) as GameProcessingState;
 
-  // Only use txHash if it's a valid hash
-  const validTxHash =
-    txHash && txHash.startsWith("0x") ? txHash : existing?.txHash;
+  const validTxHash = txHash && isHex(txHash) ? txHash : existing?.txHash;
 
-  const retryCount = (existing?.retryCount || 0) + 1;
+  // Increment retry count if it exists, otherwise start at 1
+  const retryCount =
+    existing?.retryCount !== undefined ? existing.retryCount + 1 : 1;
 
-  processedGamesCache.set(gameId, {
-    status: "processing",
-    step: "joining",
-    timestamp: Date.now(),
-    result: existing?.result,
-    txHash: validTxHash,
-    waitingForConfirmation: true,
-    retryCount,
-  });
+  await redis.set(
+    getRedisKey(gameId),
+    {
+      status: "processing",
+      step: "joining",
+      timestamp: Date.now(),
+      result: existing?.result,
+      txHash: validTxHash,
+      waitingForConfirmation: true,
+      retryCount,
+    },
+    {
+      ex: 60,
+    }
+  );
 
   if (validTxHash) {
     console.log(
@@ -123,24 +131,32 @@ export function markGameAsWaitingForJoin(gameId: number, txHash?: string) {
 }
 
 // Mark game as completed
-export function markGameAsCompleted(
+export async function markGameAsCompleted(
   gameId: number,
   result: number,
   txHash?: string
 ) {
-  const existing = processedGamesCache.get(gameId);
+  const existing = (await redis.get(
+    getRedisKey(gameId)
+  )) as GameProcessingState;
 
   // Only use txHash if it's a valid hash
   const finalTxHash =
     txHash && txHash.startsWith("0x") ? txHash : existing?.txHash;
 
-  processedGamesCache.set(gameId, {
-    status: "completed",
-    step: "done",
-    result,
-    timestamp: Date.now(),
-    txHash: finalTxHash,
-  });
+  await redis.set(
+    getRedisKey(gameId),
+    {
+      status: "completed",
+      step: "done",
+      result,
+      timestamp: Date.now(),
+      txHash: finalTxHash,
+    },
+    {
+      ex: 60,
+    }
+  );
 
   console.log(
     `Marked game ${gameId} as completed with result: ${result}${
@@ -150,8 +166,8 @@ export function markGameAsCompleted(
 }
 
 // Remove game from cache
-export function removeGameFromCache(gameId: number) {
-  processedGamesCache.delete(gameId);
+export async function removeGameFromCache(gameId: number) {
+  await redis.del(getRedisKey(gameId));
   console.log(`Removed game ${gameId} from processing cache`);
 }
 

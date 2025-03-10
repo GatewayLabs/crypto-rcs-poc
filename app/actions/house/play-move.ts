@@ -7,6 +7,7 @@ import { executeContractFunction } from "@/lib/wallet-utils";
 import { generateHouseMove } from "./utils";
 import { retry } from "@/lib/utils";
 import { publicClient } from "@/config/server";
+import { markGameAsWaitingForJoin } from "./cache";
 
 // Result types
 export type PlayHouseMoveSuccessResult = {
@@ -137,6 +138,11 @@ export async function playHouseMove(
         logPrefix: `JoinGame for game ${gameId}`,
         value: validBetAmount,
       }
+    );
+
+    await markGameAsWaitingForJoin(gameId, hash);
+    console.log(
+      `House move for game ${gameId} sent with tx ${hash}, updated game cache`
     );
 
     const successResponse = {
