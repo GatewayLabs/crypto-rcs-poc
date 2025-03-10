@@ -58,7 +58,7 @@ export async function resolveGameAsync(gameId: number): Promise<{
     console.log(`Starting to resolve game ${gameId}`);
 
     // Check if this game is already being processed or completed
-    const cachedStatus = getGameProcessingStatus(gameId);
+    const cachedStatus = await getGameProcessingStatus(gameId);
 
     if (cachedStatus.isProcessed) {
       const state = cachedStatus.state!;
@@ -81,7 +81,7 @@ export async function resolveGameAsync(gameId: number): Promise<{
                 `Join transaction for game ${gameId} has been confirmed, proceeding with resolution`
               );
               // Transaction confirmed, update step and continue
-              updateGameProcessingStep(
+              await await updateGameProcessingStep(
                 gameId,
                 "submitting_moves",
                 state.txHash
@@ -109,7 +109,7 @@ export async function resolveGameAsync(gameId: number): Promise<{
               console.log(
                 `Too many retries (${state.retryCount}) for game ${gameId}, removing from cache`
               );
-              removeGameFromCache(gameId);
+              await removeGameFromCache(gameId);
               return {
                 success: false,
                 error:
@@ -137,7 +137,7 @@ export async function resolveGameAsync(gameId: number): Promise<{
             console.log(
               `Too many retries (${state.retryCount}) for game ${gameId}, removing from cache`
             );
-            removeGameFromCache(gameId);
+            await removeGameFromCache(gameId);
             return {
               success: false,
               error:
@@ -180,7 +180,7 @@ export async function resolveGameAsync(gameId: number): Promise<{
         existingState?.txHash && isHex(existingState.txHash)
           ? existingState.txHash
           : undefined;
-      markGameAsCompleted(gameId, quickCheck.result, validTxHash);
+      await markGameAsCompleted(gameId, quickCheck.result, validTxHash);
 
       console.log(
         `Game ${gameId} is already finished with result: ${quickCheck.result}`
@@ -224,7 +224,7 @@ export async function resolveGameAsync(gameId: number): Promise<{
         existingState?.txHash && isHex(existingState.txHash)
           ? existingState.txHash
           : undefined;
-      markGameAsCompleted(gameId, result, validTxHash);
+      await markGameAsCompleted(gameId, result, validTxHash);
 
       return {
         success: true,
@@ -271,7 +271,7 @@ export async function resolveGameAsync(gameId: number): Promise<{
           }
 
           // Mark the game as waiting for join confirmation
-          markGameAsWaitingForJoin(gameId, joinTxHash);
+          await markGameAsWaitingForJoin(gameId, joinTxHash);
 
           // Return a more helpful response to the client
           return {
@@ -312,7 +312,7 @@ export async function resolveGameAsync(gameId: number): Promise<{
       isHex(cachedStatus.state.txHash)
         ? cachedStatus.state.txHash
         : undefined;
-    updateGameProcessingStep(gameId, currentStep, existingTxHash);
+    await updateGameProcessingStep(gameId, currentStep, existingTxHash);
 
     // Step 1: Submit moves if not already done
     if (!gameState.bothCommitted) {
@@ -326,7 +326,7 @@ export async function resolveGameAsync(gameId: number): Promise<{
         );
 
         // Update the step and store the transaction hash
-        updateGameProcessingStep(
+        await updateGameProcessingStep(
           gameId,
           "computing_difference",
           submitMovesHash
@@ -353,7 +353,7 @@ export async function resolveGameAsync(gameId: number): Promise<{
           console.log(
             `Moves for game ${gameId} were already submitted, continuing to next step`
           );
-          updateGameProcessingStep(gameId, "computing_difference");
+          await updateGameProcessingStep(gameId, "computing_difference");
           // Refresh game state
           gameState = await getGameState(gameId);
         } else {
@@ -374,7 +374,7 @@ export async function resolveGameAsync(gameId: number): Promise<{
         );
 
         // Update the step and store the transaction hash
-        updateGameProcessingStep(gameId, "finalizing", computeDiffHash);
+        await updateGameProcessingStep(gameId, "finalizing", computeDiffHash);
 
         // Wait for transaction to be mined
         const confirmed = await waitForTransaction(computeDiffHash);
@@ -397,7 +397,7 @@ export async function resolveGameAsync(gameId: number): Promise<{
           console.log(
             `Difference for game ${gameId} was already computed, continuing to next step`
           );
-          updateGameProcessingStep(gameId, "finalizing");
+          await updateGameProcessingStep(gameId, "finalizing");
           // Refresh game state
           gameState = await getGameState(gameId);
         } else {
@@ -432,7 +432,7 @@ export async function resolveGameAsync(gameId: number): Promise<{
       );
 
       // Mark game as completed with the finalize transaction hash
-      markGameAsCompleted(gameId, diffMod3, finalizeHash);
+      await markGameAsCompleted(gameId, diffMod3, finalizeHash);
 
       return {
         success: true,
@@ -468,7 +468,7 @@ export async function resolveGameAsync(gameId: number): Promise<{
             isHex(cachedStatus.state.txHash)
               ? cachedStatus.state.txHash
               : undefined;
-          markGameAsCompleted(gameId, result, validTxHash);
+          await markGameAsCompleted(gameId, result, validTxHash);
 
           return {
             success: true,
@@ -484,7 +484,7 @@ export async function resolveGameAsync(gameId: number): Promise<{
             isHex(cachedStatus.state.txHash)
               ? cachedStatus.state.txHash
               : undefined;
-          markGameAsCompleted(gameId, diffMod3, validTxHash);
+          await markGameAsCompleted(gameId, diffMod3, validTxHash);
 
           return {
             success: true,
@@ -512,7 +512,7 @@ export async function resolveGameAsync(gameId: number): Promise<{
 
     if (!isTransientError) {
       // Only remove from cache for fatal errors
-      removeGameFromCache(gameId);
+      await removeGameFromCache(gameId);
     }
 
     return {
@@ -557,7 +557,7 @@ export async function getGameResult(gameId: number): Promise<{
 }> {
   try {
     // Check cache first
-    const cachedStatus = getGameProcessingStatus(gameId);
+    const cachedStatus = await getGameProcessingStatus(gameId);
     if (
       cachedStatus.isProcessed &&
       cachedStatus.state?.status === "completed" &&
@@ -585,7 +585,11 @@ export async function getGameResult(gameId: number): Promise<{
         isHex(cachedStatus.state.txHash)
           ? cachedStatus.state.txHash
           : undefined;
-      markGameAsCompleted(gameId, Number(gameState.revealedDiff), validTxHash);
+      await markGameAsCompleted(
+        gameId,
+        Number(gameState.revealedDiff),
+        validTxHash
+      );
     }
 
     return {
