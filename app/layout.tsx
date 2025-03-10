@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import dynamic from "next/dynamic";
 import { Analytics } from "@vercel/analytics/next";
+import { GoogleAnalytics } from "@next/third-parties/google"
 import "./globals.css";
 
 const Providers = dynamic(() => import("./providers"), {
@@ -23,6 +24,7 @@ export default function RootLayout({
       <body>
         <Providers>{children}</Providers>
         <Analytics />
+        <GoogleAnalytics gaId="G-X0FKGJF5VW" />
       </body>
     </html>
   );
