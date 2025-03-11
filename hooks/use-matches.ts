@@ -230,6 +230,7 @@ export function useMatches() {
     },
     enabled: !!address,
     staleTime: 5000,
+    refetchInterval: 60000,
   });
 
   // Helper function to infer game results from diffMod3
