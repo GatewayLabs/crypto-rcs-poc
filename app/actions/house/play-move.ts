@@ -140,7 +140,7 @@ export async function playHouseMove(
       }
     );
 
-    markGameAsWaitingForJoin(gameId, hash);
+    await markGameAsWaitingForJoin(gameId, hash);
     console.log(
       `House move for game ${gameId} sent with tx ${hash}, updated game cache`
     );

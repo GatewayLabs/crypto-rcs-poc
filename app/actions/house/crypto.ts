@@ -45,3 +45,39 @@ export function decryptDifference(ciphertext: string): number {
     );
   }
 }
+
+/**
+ * Computes homomorphic difference between two encrypted values locally
+ * This replicates what the smart contract does but runs on the server
+ * @param encryptedA Encrypted player A move
+ * @param encryptedB Encrypted player B move
+ * @returns Encrypted difference that can be decrypted with the private key
+ */
+export function computeDifferenceLocally(
+  encryptedA: string,
+  encryptedB: string
+): string {
+  try {
+    const { publicKey } = getPaillierKeys();
+
+    // Ensure we're working with BigInt values
+    const encA = BigInt(encryptedA);
+    const encB = BigInt(encryptedB);
+
+    // Compute Enc(A-B) = Enc(A) * Enc(-B) mod n^2
+    // For Paillier, Enc(-B) = Enc(B)^-1 mod n^2
+    const encBInverse = publicKey.multiply(encB, -1n);
+
+    // Multiply to get the encrypted difference
+    const encryptedDiff = publicKey.addition(encA, encBInverse);
+
+    return encryptedDiff.toString();
+  } catch (error) {
+    console.error("Error computing homomorphic difference:", error);
+    throw new Error(
+      `Failed to compute homomorphic difference: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+  }
+}

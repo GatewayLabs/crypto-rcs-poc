@@ -430,14 +430,25 @@ export function useGame() {
       } catch (error) {
         console.error("Error in polling resolution:", error);
 
+        // Only increment error count for actual errors, not timeouts which are expected
+        const isTimeout =
+          error instanceof Error &&
+          (error.message.includes("timed out") ||
+            error.message.includes("timeout"));
+
         setPollingState((prev) => ({
           ...prev,
-          errorCount: (prev.errorCount || 0) + 1,
+          errorCount: isTimeout
+            ? prev.errorCount || 0
+            : (prev.errorCount || 0) + 1,
         }));
 
-        if (Date.now() - pollingState.pollStartTime > 60000) {
+        // Allow longer total polling time (3 minutes instead of 1 minute)
+        if (Date.now() - pollingState.pollStartTime > 180000) {
           stopPolling();
-          setError("Game resolution timed out. Please try again later.");
+          setError(
+            "Game resolution is taking longer than expected. Please check back later or try resolving again."
+          );
         }
       }
     }, finalInterval);
