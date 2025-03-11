@@ -41,18 +41,10 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-mono;
   }
 }
 
-@font-face {
-  font-family: "Departure Mono";
-  src: url("https://fonts.cdnfonts.com/css/departure-mono") format("woff2");
-}
-
-body {
-  font-family: "Departure Mono", monospace;
-}
 
 .neon-text {
   text-shadow: 0 0 5px theme('colors.neon.blue'),

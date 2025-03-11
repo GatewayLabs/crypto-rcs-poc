@@ -4,10 +4,17 @@ import { Analytics } from "@vercel/analytics/next";
 import { GoogleTagManager } from "@next/third-parties/google"
 import "./globals.css";
 import Script from "next/script";
+import localFont from 'next/font/local'
 
 const Providers = dynamic(() => import("./providers"), {
   ssr: false,
 });
+
+const departureMono = localFont({
+  src: './DepartureMono-Regular.woff2',
+  display: 'swap',
+  variable: "--departure-mono-font",
+})
 
 export const metadata: Metadata = {
   title: "ERPS - Wager your $MON on Encrypted RPS",
@@ -21,7 +28,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={departureMono.className}>
       <body>
         <Providers>{children}</Providers>
         <Analytics />

@@ -74,7 +74,8 @@ const config: Config = {
         "neon-pulse": "neonPulse 2s ease-in-out infinite",
       },
       fontFamily: {
-        mono: ["Departure Mono", "monospace"],
+        body: ["var(--departure-mono-font)", "monospace"],
+        mono: ["var(--departure-mono-font)", "monospace"],
       },
     },
   },
