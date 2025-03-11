@@ -4,6 +4,7 @@ import { useLeaderboard } from "@/hooks/use-leaderboard";
 import { useGameUIStore } from "@/stores/game-ui-store";
 import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
+import Tooltip from "./tooltip";
 
 export default function Leaderboard() {
   const { leaderboard } = useLeaderboard();
@@ -72,7 +73,7 @@ export default function Leaderboard() {
       </div>
       <div className="w-full mt-8 max-md:max-w-full max-md:mt-10 flex flex-col flex-grow">
         <div className="flex-grow">
-          <div className="border-zinc-700 border w-full overflow-x-auto rounded-lg border-solid max-md:max-w-full">
+          <div className="border-zinc-700 border w-full rounded-lg border-solid max-md:max-w-full">
             <table className="w-full border-collapse">
               <thead>
                 <tr className="border-zinc-700 border-b">
@@ -82,8 +83,13 @@ export default function Leaderboard() {
                   <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3">
                     Player
                   </th>
-                  <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3 w-[150px]">
-                    PnL ($MON)
+                  <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3 w-[150px] flex items-center">
+                    <span className="mr-2">PnL ($MON)</span>
+                    <Tooltip
+                      text="Your PnL balance may become out of date due to the
+                                    blockchain's response time. Don't worry, the data will
+                                    be updated in 1 or 2 minutes."
+                    />
                   </th>
                 </tr>
               </thead>

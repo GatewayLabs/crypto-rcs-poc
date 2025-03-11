@@ -1,8 +1,9 @@
 "use client";
 
-import { useGameUIStore } from "@/stores/game-ui-store";
 import { useMatches } from "@/hooks/use-matches";
+import { useGameUIStore } from "@/stores/game-ui-store";
 import { SubgraphPlayerStats } from "@/types/game";
+import Tooltip from "./tooltip";
 
 export default function MatchesSummary({
   playerStats,
@@ -25,7 +26,7 @@ export default function MatchesSummary({
 
   return (
     <div className="mt-6 w-full">
-      <div className="flex rounded-lg border border-solid border-zinc-700 overflow-x-auto">
+      <div className="flex rounded-lg border border-solid border-zinc-700 ">
         <div className="flex flex-col items-center justify-center p-4 flex-1">
           <span className="text-zinc-400 text-sm font-normal mb-2">Rank</span>
           <span className="text-neutral-50 text-2xl font-medium">
@@ -79,7 +80,14 @@ export default function MatchesSummary({
         <div className="w-px bg-zinc-700 h-auto"></div>
 
         <div className="flex flex-col items-center justify-center p-4 flex-1">
-          <span className="text-zinc-400 text-sm font-normal mb-2">PnL</span>
+          <div className="flex items-center mb-2">
+            <span className="text-zinc-400 text-sm font-normal mr-1">PnL</span>
+            <Tooltip
+              text="Your PnL balance may become out of date due to the
+                blockchain's response time. Don't worry, the data will
+                be updated in 1 or 2 minutes."
+            />
+          </div>
           <span className="text-2xl font-medium">{formattedEarnings}</span>
         </div>
       </div>
