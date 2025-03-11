@@ -78,8 +78,6 @@ export default function TransactionModal({
     return "Processing your transaction...";
   };
 
-  const showRetry =
-    transactionType === "validate" && elapsedTime > 30 && onRetry;
   const showExplorer = transactionType === "validate" && transactionHash;
 
   const handleOpenChange = (open: boolean) => {
@@ -135,16 +133,6 @@ export default function TransactionModal({
                 Elapsed time: {elapsedTime} seconds
               </div>
             </div>
-          )}
-
-          {showRetry && (
-            <button
-              onClick={onRetry}
-              className="mt-4 flex items-center gap-2 bg-indigo-700 hover:bg-indigo-600 text-white px-4 py-2 rounded-md transition-colors text-sm"
-            >
-              <RefreshCw size={16} />
-              Retry Transaction
-            </button>
           )}
         </DialogHeader>
       </DialogContent>
