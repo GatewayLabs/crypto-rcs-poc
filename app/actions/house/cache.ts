@@ -29,26 +29,21 @@ export async function getGameProcessingStatus(gameId: number): Promise<{
   isProcessed: boolean;
   state?: GameProcessingState;
 }> {
-  const entry = (await redis.get(getRedisKey(gameId))) as GameProcessingState;
-  if (!entry) {
+  try {
+    const result = await redis.get(getRedisKey(gameId));
+
+    if (!result) {
+      return { isProcessed: false };
+    }
+
+    return {
+      isProcessed: true,
+      state: result as GameProcessingState,
+    };
+  } catch (error) {
+    console.error(`Error getting processing status for game ${gameId}:`, error);
     return { isProcessed: false };
   }
-
-  // Check for stale processing - if it's been more than 1 minute since the last update
-  const isStale =
-    entry.status === "processing" && Date.now() - entry.timestamp > 60000;
-
-  if (isStale) {
-    console.log(
-      `Game ${gameId} processing state is stale (over 60s), allowing retry`
-    );
-    return { isProcessed: false };
-  }
-
-  return {
-    isProcessed: true,
-    state: entry,
-  };
 }
 
 // Update game processing step
