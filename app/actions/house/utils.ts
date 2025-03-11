@@ -112,7 +112,7 @@ export async function quickCheckGameFinished(gameId: number): Promise<{
 // Wait for transaction confirmation with timeout
 export async function waitForTransaction(
   txHash: string,
-  timeoutMs = 15000
+  timeoutMs = 60000
 ): Promise<boolean> {
   // Validate the txHash
   if (!txHash || !isHex(txHash)) {

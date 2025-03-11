@@ -380,15 +380,45 @@ export async function resolveGameAsync(gameId: number): Promise<{
         const confirmed = await waitForTransaction(computeDiffHash);
 
         if (!confirmed) {
-          return {
-            success: true,
-            txHash: computeDiffHash,
-            status: "computing_difference",
-          };
-        }
+          console.log(
+            `Transaction confirmation taking longer than expected for ${computeDiffHash}. Proceeding with caution.`
+          );
 
-        // Refresh game state
-        gameState = await getGameState(gameId);
+          // Check if the transaction may already be confirmed despite timeout
+          try {
+            const receipt = await publicClient.getTransactionReceipt({
+              hash: computeDiffHash as `0x${string}`,
+            });
+
+            if (receipt && receipt.status === "success") {
+              console.log(
+                `Transaction ${computeDiffHash} was actually confirmed. Continuing.`
+              );
+              // Let's refresh game state and continue
+              gameState = await getGameState(gameId);
+            } else {
+              // Still not confirmed, return current status for client to retry
+              return {
+                success: true,
+                txHash: computeDiffHash,
+                status: "computing_difference",
+              };
+            }
+          } catch (receiptError) {
+            console.log(
+              `Failed to get receipt for ${computeDiffHash}: ${receiptError}`
+            );
+            // Still not confirmed, return current status for client to retry
+            return {
+              success: true,
+              txHash: computeDiffHash,
+              status: "computing_difference",
+            };
+          }
+        } else {
+          // Refresh game state
+          gameState = await getGameState(gameId);
+        }
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : String(error);
@@ -431,6 +461,24 @@ export async function resolveGameAsync(gameId: number): Promise<{
         { retries: 3, logPrefix: `FinalizeGame:${gameId}` }
       );
 
+      // Wait for confirmation with a longer timeout
+      try {
+        const confirmed = await waitForTransaction(finalizeHash, 90000); // 90 seconds timeout
+
+        if (!confirmed) {
+          console.log(
+            `Finalize transaction ${finalizeHash} taking longer than expected. Game will complete on next poll.`
+          );
+        } else {
+          console.log(
+            `Finalize transaction ${finalizeHash} confirmed successfully.`
+          );
+        }
+      } catch (waitError) {
+        console.error(`Error waiting for finalize transaction: ${waitError}`);
+        // We'll continue even with wait error - game can be completed on next poll
+      }
+
       // Mark game as completed with the finalize transaction hash
       await markGameAsCompleted(gameId, diffMod3, finalizeHash);
 
@@ -438,7 +486,7 @@ export async function resolveGameAsync(gameId: number): Promise<{
         success: true,
         txHash: finalizeHash,
         pendingResult: diffMod3,
-        status: "finalizing",
+        status: "completed", // Mark as completed even if transaction is still pending, next poll will verify
       };
     } catch (error) {
       const errorMessage =
