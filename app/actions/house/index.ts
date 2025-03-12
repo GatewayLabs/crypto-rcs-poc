@@ -261,12 +261,15 @@ export async function finalizeGame(gameId: number): Promise<{
     console.log(
       `[finalizeGame] Sending finalizeGame transaction for game ${gameId} with diffMod3=${diffMod3}`,
     );
-    const finalizeHash = await walletClient.writeContract({
-      ...gameContractConfig,
-      functionName: 'finalizeGame',
-      args: [BigInt(gameId), BigInt(diffMod3)],
-      account: houseAccount,
-    });
+    const finalizeHash = await executeContractFunction(
+      gameContractConfig,
+      'finalizeGame',
+      [BigInt(gameId), BigInt(diffMod3)],
+      {
+        retries: 3,
+        logPrefix: `[finalizeGame] finalizeGame for game ${gameId}`,
+      },
+    );
 
     console.log(
       `[finalizeGame] Game ${gameId} finalized successfully with hash: ${finalizeHash}`,
