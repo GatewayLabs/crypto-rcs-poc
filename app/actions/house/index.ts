@@ -34,14 +34,18 @@ export async function playHouseMove(
   gameId: number,
   betAmount: bigint,
 ): Promise<PlayHouseMoveResult> {
+  console.log(
+    `[playHouseMove] Starting house move for game ${gameId} with bet ${betAmount}`,
+  );
+
   try {
     if (gameId === undefined || gameId === null || isNaN(gameId)) {
+      console.error(`[playHouseMove] Invalid game ID: ${gameId}`);
       throw new Error('Invalid game ID');
     }
 
-    console.log(`Starting house move for game ${gameId} with bet ${betAmount}`);
-
     // 1. Validate game state
+    console.log(`[playHouseMove] Fetching game data for game ${gameId}`);
     let gameData;
     try {
       gameData = await publicClient.readContract({
@@ -49,8 +53,14 @@ export async function playHouseMove(
         functionName: 'getGameInfo',
         args: [BigInt(gameId)],
       });
+      console.log(
+        `[playHouseMove] Successfully fetched game data for game ${gameId}`,
+      );
     } catch (error) {
-      console.error('Error fetching game data:', error);
+      console.error(
+        `[playHouseMove] Error fetching game data for game ${gameId}:`,
+        error,
+      );
       throw new Error(
         `Failed to fetch game data: Game ID ${gameId} may not exist`,
       );
@@ -59,33 +69,55 @@ export async function playHouseMove(
     const [playerA, playerB, winner, finished, bothCommitted, encChoiceA] =
       gameData;
 
+    console.log(`[playHouseMove] Game ${gameId} state:
+      playerA: ${playerA}
+      playerB: ${playerB}
+      finished: ${finished}
+      bothCommitted: ${bothCommitted}
+      hasEncChoiceA: ${!!encChoiceA && encChoiceA !== '0x'}`);
+
     // Validation checks
     if (playerB !== '0x0000000000000000000000000000000000000000') {
+      console.error(
+        `[playHouseMove] Game ${gameId} already joined by ${playerB}`,
+      );
       throw new Error(
         `Game ID ${gameId} has already been joined by another player (${playerB})`,
       );
     }
 
     if (playerA === '0x0000000000000000000000000000000000000000') {
+      console.error(`[playHouseMove] Game ${gameId} not properly created`);
       throw new Error(`Game ID ${gameId} has not been properly created`);
     }
 
     if (finished) {
+      console.error(`[playHouseMove] Game ${gameId} already finished`);
       throw new Error(`Game ID ${gameId} is already finished`);
     }
 
     if (bothCommitted) {
+      console.error(
+        `[playHouseMove] Game ${gameId} already has both moves committed`,
+      );
       throw new Error(`Game ID ${gameId} has already submitted moves`);
     }
 
     // 2. Generate and encrypt house move
+    console.log(`[playHouseMove] Generating house move for game ${gameId}`);
     const houseMove = generateHouseMove();
-    console.log(`Generated house move for game ${gameId}: ${houseMove}`);
+    console.log(
+      `[playHouseMove] Generated house move for game ${gameId}: ${houseMove}`,
+    );
 
     // 3. Encrypt move
+    console.log(`[playHouseMove] Encrypting house move for game ${gameId}`);
     let encryptedMove, paddedEncryptedMove;
     try {
       encryptedMove = await encryptMove(houseMove);
+      console.log(
+        `[playHouseMove] Successfully encrypted house move for game ${gameId}`,
+      );
 
       paddedEncryptedMove = encryptedMove;
       if (encryptedMove.length % 2 !== 0) {
@@ -95,20 +127,35 @@ export async function playHouseMove(
       while (paddedEncryptedMove.length < 258) {
         paddedEncryptedMove = paddedEncryptedMove.replace('0x', '0x0');
       }
+
+      console.log(
+        `[playHouseMove] Padded encrypted move to length ${paddedEncryptedMove.length}`,
+      );
     } catch (error) {
-      console.error('Error encrypting move:', error);
+      console.error(
+        `[playHouseMove] Error encrypting move for game ${gameId}:`,
+        error,
+      );
       throw new Error('Failed to encrypt house move');
     }
 
-    // Do the local computation of difference
+    // 4. Do the local computation of difference
+    console.log(
+      `[playHouseMove] Computing local difference for game ${gameId}`,
+    );
     const differenceCipher = computeDifferenceLocally(
       encChoiceA,
       paddedEncryptedMove,
     );
     const diffMod3 = decryptDifference(differenceCipher);
-    console.log(`Computed local difference for game ${gameId}: ${diffMod3}`);
+    console.log(
+      `[playHouseMove] Computed local difference for game ${gameId}: ${diffMod3}`,
+    );
 
-    // Execute the batcher contract transaction
+    // 5. Execute the batcher contract transaction
+    console.log(
+      `[playHouseMove] Executing batchHouseFlow transaction for game ${gameId}`,
+    );
     const batchHash = await executeContractFunction(
       houseBatcherContractConfig,
       'batchHouseFlow',
@@ -116,34 +163,52 @@ export async function playHouseMove(
       {
         value: betAmount,
         retries: 3,
+        logPrefix: `[playHouseMove] batchHouseFlow for game ${gameId}`,
       },
     );
 
-    console.log(`House batch for game ${gameId} executed: ${batchHash}`);
+    console.log(
+      `[playHouseMove] House batch for game ${gameId} executed with hash: ${batchHash}`,
+    );
 
+    // 6. Return success result
+    console.log(
+      `[playHouseMove] Successfully completed house move for game ${gameId}`,
+    );
     return {
       success: true,
       batchHash,
+      move: houseMove,
       diffMod3,
       status: 'NEEDS_FINALIZATION',
     };
   } catch (error) {
-    console.error('Error in house move:', error);
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    console.error(
+      `[playHouseMove] Error in house move for game ${gameId}:`,
+      errorMessage,
+    );
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      status: 'FAILED',
+      error: errorMessage,
     };
   }
 }
 
 export async function finalizeGame(gameId: number): Promise<{
   success: boolean;
+  status?: GameProcessingStatus;
   finalizeHash?: `0x${string}`;
   diffMod3?: number;
   error?: string;
 }> {
+  console.log(`[finalizeGame] Starting finalization for game ${gameId}`);
+
   try {
     // Get the current game state
+    console.log(`[finalizeGame] Fetching current game state for ${gameId}`);
     const gameState = await publicClient.readContract({
       ...gameContractConfig,
       functionName: 'getGameInfo',
@@ -151,49 +216,78 @@ export async function finalizeGame(gameId: number): Promise<{
     });
 
     // Destructure the result
-    const [, , , finished, , , , differenceCipher, revealedDiff] = gameState;
+    const [, , , finished, bothCommitted, , , differenceCipher, revealedDiff] =
+      gameState;
+
+    console.log(
+      `[finalizeGame] Game ${gameId} state: finished=${finished}, bothCommitted=${bothCommitted}, hasDifferenceCipher=${
+        !!differenceCipher && differenceCipher !== '0x'
+      }`,
+    );
 
     // Check if game already finished
     if (finished) {
+      console.log(
+        `[finalizeGame] Game ${gameId} is already finished with revealed difference: ${revealedDiff}`,
+      );
       return {
         success: true,
+        status: 'COMPLETED',
         diffMod3: revealedDiff !== undefined ? Number(revealedDiff) : undefined,
       };
     }
 
     // Check if difference is computed
     if (!differenceCipher || differenceCipher === '0x') {
-      // Don't throw an error, just return with a specific status
+      console.log(
+        `[finalizeGame] Game ${gameId} difference cipher not yet available on chain`,
+      );
       return {
         success: false,
+        status: 'NEEDS_FINALIZATION',
         error:
           'Difference not computed yet. Try again later when batch transaction is confirmed.',
       };
     }
 
     // Compute local difference
+    console.log(`[finalizeGame] Decrypting difference for game ${gameId}`);
     const diffMod3 = decryptDifference(differenceCipher);
+    console.log(
+      `[finalizeGame] Decrypted difference for game ${gameId}: ${diffMod3}`,
+    );
 
     // Finalize the game with our computed/decrypted result
-    const finalizeHash = await executeContractFunction(
-      gameContractConfig,
-      'finalizeGame',
-      [BigInt(gameId), BigInt(diffMod3)],
-      {
-        retries: 3,
-      },
+    console.log(
+      `[finalizeGame] Sending finalizeGame transaction for game ${gameId} with diffMod3=${diffMod3}`,
+    );
+    const finalizeHash = await walletClient.writeContract({
+      ...gameContractConfig,
+      functionName: 'finalizeGame',
+      args: [BigInt(gameId), BigInt(diffMod3)],
+      account: houseAccount,
+    });
+
+    console.log(
+      `[finalizeGame] Game ${gameId} finalized successfully with hash: ${finalizeHash}`,
     );
 
     return {
       success: true,
+      status: 'COMPLETED',
       finalizeHash,
       diffMod3,
     };
   } catch (error) {
-    console.error('Error finalizing game:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(
+      `[finalizeGame] Error finalizing game ${gameId}: ${errorMessage}`,
+    );
+
     return {
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      status: 'FAILED',
+      error: errorMessage,
     };
   }
 }

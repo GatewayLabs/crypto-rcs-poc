@@ -145,10 +145,15 @@ export function useGame() {
     (
       gameId: number,
       diffMod3: number | undefined,
-      playerMoveParam: Move | null | undefined, // Add explicit player move parameter
+      playerMoveParam: Move | null | undefined,
       txHash: string | undefined,
     ) => {
+      console.log(
+        `[processGameResult] Processing result for game ${gameId} with diffMod3=${diffMod3}, txHash=${txHash}`,
+      );
+
       if (diffMod3 === undefined) {
+        console.log('[processGameResult] diffMod3 is undefined, skipping');
         return false;
       }
 
@@ -156,15 +161,24 @@ export function useGame() {
       const currentPlayerMove = playerMoveParam || playerMove;
 
       if (!currentPlayerMove) {
+        console.log(
+          '[processGameResult] No player move available, cannot process result',
+        );
         return false;
       }
 
       // Calculate game outcome
       const gameOutcome = getResultFromDiff(diffMod3);
+      console.log(
+        `[processGameResult] Game outcome for game ${gameId} is ${gameOutcome}`,
+      );
       setResult(gameOutcome);
 
       // Infer house move from player move and result
       const inferredHouseMove = inferHouseMove(gameOutcome, currentPlayerMove);
+      console.log(
+        `[processGameResult] Inferred house move: ${inferredHouseMove}`,
+      );
       setHouseMove(inferredHouseMove);
 
       // Play appropriate sound effect
@@ -176,15 +190,27 @@ export function useGame() {
       setTransactionModal(false);
       setPhase(GamePhase.FINISHED);
       setIsResolutionPending(false);
-      setNeedsFinalization(false);
 
       // Update transaction hash if provided
       if (txHash) {
+        console.log(
+          `[processGameResult] Updating transaction hash to: ${txHash}`,
+        );
         setTransactionHash(txHash);
       }
 
+      // Debug state values
+      console.log(`[processGameResult] Debug state:
+      address: ${address ? address.substring(0, 8) + '...' : 'undefined'} 
+      playerMove: ${currentPlayerMove} 
+      betValue: ${betValue ? Number(formatEther(betValue)) : 'null'}`);
+
       // Update stats if we have all required data
       if (address && betValue !== null) {
+        console.log(
+          '[processGameResult] All required data available, updating stats',
+        );
+
         let betValueChange = 0n;
 
         if (gameOutcome === GameResult.WIN) {
@@ -193,6 +219,12 @@ export function useGame() {
           betValueChange = -betValue;
         }
 
+        console.log(`[processGameResult] Calling updateLocalLeaderboard with:
+        address: ${address.substring(0, 8)}...
+        gameOutcome: ${gameOutcome}
+        betValueChange: ${Number(formatEther(betValueChange))}
+        gameId: ${gameId}`);
+
         updateLocalLeaderboard(
           address,
           gameOutcome,
@@ -200,6 +232,15 @@ export function useGame() {
           gameId,
         );
 
+        console.log(`[processGameResult] Calling addLocalMatch with:
+        gameId: ${gameId}
+        playerMove: ${currentPlayerMove}
+        houseMove: ${inferredHouseMove}
+        result: ${gameOutcome}
+        txHash: ${txHash || transactionHash || 'none'}
+        betAmount: ${betValue ? Number(formatEther(betValue)) : 'null'}`);
+
+        // Make sure to prioritize the finalization hash (txHash) over any previous hash
         addLocalMatch({
           gameId: gameId,
           playerMove: currentPlayerMove,
@@ -208,8 +249,14 @@ export function useGame() {
           transactionHash: txHash || transactionHash || '',
           betAmount: betValue,
         });
+
+        console.log('[processGameResult] Calling updateStats()');
+        updateStats();
         return true;
       } else {
+        console.log(`[processGameResult] Missing required data, stats not updated. 
+        address: ${!!address} 
+        betValue: ${betValue !== null}`);
         return false;
       }
     },
@@ -235,6 +282,10 @@ export function useGame() {
   // Finalization process
   const startFinalizationProcess = useCallback(
     (gameId: number, move: Move, diffMod3: number) => {
+      console.log(
+        `[startFinalizationProcess] Starting finalization process for game ${gameId}`,
+      );
+
       // Create a recursive function to retry with exponential backoff
       const attemptFinalization = async (
         attempt: number,
@@ -242,7 +293,7 @@ export function useGame() {
       ) => {
         if (attempt > maxAttempts) {
           console.log(
-            `Reached max attempts (${maxAttempts}) for game ${gameId} finalization`,
+            `[attemptFinalization] Reached max attempts (${maxAttempts}) for game ${gameId} finalization`,
           );
           // Only show an error after all retries fail
           setError(
@@ -254,27 +305,30 @@ export function useGame() {
         }
 
         console.log(
-          `Finalization attempt ${attempt}/${maxAttempts} for game ${gameId}`,
+          `[attemptFinalization] Attempt ${attempt}/${maxAttempts} for game ${gameId}`,
         );
 
         try {
           const result = await finalizeGame(gameId);
+          console.log(
+            `[attemptFinalization] Got result from finalizeGame:`,
+            result,
+          );
 
-          if (result.success) {
-            console.log(`Game ${gameId} finalized successfully!`);
+          if (result.status === 'COMPLETED') {
+            console.log(
+              `[attemptFinalization] Game ${gameId} finalized successfully!`,
+            );
             // Use the processed diffMod3 or the one from the result
             const finalDiffMod3 =
               result.diffMod3 !== undefined ? result.diffMod3 : diffMod3;
 
-            // Process the result
+            // Process the result - pass the finalize hash here
             processGameResult(gameId, finalDiffMod3, move, result.finalizeHash);
-          } else if (
-            result.error &&
-            result.error.includes('Difference not computed yet')
-          ) {
-            // This is an expected error - just need to wait longer
+          } else if (result.status === 'NEEDS_FINALIZATION') {
+            // This is an expected state - just need to wait longer
             console.log(
-              `Difference not computed yet for game ${gameId}, will retry...`,
+              `[attemptFinalization] Difference not computed yet for game ${gameId}, will retry...`,
             );
 
             // Compute backoff delay (exponential with jitter)
@@ -282,19 +336,31 @@ export function useGame() {
             const jitter = Math.random() * 1000;
             const delay = baseDelay + jitter;
 
+            console.log(
+              `[attemptFinalization] Scheduling next attempt in ${Math.round(
+                delay,
+              )}ms`,
+            );
+
             // Schedule next attempt
             setTimeout(
               () => attemptFinalization(attempt + 1, maxAttempts),
               delay,
             );
           } else {
-            // Only show an error for non-timing issues
+            // Only show an error for actual failures
+            console.error(
+              `[attemptFinalization] Finalization failed with status ${result.status}: ${result.error}`,
+            );
             setError(result.error || 'Game finalization failed');
             setPhase(GamePhase.ERROR);
             setIsResolutionPending(false);
           }
         } catch (error) {
-          console.error(`Error in finalization attempt ${attempt}:`, error);
+          console.error(
+            `[attemptFinalization] Error in attempt ${attempt}:`,
+            error,
+          );
 
           // Retry on network errors
           if (
@@ -303,6 +369,11 @@ export function useGame() {
               error.message.includes('timeout'))
           ) {
             const delay = 2000 * Math.pow(1.5, attempt) + Math.random() * 1000;
+            console.log(
+              `[attemptFinalization] Network error, retrying in ${Math.round(
+                delay,
+              )}ms`,
+            );
             setTimeout(
               () => attemptFinalization(attempt + 1, maxAttempts),
               delay,
@@ -321,6 +392,9 @@ export function useGame() {
       };
 
       // Start the first attempt with a slight delay
+      console.log(
+        `[startFinalizationProcess] Scheduling first attempt in 3000ms`,
+      );
       setTimeout(() => attemptFinalization(1, 5), 3000);
     },
     [
@@ -405,22 +479,40 @@ export function useGame() {
           throw new Error(houseResult.error || 'Failed to play house move');
         }
 
-        // Store transaction hash
+        // Store batch hash immediately
         if (houseResult.batchHash) {
+          console.log(
+            `[createGameMutation] Setting transaction hash to batch hash: ${houseResult.batchHash}`,
+          );
           setTransactionHash(houseResult.batchHash);
         }
 
-        // We have the optimistic result but it needs finalization
+        // Check the status field now
         if (
           houseResult.status === 'NEEDS_FINALIZATION' &&
           houseResult.diffMod3 !== undefined
         ) {
-          // Show the game as "revealing" instead of showing an error
+          console.log(
+            `[createGameMutation] Game ${gameId} needs finalization, moving to revealing phase`,
+          );
           setPhase(GamePhase.REVEALING);
           setIsResolutionPending(true);
 
-          // Start a graceful retry process for finalization
+          // Pass the move and diffMod3 to the finalization process
           startFinalizationProcess(gameId, move, houseResult.diffMod3);
+        } else if (
+          houseResult.status === 'COMPLETED' &&
+          houseResult.diffMod3 !== undefined
+        ) {
+          console.log(
+            `[createGameMutation] Game ${gameId} completed immediately, processing result`,
+          );
+
+          // Use finalizeHash as priority for the transaction hash
+          const txHash = houseResult.finalizeHash || houseResult.batchHash;
+
+          // Process the result immediately
+          processGameResult(gameId, houseResult.diffMod3, move, txHash);
         }
 
         return {
