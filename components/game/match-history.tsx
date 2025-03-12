@@ -95,126 +95,124 @@ export default function MatchHistory() {
       {playerStats && <MatchesSummary playerStats={playerStats} />}
 
       <div className="w-full mt-4 max-md:max-w-full flex flex-col flex-grow">
-        <div className="flex-grow">
-          <div className="border-zinc-700 border w-full overflow-x-auto rounded-lg border-solid max-md:max-w-full">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="border-zinc-700 border-b">
-                  <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3">
-                    Timestamp
-                  </th>
-                  <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3">
-                    Player move
-                  </th>
-                  <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3">
-                    House move
-                  </th>
-                  <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3">
-                    Result
-                  </th>
-                  <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3">
-                    Value
-                  </th>
-                  <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3">
-                    Status
-                  </th>
-                  <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3">
-                    Tx
-                  </th>
+        <div className="border-zinc-700 border w-full overflow-x-auto rounded-lg border-solid max-md:max-w-full mb-6">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="border-zinc-700 border-b">
+                <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3">
+                  Timestamp
+                </th>
+                <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3">
+                  Player move
+                </th>
+                <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3">
+                  House move
+                </th>
+                <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3">
+                  Result
+                </th>
+                <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3">
+                  Value
+                </th>
+                <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3">
+                  Status
+                </th>
+                <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3">
+                  Tx
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {matches.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="text-center py-4 text-zinc-400">
+                    No games played yet
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {matches.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="text-center py-4 text-zinc-400">
-                      No games played yet
+              ) : (
+                currentMatches.map((game) => (
+                  <tr
+                    key={game.id}
+                    className={
+                      game.syncStatus === "pending" ? "bg-zinc-900/30" : ""
+                    }
+                  >
+                    <td className="px-4 min-h-14">
+                      <div className="text-neutral-50 text-sm font-normal leading-none my-auto py-4">
+                        {formatRelativeTime(game.timestamp)}
+                      </div>
+                    </td>
+                    <td className="px-4 min-h-14">
+                      <img
+                        loading="lazy"
+                        src={getMoveImage(game.playerMove)}
+                        className="aspect-[1] object-contain w-6 my-auto"
+                        alt={`Player Move - ${game.playerMove}`}
+                      />
+                    </td>
+                    <td className="px-4 min-h-14">
+                      <img
+                        loading="lazy"
+                        src={getMoveImage(game.houseMove)}
+                        className="aspect-[1] object-contain w-6 my-auto"
+                        alt={`House Move - ${game.houseMove}`}
+                      />
+                    </td>
+                    <td className="px-4 min-h-14 w-[108px]">
+                      <div
+                        className={`text-sm font-normal leading-none my-auto ${
+                          game.result === "WIN"
+                            ? "text-[rgba(174,243,66,1)]"
+                            : game.result === "LOSE"
+                            ? "text-red-500"
+                            : "text-yellow-500"
+                        }`}
+                      >
+                        {game.result.slice(0, 1).toUpperCase() +
+                          game.result.slice(1).toLowerCase()}
+                      </div>
+                    </td>
+                    <td className="px-4 min-h-14 w-[80px]">
+                      <div className="text-sm font-normal leading-none my-auto">
+                        {formatBetValue(game.betValue)}
+                      </div>
+                    </td>
+                    <td className="px-4 min-h-14">
+                      {game.syncStatus === "pending" ? (
+                        <div className="flex items-center gap-2">
+                          <span className="inline-block w-2 h-2 bg-yellow-500 rounded-full"></span>
+                          <span className="text-yellow-500 text-sm">
+                            Pending
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="inline-block w-2 h-2 bg-[rgba(174,243,66,1)] rounded-full"></span>
+                          <span className="text-[rgba(174,243,66,1)] text-sm">
+                            Confirmed
+                          </span>
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 min-h-14">
+                      <div className="flex items-center gap-2">
+                        {game.transactionHash && (
+                          <a
+                            href={getExplorerUrl(game.transactionHash)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-white transition-colors flex items-center gap-2"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        )}
+                      </div>
                     </td>
                   </tr>
-                ) : (
-                  currentMatches.map((game) => (
-                    <tr
-                      key={game.id}
-                      className={
-                        game.syncStatus === "pending" ? "bg-zinc-900/30" : ""
-                      }
-                    >
-                      <td className="px-4 min-h-14">
-                        <div className="text-neutral-50 text-sm font-normal leading-none my-auto py-4">
-                          {formatRelativeTime(game.timestamp)}
-                        </div>
-                      </td>
-                      <td className="px-4 min-h-14">
-                        <img
-                          loading="lazy"
-                          src={getMoveImage(game.playerMove)}
-                          className="aspect-[1] object-contain w-6 my-auto"
-                          alt={`Player Move - ${game.playerMove}`}
-                        />
-                      </td>
-                      <td className="px-4 min-h-14">
-                        <img
-                          loading="lazy"
-                          src={getMoveImage(game.houseMove)}
-                          className="aspect-[1] object-contain w-6 my-auto"
-                          alt={`House Move - ${game.houseMove}`}
-                        />
-                      </td>
-                      <td className="px-4 min-h-14 w-[108px]">
-                        <div
-                          className={`text-sm font-normal leading-none my-auto ${
-                            game.result === "WIN"
-                              ? "text-[rgba(174,243,66,1)]"
-                              : game.result === "LOSE"
-                              ? "text-red-500"
-                              : "text-yellow-500"
-                          }`}
-                        >
-                          {game.result.slice(0, 1).toUpperCase() +
-                            game.result.slice(1).toLowerCase()}
-                        </div>
-                      </td>
-                      <td className="px-4 min-h-14 w-[80px]">
-                        <div className="text-sm font-normal leading-none my-auto">
-                          {formatBetValue(game.betValue)}
-                        </div>
-                      </td>
-                      <td className="px-4 min-h-14">
-                        {game.syncStatus === "pending" ? (
-                          <div className="flex items-center gap-2">
-                            <span className="inline-block w-2 h-2 bg-yellow-500 rounded-full"></span>
-                            <span className="text-yellow-500 text-sm">
-                              Pending
-                            </span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <span className="inline-block w-2 h-2 bg-[rgba(174,243,66,1)] rounded-full"></span>
-                            <span className="text-[rgba(174,243,66,1)] text-sm">
-                              Confirmed
-                            </span>
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 min-h-14">
-                        <div className="flex items-center gap-2">
-                          {game.transactionHash && (
-                            <a
-                              href={getExplorerUrl(game.transactionHash)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-white transition-colors flex items-center gap-2"
-                            >
-                              <ExternalLink className="w-4 h-4" />
-                            </a>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
 
         <SyncStatus isSynced={!hasPendingMatch} />
