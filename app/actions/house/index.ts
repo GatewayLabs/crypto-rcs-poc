@@ -92,8 +92,7 @@ export async function playHouseMove(
       throw new Error('Failed to encrypt house move');
     }
 
-    // 4. Do the local computation of difference BEFORE sending any transactions
-    // This is the optimization - compute everything locally first
+    // Do the local computation of difference
     const differenceCipher = computeDifferenceLocally(
       encChoiceA,
       paddedEncryptedMove,
@@ -101,35 +100,97 @@ export async function playHouseMove(
     const diffMod3 = decryptDifference(differenceCipher);
     console.log(`Computed local difference for game ${gameId}: ${diffMod3}`);
 
-    // 5. Execute the batcher contract transaction
-    const batchHash = await executeContractFunction(
-      houseBatcherContractConfig,
-      'batchHouseFlow',
-      [BigInt(gameId), paddedEncryptedMove as `0x${string}`],
-      {
-        value: betAmount,
-        logPrefix: `House batch for game ${gameId}`,
-        retries: 3,
-      },
-    );
+    // Execute the batcher contract transaction
+    const batchHash = await walletClient.writeContract({
+      ...houseBatcherContractConfig,
+      functionName: 'batchHouseFlow',
+      args: [BigInt(gameId), paddedEncryptedMove as `0x${string}`],
+      value: betAmount,
+      account: houseAccount,
+    });
 
     console.log(`House batch for game ${gameId} executed: ${batchHash}`);
 
-    // 6. Immediately call finalizeGame with our pre-computed result
-    // No need to wait for batch confirmation or read from chain
-    const finalizeHash = await executeContractFunction(
-      gameContractConfig,
-      'finalizeGame',
-      [BigInt(gameId), BigInt(diffMod3)],
-      {
-        logPrefix: `House finalize for game ${gameId}`,
-        retries: 3,
-      },
-    );
+    // *** FIX: Wait for the batch transaction to be confirmed ***
+    try {
+      console.log(
+        `Waiting for batch transaction ${batchHash} to be confirmed...`,
+      );
+      await publicClient.waitForTransactionReceipt({
+        hash: batchHash,
+        timeout: 30000, // 30 seconds timeout
+      });
+      console.log(`Batch transaction ${batchHash} confirmed`);
+    } catch (waitError) {
+      console.warn(`Timeout waiting for batch confirmation: ${waitError}`);
+      // Continue anyway but log warning - we'll try optimistically
+    }
 
-    console.log(`Game ${gameId} finalized with hash: ${finalizeHash}`);
+    // *** FIX: Verify game state before finalizing ***
+    try {
+      const gameState = await publicClient.readContract({
+        ...gameContractConfig,
+        functionName: 'getGameInfo',
+        args: [BigInt(gameId)],
+      });
 
-    // 7. Return all the data immediately
+      const [, , , finished, bothCommitted, , , differenceCipherOnChain] =
+        gameState;
+
+      if (finished) {
+        console.log(`Game ${gameId} is already finished, no need to finalize`);
+        return {
+          success: true,
+          batchHash,
+          diffMod3,
+        };
+      }
+
+      if (
+        !bothCommitted ||
+        !differenceCipherOnChain ||
+        differenceCipherOnChain === '0x'
+      ) {
+        console.log(
+          `Game ${gameId} is not ready for finalization yet, returning with batch hash only`,
+        );
+        return {
+          success: true,
+          batchHash,
+          diffMod3,
+          finalizeHash: undefined,
+        };
+      }
+    } catch (stateError) {
+      console.warn(
+        `Error checking game state before finalization: ${stateError}`,
+      );
+      // Continue optimistically, but the finalize call might fail
+    }
+
+    // Now try to finalize the game
+    let finalizeHash;
+    try {
+      console.log(`Finalizing game ${gameId} with diffMod3=${diffMod3}`);
+      finalizeHash = await walletClient.writeContract({
+        ...gameContractConfig,
+        functionName: 'finalizeGame',
+        args: [BigInt(gameId), BigInt(diffMod3)],
+        account: houseAccount,
+      });
+
+      console.log(`Game ${gameId} finalized with hash: ${finalizeHash}`);
+    } catch (finalizeError) {
+      console.error(`Error finalizing game: ${finalizeError}`);
+      return {
+        success: true,
+        batchHash,
+        diffMod3,
+        finalizeHash: undefined,
+        error: `Finalization will be retried later: ${finalizeError}`,
+      };
+    }
+
     return {
       success: true,
       batchHash,
