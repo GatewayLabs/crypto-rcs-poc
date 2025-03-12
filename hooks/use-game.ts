@@ -149,7 +149,6 @@ export function useGame() {
       txHash: string | undefined,
     ) => {
       if (diffMod3 === undefined) {
-        console.log('processGameResult: diffMod3 is undefined, skipping');
         return false;
       }
 
@@ -157,24 +156,15 @@ export function useGame() {
       const currentPlayerMove = playerMoveParam || playerMove;
 
       if (!currentPlayerMove) {
-        console.log(
-          'processGameResult: No player move available, cannot process result',
-        );
         return false;
       }
 
       // Calculate game outcome
       const gameOutcome = getResultFromDiff(diffMod3);
-      console.log(
-        `processGameResult: Game outcome for game ${gameId} is ${gameOutcome}`,
-      );
       setResult(gameOutcome);
 
       // Infer house move from player move and result
       const inferredHouseMove = inferHouseMove(gameOutcome, currentPlayerMove);
-      console.log(
-        `processGameResult: Inferred house move: ${inferredHouseMove}`,
-      );
       setHouseMove(inferredHouseMove);
 
       // Play appropriate sound effect
@@ -193,18 +183,8 @@ export function useGame() {
         setTransactionHash(txHash);
       }
 
-      // Debug state values
-      console.log(`processGameResult: Debug state:
-      address: ${address ? address.substring(0, 8) + '...' : 'undefined'} 
-      playerMove: ${currentPlayerMove} 
-      betValue: ${betValue ? Number(formatEther(betValue)) : 'null'}`);
-
       // Update stats if we have all required data
       if (address && betValue !== null) {
-        console.log(
-          'processGameResult: All required data available, updating stats',
-        );
-
         let betValueChange = 0n;
 
         if (gameOutcome === GameResult.WIN) {
@@ -213,26 +193,12 @@ export function useGame() {
           betValueChange = -betValue;
         }
 
-        console.log(`processGameResult: Calling updateLocalLeaderboard with:
-        address: ${address.substring(0, 8)}...
-        gameOutcome: ${gameOutcome}
-        betValueChange: ${Number(formatEther(betValueChange))}
-        gameId: ${gameId}`);
-
         updateLocalLeaderboard(
           address,
           gameOutcome,
           Number(formatEther(betValueChange)),
           gameId,
         );
-
-        console.log(`processGameResult: Calling addLocalMatch with:
-        gameId: ${gameId}
-        playerMove: ${currentPlayerMove}
-        houseMove: ${inferredHouseMove}
-        result: ${gameOutcome}
-        txHash: ${txHash || transactionHash || 'none'}
-        betAmount: ${betValue ? Number(formatEther(betValue)) : 'null'}`);
 
         addLocalMatch({
           gameId: gameId,
@@ -242,14 +208,8 @@ export function useGame() {
           transactionHash: txHash || transactionHash || '',
           betAmount: betValue,
         });
-
-        console.log('processGameResult: Calling updateStats()');
-        updateStats();
         return true;
       } else {
-        console.log(`processGameResult: Missing required data, stats not updated. 
-        address: ${!!address} 
-        betValue: ${betValue !== null}`);
         return false;
       }
     },
