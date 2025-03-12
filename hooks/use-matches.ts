@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useWallet } from "@/contexts/wallet-context";
 import { Move } from "@/lib/crypto";
 import {
@@ -7,9 +8,11 @@ import {
   SubgraphPlayerStats,
 } from "@/types/game";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { formatEther } from "viem";
 
 const SUBGRAPH_URL = process.env.NEXT_PUBLIC_SUBGRAPH_URL as string;
+const LOCAL_MATCHES_KEY = "local-matches";
 
 const PLAYER_GAMES_QUERY = `
   query GetPlayerGames($playerId: ID!, $first: Int, $skip: Int) {
@@ -73,19 +76,72 @@ export function useMatches() {
   const { walletAddress: address } = useWallet();
   const queryClient = useQueryClient();
   const PAGE_SIZE = 50;
+  const [isSyncing, setIsSyncing] = useState(false);
+  // const [initialLocalDataLoaded, setInitialLocalDataLoaded] = useState(false);
+
+  // Helper functions for localStorage
+  const saveLocalMatches = (address: string, matches: GameHistory[]) => {
+    try {
+      localStorage.setItem(
+        `${LOCAL_MATCHES_KEY}-${address}`,
+        JSON.stringify(matches)
+      );
+      logDebug(`Saved ${matches.length} local matches to localStorage`);
+    } catch (error) {
+      console.error("Error saving matches to localStorage:", error);
+    }
+  };
+
+  const getLocalMatches = (address: string): GameHistory[] => {
+    try {
+      const data = localStorage.getItem(`${LOCAL_MATCHES_KEY}-${address}`);
+      const matches = data ? JSON.parse(data) : [];
+      logDebug(`Retrieved ${matches.length} local matches from localStorage`);
+      return matches;
+    } catch (error) {
+      console.error("Error loading matches from localStorage:", error);
+      return [];
+    }
+  };
+
+  // Logging utility
+  function logDebug(message: string, data?: any) {
+    if (process.env.NODE_ENV !== "production") {
+      console.log(`[Matches] ${message}`, data ? data : "");
+    }
+  }
 
   const {
-    data: matchesData = { matches: [], totalEarnings: 0, playerStats: null },
+    data: matchesData = {
+      matches: [],
+      totalEarnings: 0,
+      playerStats: null,
+      lastSyncTime: 0,
+    },
     isLoading,
     refetch,
+    isFetching,
   } = useQuery({
     queryKey: ["matches", address],
     queryFn: async () => {
-      if (!address) return { matches: [], totalEarnings: 0, playerStats: null };
+      if (!address)
+        return {
+          matches: [],
+          totalEarnings: 0,
+          playerStats: null,
+          lastSyncTime: 0,
+        };
+
+      setIsSyncing(true);
+      logDebug("Starting sync with server");
 
       try {
+        const localStoredMatches = getLocalMatches(address);
         const normalizedAddress = address.toLowerCase();
 
+        logDebug(
+          `Fetching data from subgraph for address ${normalizedAddress}`
+        );
         const response = await fetch(SUBGRAPH_URL, {
           method: "POST",
           headers: {
@@ -112,9 +168,10 @@ export function useMatches() {
           throw new Error("GraphQL query failed");
         }
 
-        const userMatches: GameHistory[] = [];
+        const serverMatches: GameHistory[] = [];
         let totalEarnings = 0;
 
+        logDebug(`Processing ${data.data.playerA.length} playerA games`);
         for (const game of data.data.playerA) {
           if (!game.resolvedAt || game.revealedDifference === null) {
             continue;
@@ -125,8 +182,6 @@ export function useMatches() {
 
           const diffMod3Value = ((game.revealedDifference % 3) + 3) % 3;
 
-          // TODO: This is a temporary function to infer game results from diffMod3
-          // We should find a way to use the actual moves from the game instead
           const { playerMove, houseMove, result, betValue } = inferGameResult(
             diffMod3Value,
             true,
@@ -136,7 +191,7 @@ export function useMatches() {
 
           totalEarnings += betValue;
 
-          userMatches.push({
+          serverMatches.push({
             id: game.id,
             gameId: Number(game.gameId),
             timestamp,
@@ -149,6 +204,7 @@ export function useMatches() {
           });
         }
 
+        logDebug(`Processing ${data.data.playerB.length} playerB games`);
         for (const game of data.data.playerB) {
           if (!game.resolvedAt || game.revealedDifference === null) {
             continue;
@@ -168,7 +224,7 @@ export function useMatches() {
 
           totalEarnings += betValue;
 
-          userMatches.push({
+          serverMatches.push({
             id: game.id,
             gameId: Number(game.gameId),
             timestamp,
@@ -181,51 +237,77 @@ export function useMatches() {
           });
         }
 
-        userMatches.sort((a, b) => b.timestamp - a.timestamp);
+        serverMatches.sort((a, b) => b.timestamp - a.timestamp);
 
-        if (data.data.playerStats?.netProfitLoss) {
-          totalEarnings = Number(
-            formatEther(BigInt(data.data.playerStats.netProfitLoss))
-          );
-        }
+        const markedServerMatches = serverMatches.map((match) => ({
+          ...match,
+          syncStatus: "synced" as const,
+        }));
 
-        const previousData = queryClient.getQueryData(["matches", address]) as
-          | {
-              matches: GameHistory[];
-              totalEarnings: number;
-              playerStats: SubgraphPlayerStats | null;
-            }
-          | undefined;
+        logDebug(`Total server matches found: ${markedServerMatches.length}`);
 
-        if (previousData?.matches) {
-          const localMatches = previousData.matches.filter((match) =>
-            match.id.startsWith("local-")
-          );
+        // Filter out local matches that already exist on server
+        const pendingLocalMatches = localStoredMatches
+          .filter(
+            (localMatch) =>
+              !markedServerMatches.some(
+                (serverMatch) => serverMatch.gameId === localMatch.gameId
+              )
+          )
+          .map((match) => ({
+            ...match,
+            syncStatus: "pending" as const,
+          }));
 
-          for (const localMatch of localMatches) {
-            const matchExistsInServer = userMatches.some(
-              (serverMatch) => serverMatch.gameId === localMatch.gameId
-            );
+        logDebug(`Pending local matches: ${pendingLocalMatches.length}`);
 
-            if (!matchExistsInServer) {
-              console.log(
-                `Preserving local match for gameId ${localMatch.gameId} that doesn't exist on server yet`
-              );
-              userMatches.push(localMatch);
-            }
-          }
+        const allMatches = [...markedServerMatches, ...pendingLocalMatches];
+        allMatches.sort((a, b) => b.timestamp - a.timestamp);
 
-          userMatches.sort((a, b) => b.timestamp - a.timestamp);
-        }
+        // Only save pending matches to localStorage
+        saveLocalMatches(
+          address,
+          allMatches.filter((match) => match.syncStatus === "pending")
+        );
+
+        const syncTime = Date.now();
+        logDebug(
+          `Sync completed at ${new Date(syncTime).toLocaleTimeString()}`
+        );
 
         return {
-          matches: userMatches,
-          totalEarnings,
+          matches: allMatches,
+          totalEarnings: data.data.playerStats?.netProfitLoss
+            ? Number(formatEther(BigInt(data.data.playerStats.netProfitLoss)))
+            : pendingLocalMatches.reduce(
+                (sum, match) => sum + match.betValue,
+                0
+              ) + totalEarnings,
           playerStats: data.data.playerStats,
+          lastSyncTime: syncTime,
         };
       } catch (error) {
         console.error("Error fetching matches:", error);
-        return { matches: [], totalEarnings: 0, playerStats: null };
+        logDebug("Recovering with local matches due to server error");
+
+        const localMatches = getLocalMatches(address).map((match) => ({
+          ...match,
+          syncStatus: "pending" as const,
+        }));
+
+        logDebug(`Found ${localMatches.length} local matches to recover with`);
+
+        return {
+          matches: localMatches,
+          totalEarnings: localMatches.reduce(
+            (sum, match) => sum + match.betValue,
+            0
+          ),
+          playerStats: null,
+          lastSyncTime: 0,
+        };
+      } finally {
+        setIsSyncing(false);
       }
     },
     enabled: !!address,
@@ -234,8 +316,6 @@ export function useMatches() {
   });
 
   // Helper function to infer game results from diffMod3
-  // TODO: This is a temporary function to infer game results from diffMod3
-  // We should find a way to use the actual moves from the game instead
   function inferGameResult(
     diffMod3Value: number,
     isPlayerA: boolean,
@@ -310,6 +390,7 @@ export function useMatches() {
 
   const addMatch = async () => {
     try {
+      logDebug("Manually refreshing match history");
       await refetch();
     } catch (error) {
       console.error("Error refetching match history:", error);
@@ -329,7 +410,7 @@ export function useMatches() {
       return;
     }
 
-    console.log("Adding local match:", gameData);
+    logDebug("Adding local match:", gameData);
 
     const betValue =
       gameData.result === GameResult.WIN
@@ -350,6 +431,7 @@ export function useMatches() {
       playerAddress: address,
       transactionHash: gameData.transactionHash,
       betValue: betValue,
+      syncStatus: "pending",
     };
 
     queryClient.setQueryData(
@@ -360,15 +442,18 @@ export function useMatches() {
               matches: GameHistory[];
               totalEarnings: number;
               playerStats: SubgraphPlayerStats | null;
+              lastSyncTime: number;
             }
           | undefined
       ) => {
         if (!oldData) {
-          console.log("No existing matches data, creating new");
+          saveLocalMatches(address, [newMatch]);
+          logDebug("No existing matches data, creating new");
           return {
             matches: [newMatch],
             totalEarnings: betValue,
             playerStats: null,
+            lastSyncTime: 0,
           };
         }
 
@@ -376,39 +461,37 @@ export function useMatches() {
           (match) => match.gameId === gameData.gameId
         );
 
+        let updatedMatches;
         if (existingMatchIndex === -1) {
-          console.log("No existing match found, adding new one");
-          return {
-            matches: [newMatch, ...oldData.matches],
-            totalEarnings: oldData.totalEarnings + betValue,
-            playerStats: updatePlayerStats(
-              oldData.playerStats,
-              gameData.result,
-              betValue
-            ),
-          };
-        }
-
-        const isLocalOrIncomplete =
-          oldData.matches[existingMatchIndex].id.startsWith("local-") ||
-          !oldData.matches[existingMatchIndex].transactionHash;
-
-        if (isLocalOrIncomplete) {
-          console.log(
-            "Replacing existing local/incomplete match with updated data"
-          );
-          const updatedMatches = [...oldData.matches];
+          logDebug("Adding new match to existing data");
+          updatedMatches = [newMatch, ...oldData.matches];
+        } else {
+          logDebug("Updating existing match");
+          updatedMatches = [...oldData.matches];
           updatedMatches[existingMatchIndex] = newMatch;
-
-          return {
-            matches: updatedMatches,
-            totalEarnings: oldData.totalEarnings,
-            playerStats: oldData.playerStats,
-          };
         }
 
-        console.log("Match from server already exists, not replacing");
-        return oldData;
+        const pendingMatches = updatedMatches.filter(
+          (match: GameHistory) => match.syncStatus === "pending"
+        );
+        saveLocalMatches(address, pendingMatches);
+
+        return {
+          matches: updatedMatches,
+          totalEarnings:
+            existingMatchIndex === -1
+              ? calculateTotalEarnings(updatedMatches, oldData.playerStats)
+              : oldData.totalEarnings,
+          playerStats:
+            existingMatchIndex === -1
+              ? updatePlayerStats(
+                  oldData.playerStats,
+                  gameData.result,
+                  betValue
+                )
+              : oldData.playerStats,
+          lastSyncTime: oldData.lastSyncTime,
+        };
       }
     );
 
@@ -417,6 +500,33 @@ export function useMatches() {
       exact: true,
       refetchType: "none",
     });
+  };
+
+  function calculateTotalEarnings(
+    matches: GameHistory[],
+    playerStats: SubgraphPlayerStats | null
+  ) {
+    if (!playerStats || !playerStats.netProfitLoss) {
+      return matches.reduce((sum, match) => sum + match.betValue, 0);
+    }
+
+    const pendingMatches = matches.filter(
+      (match) => match.syncStatus === "pending"
+    );
+    const pendingEarnings = pendingMatches.reduce(
+      (sum, match) => sum + match.betValue,
+      0
+    );
+
+    return (
+      Number(formatEther(BigInt(playerStats.netProfitLoss))) + pendingEarnings
+    );
+  }
+
+  const syncMatches = async () => {
+    if (isSyncing) return;
+    logDebug("Manual sync triggered");
+    await refetch();
   };
 
   function updatePlayerStats(
@@ -452,10 +562,18 @@ export function useMatches() {
 
   const clearHistoryMutation = async () => {
     if (address) {
+      try {
+        logDebug("Clearing local matches history");
+        localStorage.removeItem(`${LOCAL_MATCHES_KEY}-${address}`);
+      } catch (error) {
+        console.error("Error clearing localStorage:", error);
+      }
+
       queryClient.setQueryData(["matches", address], {
         matches: [],
         totalEarnings: 0,
         playerStats: null,
+        lastSyncTime: 0,
       });
     }
   };
@@ -463,10 +581,13 @@ export function useMatches() {
   return {
     matches: matchesData.matches,
     isLoading,
+    isSyncing: isFetching,
     addMatch,
     addLocalMatch,
+    syncMatches,
     clearHistory: clearHistoryMutation,
     totalEarnings: matchesData.totalEarnings,
     playerStats: matchesData.playerStats,
+    lastSyncTime: matchesData.lastSyncTime,
   };
 }

@@ -11,7 +11,7 @@ export default function MatchesSummary({
   playerStats: SubgraphPlayerStats;
 }) {
   const { playerRank } = useGameUIStore();
-  const { totalEarnings } = useMatches();
+  const { totalEarnings, isSyncing } = useMatches();
 
   const formattedEarnings =
     totalEarnings !== undefined ? (
@@ -84,11 +84,21 @@ export default function MatchesSummary({
             <span className="text-zinc-400 text-sm font-normal mr-1">PnL</span>
             <Tooltip
               text="Your PnL balance may become out of date due to the
-                blockchain's response time. Don't worry, the data will
-                be updated in 1 or 2 minutes."
+                blockchain's response time. Check the status indicator for matches waiting for blockchain confirmation."
             />
           </div>
-          <span className="text-2xl font-medium">{formattedEarnings}</span>
+          <span
+            className={`text-2xl font-medium ${isSyncing ? "opacity-70" : ""}`}
+          >
+            {isSyncing ? (
+              <div className="flex items-center">
+                {formattedEarnings}
+                <span className="ml-2 inline-block w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+              </div>
+            ) : (
+              formattedEarnings
+            )}
+          </span>
         </div>
       </div>
     </div>

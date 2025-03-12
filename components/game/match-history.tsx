@@ -1,9 +1,11 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useMatches } from "@/hooks/use-matches";
 import { ExternalLink } from "lucide-react";
+import { useEffect, useState } from "react";
 import MatchesSummary from "./matches-summary";
-import { useState, useEffect } from "react";
+import SyncStatus from "./sync-status";
 
 export default function MatchHistory() {
   const { matches, playerStats } = useMatches();
@@ -26,6 +28,9 @@ export default function MatchHistory() {
   const indexOfLastMatch = currentPage * rowsPerPage;
   const indexOfFirstMatch = indexOfLastMatch - rowsPerPage;
   const currentMatches = matches.slice(indexOfFirstMatch, indexOfLastMatch);
+  const hasPendingMatch = currentMatches.some(
+    (match) => match.syncStatus === "pending"
+  );
 
   // Change page handlers
   const goToNextPage = () => {
@@ -111,6 +116,9 @@ export default function MatchHistory() {
                     Value
                   </th>
                   <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3">
+                    Status
+                  </th>
+                  <th className="text-zinc-400 text-sm font-normal leading-6 text-left px-4 py-3">
                     Tx
                   </th>
                 </tr>
@@ -118,13 +126,18 @@ export default function MatchHistory() {
               <tbody>
                 {matches.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-4 text-zinc-400">
+                    <td colSpan={7} className="text-center py-4 text-zinc-400">
                       No games played yet
                     </td>
                   </tr>
                 ) : (
                   currentMatches.map((game) => (
-                    <tr key={game.id}>
+                    <tr
+                      key={game.id}
+                      className={
+                        game.syncStatus === "pending" ? "bg-zinc-900/30" : ""
+                      }
+                    >
                       <td className="px-4 min-h-14">
                         <div className="text-neutral-50 text-sm font-normal leading-none my-auto py-4">
                           {formatRelativeTime(game.timestamp)}
@@ -166,6 +179,23 @@ export default function MatchHistory() {
                         </div>
                       </td>
                       <td className="px-4 min-h-14">
+                        {game.syncStatus === "pending" ? (
+                          <div className="flex items-center gap-2">
+                            <span className="inline-block w-2 h-2 bg-yellow-500 rounded-full"></span>
+                            <span className="text-yellow-500 text-sm">
+                              Pending
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <span className="inline-block w-2 h-2 text-[rgba(174,243,66,1)] rounded-full"></span>
+                            <span className="text-[rgba(174,243,66,1)] text-sm">
+                              Synced
+                            </span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 min-h-14">
                         <div className="flex items-center gap-2">
                           {game.transactionHash && (
                             <a
@@ -186,6 +216,9 @@ export default function MatchHistory() {
             </table>
           </div>
         </div>
+
+        <SyncStatus isSynced={!hasPendingMatch} />
+
         <div className="flex w-full items-center gap-[40px_100px] text-sm leading-6 justify-between flex-wrap pt-4 max-md:max-w-full">
           <div className="text-[color:var(--muted-foreground)] font-normal self-stretch my-auto">
             Showing{" "}

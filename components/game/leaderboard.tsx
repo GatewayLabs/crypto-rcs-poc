@@ -87,8 +87,7 @@ export default function Leaderboard() {
                     <span className="mr-2">PnL ($MON)</span>
                     <Tooltip
                       text="Your PnL balance may become out of date due to the
-                                    blockchain's response time. Don't worry, the data will
-                                    be updated in 1 or 2 minutes."
+                blockchain's response time. Check the status indicator for matches waiting for blockchain confirmation."
                     />
                   </th>
                 </tr>

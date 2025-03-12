@@ -25,6 +25,7 @@ export interface GameHistory {
   transactionHash?: string;
   gameId: number | null;
   betValue: number;
+  syncStatus?: "pending" | "synced";
 }
 
 export interface LeaderboardEntry {
