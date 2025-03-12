@@ -15,7 +15,6 @@ export type PlayHouseMoveResult = {
   success: boolean;
   batchHash?: `0x${string}`;
   finalizeHash?: `0x${string}`;
-  move?: Move;
   diffMod3?: number;
   error?: string;
 };
@@ -135,7 +134,6 @@ export async function playHouseMove(
       success: true,
       batchHash,
       finalizeHash,
-      move: houseMove,
       diffMod3,
     };
   } catch (error) {

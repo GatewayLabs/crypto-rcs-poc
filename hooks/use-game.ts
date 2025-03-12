@@ -145,25 +145,37 @@ export function useGame() {
     (
       gameId: number,
       diffMod3: number | undefined,
-      houseMove: Move | undefined,
+      playerMoveParam: Move | null | undefined, // Add explicit player move parameter
       txHash: string | undefined,
     ) => {
-      if (diffMod3 === undefined) return false;
+      if (diffMod3 === undefined) {
+        console.log('processGameResult: diffMod3 is undefined, skipping');
+        return false;
+      }
+
+      // Use the provided playerMove parameter or fall back to state
+      const currentPlayerMove = playerMoveParam || playerMove;
+
+      if (!currentPlayerMove) {
+        console.log(
+          'processGameResult: No player move available, cannot process result',
+        );
+        return false;
+      }
 
       // Calculate game outcome
       const gameOutcome = getResultFromDiff(diffMod3);
+      console.log(
+        `processGameResult: Game outcome for game ${gameId} is ${gameOutcome}`,
+      );
       setResult(gameOutcome);
 
-      // Set house move if provided or infer it
-      if (houseMove) {
-        setHouseMove(houseMove);
-      } else if (playerMove) {
-        const inferredHouseMove = inferHouseMove(
-          gameOutcome,
-          playerMove as Move,
-        );
-        setHouseMove(inferredHouseMove);
-      }
+      // Infer house move from player move and result
+      const inferredHouseMove = inferHouseMove(gameOutcome, currentPlayerMove);
+      console.log(
+        `processGameResult: Inferred house move: ${inferredHouseMove}`,
+      );
+      setHouseMove(inferredHouseMove);
 
       // Play appropriate sound effect
       if (gameOutcome === GameResult.WIN) soundEffects.win();
@@ -181,8 +193,18 @@ export function useGame() {
         setTransactionHash(txHash);
       }
 
+      // Debug state values
+      console.log(`processGameResult: Debug state:
+      address: ${address ? address.substring(0, 8) + '...' : 'undefined'} 
+      playerMove: ${currentPlayerMove} 
+      betValue: ${betValue ? Number(formatEther(betValue)) : 'null'}`);
+
       // Update stats if we have all required data
-      if (address && playerMove && betValue !== null) {
+      if (address && betValue !== null) {
+        console.log(
+          'processGameResult: All required data available, updating stats',
+        );
+
         let betValueChange = 0n;
 
         if (gameOutcome === GameResult.WIN) {
@@ -191,6 +213,12 @@ export function useGame() {
           betValueChange = -betValue;
         }
 
+        console.log(`processGameResult: Calling updateLocalLeaderboard with:
+        address: ${address.substring(0, 8)}...
+        gameOutcome: ${gameOutcome}
+        betValueChange: ${Number(formatEther(betValueChange))}
+        gameId: ${gameId}`);
+
         updateLocalLeaderboard(
           address,
           gameOutcome,
@@ -198,25 +226,32 @@ export function useGame() {
           gameId,
         );
 
-        const actualHouseMove =
-          houseMove ||
-          (playerMove
-            ? inferHouseMove(gameOutcome, playerMove as Move)
-            : ('ROCK' as Move));
+        console.log(`processGameResult: Calling addLocalMatch with:
+        gameId: ${gameId}
+        playerMove: ${currentPlayerMove}
+        houseMove: ${inferredHouseMove}
+        result: ${gameOutcome}
+        txHash: ${txHash || transactionHash || 'none'}
+        betAmount: ${betValue ? Number(formatEther(betValue)) : 'null'}`);
 
         addLocalMatch({
           gameId: gameId,
-          playerMove: playerMove as Move,
-          houseMove: actualHouseMove,
+          playerMove: currentPlayerMove,
+          houseMove: inferredHouseMove,
           result: gameOutcome,
           transactionHash: txHash || transactionHash || '',
           betAmount: betValue,
         });
 
+        console.log('processGameResult: Calling updateStats()');
         updateStats();
+        return true;
+      } else {
+        console.log(`processGameResult: Missing required data, stats not updated. 
+        address: ${!!address} 
+        betValue: ${betValue !== null}`);
+        return false;
       }
-
-      return true;
     },
     [
       playerMove,
@@ -232,6 +267,8 @@ export function useGame() {
       addLocalMatch,
       updateStats,
       transactionHash,
+      inferHouseMove,
+      getResultFromDiff,
     ],
   );
 
@@ -315,14 +352,9 @@ export function useGame() {
         }
 
         // Check if we have all data to process the result optimistically
-        if (houseResult.diffMod3 !== undefined && houseResult.move) {
+        if (houseResult.diffMod3 !== undefined) {
           // Process the result immediately
-          processGameResult(
-            gameId,
-            houseResult.diffMod3,
-            houseResult.move,
-            txHash,
-          );
+          processGameResult(gameId, houseResult.diffMod3, move, txHash);
         } else {
           // This should be rare, but handle the case where we need finalization
           setPhase(GamePhase.REVEALING);
@@ -341,7 +373,6 @@ export function useGame() {
           success: true,
           gameId,
           txHash,
-          move: houseResult.move,
         };
       } catch (error) {
         // Handle errors
