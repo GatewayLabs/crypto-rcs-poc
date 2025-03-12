@@ -478,18 +478,8 @@ export function useMatches() {
 
         return {
           matches: updatedMatches,
-          totalEarnings:
-            existingMatchIndex === -1
-              ? calculateTotalEarnings(updatedMatches, oldData.playerStats)
-              : oldData.totalEarnings,
-          playerStats:
-            existingMatchIndex === -1
-              ? updatePlayerStats(
-                  oldData.playerStats,
-                  gameData.result,
-                  betValue
-                )
-              : oldData.playerStats,
+          totalEarnings: oldData.totalEarnings,
+          playerStats: oldData.playerStats,
           lastSyncTime: oldData.lastSyncTime,
         };
       }
@@ -502,63 +492,11 @@ export function useMatches() {
     });
   };
 
-  function calculateTotalEarnings(
-    matches: GameHistory[],
-    playerStats: SubgraphPlayerStats | null
-  ) {
-    if (!playerStats || !playerStats.netProfitLoss) {
-      return matches.reduce((sum, match) => sum + match.betValue, 0);
-    }
-
-    const pendingMatches = matches.filter(
-      (match) => match.syncStatus === "pending"
-    );
-    const pendingEarnings = pendingMatches.reduce(
-      (sum, match) => sum + match.betValue,
-      0
-    );
-
-    return (
-      Number(formatEther(BigInt(playerStats.netProfitLoss))) + pendingEarnings
-    );
-  }
-
   const syncMatches = async () => {
     if (isSyncing) return;
     logDebug("Manual sync triggered");
     await refetch();
   };
-
-  function updatePlayerStats(
-    currentStats: SubgraphPlayerStats | null,
-    result: GameResult,
-    betValue: number
-  ) {
-    if (!currentStats) return null;
-
-    return {
-      ...currentStats,
-      totalGamesPlayed: (currentStats.totalGamesPlayed || 0) + 1,
-      wins:
-        result === GameResult.WIN
-          ? (currentStats.wins || 0) + 1
-          : currentStats.wins || 0,
-      losses:
-        result === GameResult.LOSE
-          ? (currentStats.losses || 0) + 1
-          : currentStats.losses || 0,
-      draws:
-        result === GameResult.DRAW
-          ? (currentStats.draws || 0) + 1
-          : currentStats.draws || 0,
-      netProfitLoss: `${
-        BigInt(currentStats.netProfitLoss || "0") +
-        (betValue >= 0
-          ? BigInt(betValue * 10 ** 18)
-          : -BigInt(Math.abs(betValue) * 10 ** 18))
-      }`,
-    };
-  }
 
   const clearHistoryMutation = async () => {
     if (address) {
