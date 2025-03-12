@@ -311,22 +311,38 @@ export function useGame() {
           setTransactionHash(txHash);
         }
 
-        // Check if we have all data to process the result optimistically
-        if (houseResult.diffMod3 !== undefined) {
-          // Process the result immediately
+        // Check if we have all we need to process the result
+        if (houseResult.diffMod3 !== undefined && houseResult.finalizeHash) {
+          // Process the result immediately if finalize was successful
           processGameResult(gameId, houseResult.diffMod3, move, txHash);
-        } else {
-          // This should be rare, but handle the case where we need finalization
+        } else if (houseResult.diffMod3 !== undefined) {
+          // We have the diff but finalization failed, need to retry finalization
           setPhase(GamePhase.REVEALING);
           setIsResolutionPending(true);
-          setNeedsFinalization(true);
 
-          // Schedule a check for the result after a short delay
+          // Try finalization with a delay
           setTimeout(() => {
-            if (needsFinalization && gameId) {
+            finalizeGameMutation.mutate(gameId);
+          }, 5000);
+        } else {
+          // Something went wrong, but we have the batch hash
+          setPhase(GamePhase.REVEALING);
+          setIsResolutionPending(true);
+
+          // Try to check game status and recover
+          setTimeout(async () => {
+            try {
+              const gameStatus = await getGameResult(gameId);
+              if (gameStatus.success && gameStatus.result !== undefined) {
+                processGameResult(gameId, gameStatus.result, move, txHash);
+              } else {
+                finalizeGameMutation.mutate(gameId);
+              }
+            } catch (error) {
+              console.error('Error checking game status:', error);
               finalizeGameMutation.mutate(gameId);
             }
-          }, 3000);
+          }, 5000);
         }
 
         return {

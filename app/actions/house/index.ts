@@ -111,7 +111,7 @@ export async function playHouseMove(
 
     console.log(`House batch for game ${gameId} executed: ${batchHash}`);
 
-    // *** FIX: Wait for the batch transaction to be confirmed ***
+    // Wait for the batch transaction to be confirmed
     try {
       console.log(
         `Waiting for batch transaction ${batchHash} to be confirmed...`,
@@ -126,49 +126,9 @@ export async function playHouseMove(
       // Continue anyway but log warning - we'll try optimistically
     }
 
-    // *** FIX: Verify game state before finalizing ***
-    try {
-      const gameState = await publicClient.readContract({
-        ...gameContractConfig,
-        functionName: 'getGameInfo',
-        args: [BigInt(gameId)],
-      });
+    // Try to finalize with a short delay to ensure the difference is computed on-chain
+    await new Promise((resolve) => setTimeout(resolve, 2000));
 
-      const [, , , finished, bothCommitted, , , differenceCipherOnChain] =
-        gameState;
-
-      if (finished) {
-        console.log(`Game ${gameId} is already finished, no need to finalize`);
-        return {
-          success: true,
-          batchHash,
-          diffMod3,
-        };
-      }
-
-      if (
-        !bothCommitted ||
-        !differenceCipherOnChain ||
-        differenceCipherOnChain === '0x'
-      ) {
-        console.log(
-          `Game ${gameId} is not ready for finalization yet, returning with batch hash only`,
-        );
-        return {
-          success: true,
-          batchHash,
-          diffMod3,
-          finalizeHash: undefined,
-        };
-      }
-    } catch (stateError) {
-      console.warn(
-        `Error checking game state before finalization: ${stateError}`,
-      );
-      // Continue optimistically, but the finalize call might fail
-    }
-
-    // Now try to finalize the game
     let finalizeHash;
     try {
       console.log(`Finalizing game ${gameId} with diffMod3=${diffMod3}`);
@@ -182,12 +142,12 @@ export async function playHouseMove(
       console.log(`Game ${gameId} finalized with hash: ${finalizeHash}`);
     } catch (finalizeError) {
       console.error(`Error finalizing game: ${finalizeError}`);
+      // Return result without finalizeHash
       return {
         success: true,
         batchHash,
         diffMod3,
-        finalizeHash: undefined,
-        error: `Finalization will be retried later: ${finalizeError}`,
+        error: `Finalization failed and will require retry: ${finalizeError}`,
       };
     }
 
@@ -206,9 +166,6 @@ export async function playHouseMove(
   }
 }
 
-/**
- * Finalize a game that might have failed finalization in the optimistic flow
- */
 export async function finalizeGame(gameId: number): Promise<{
   success: boolean;
   finalizeHash?: `0x${string}`;
@@ -216,7 +173,7 @@ export async function finalizeGame(gameId: number): Promise<{
   error?: string;
 }> {
   try {
-    // 1. Get the current game state
+    // Get the current game state
     const gameState = await publicClient.readContract({
       ...gameContractConfig,
       functionName: 'getGameInfo',
@@ -224,7 +181,7 @@ export async function finalizeGame(gameId: number): Promise<{
     });
 
     // Destructure the result
-    const [
+    let [
       ,
       ,
       ,
@@ -236,7 +193,7 @@ export async function finalizeGame(gameId: number): Promise<{
       revealedDiff,
     ] = gameState;
 
-    // 2. Check if game already finished
+    // Check if game already finished
     if (finished) {
       return {
         success: true,
@@ -244,8 +201,27 @@ export async function finalizeGame(gameId: number): Promise<{
       };
     }
 
-    // 3. If we don't have the difference on chain yet but have both moves,
-    // compute it locally
+    // Check if difference is computed
+    if (!differenceCipher || differenceCipher === '0x') {
+      // Check one more time
+      const updatedState = await publicClient.readContract({
+        ...gameContractConfig,
+        functionName: 'getGameInfo',
+        args: [BigInt(gameId)],
+      });
+
+      const [, , , , , , , updatedDifferenceCipher] = updatedState;
+
+      if (!updatedDifferenceCipher || updatedDifferenceCipher === '0x') {
+        throw new Error(
+          'Difference not computed yet. Try again later when batch transaction is confirmed.',
+        );
+      }
+
+      differenceCipher = updatedDifferenceCipher;
+    }
+
+    // Compute local difference if needed
     let diffMod3: number;
     if (differenceCipher && differenceCipher !== '0x') {
       diffMod3 = decryptDifference(differenceCipher);
@@ -268,16 +244,13 @@ export async function finalizeGame(gameId: number): Promise<{
       );
     }
 
-    // 4. Finalize the game with our computed/decrypted result
-    const finalizeHash = await executeContractFunction(
-      gameContractConfig,
-      'finalizeGame',
-      [BigInt(gameId), BigInt(diffMod3)],
-      {
-        logPrefix: `House finalize for game ${gameId}`,
-        retries: 3,
-      },
-    );
+    // Finalize the game with our computed/decrypted result
+    const finalizeHash = await walletClient.writeContract({
+      ...gameContractConfig,
+      functionName: 'finalizeGame',
+      args: [BigInt(gameId), BigInt(diffMod3)],
+      account: houseAccount,
+    });
 
     return {
       success: true,
@@ -288,7 +261,7 @@ export async function finalizeGame(gameId: number): Promise<{
     console.error('Error finalizing game:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: error instanceof Error ? error.message : String(error),
     };
   }
 }
