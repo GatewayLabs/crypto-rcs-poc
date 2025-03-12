@@ -4,7 +4,7 @@ import { useLeaderboard } from "@/hooks/use-leaderboard";
 import { useGameUIStore } from "@/stores/game-ui-store";
 import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
-import Tooltip from "./tooltip";
+import Tooltip from "../ui/tooltip";
 
 export default function Leaderboard() {
   const { leaderboard } = useLeaderboard();

@@ -13,8 +13,8 @@ import { ChevronDown, ChevronUp, Download, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useBalance } from "wagmi";
 import { Button } from "../ui/button";
+import Modal from "../ui/modal";
 import DepositModal from "./deposit-modal";
-import Modal from "./modal";
 import WithdrawModal from "./withdraw-modal";
 
 export default function BalanceButton() {

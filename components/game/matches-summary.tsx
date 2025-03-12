@@ -3,7 +3,7 @@
 import { useMatches } from "@/hooks/use-matches";
 import { useGameUIStore } from "@/stores/game-ui-store";
 import { SubgraphPlayerStats } from "@/types/game";
-import Tooltip from "./tooltip";
+import Tooltip from "../ui/tooltip";
 
 export default function MatchesSummary({
   playerStats,
