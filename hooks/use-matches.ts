@@ -13,6 +13,7 @@ import { formatEther } from "viem";
 
 const SUBGRAPH_URL = process.env.NEXT_PUBLIC_SUBGRAPH_URL as string;
 const LOCAL_MATCHES_KEY = "local-matches";
+const MAX_PENDING_TIME = 24 * 60 * 60 * 1000;
 
 const PLAYER_GAMES_QUERY = `
   query GetPlayerGames($playerId: ID!, $first: Int, $skip: Int) {
@@ -72,12 +73,52 @@ const PLAYER_GAMES_QUERY = `
   }
 `;
 
+const CHECK_GAMES_BY_ID_QUERY = `
+  query CheckGamesByIds($gameIds: [BigInt!]!, $playerA: ID!, $playerB: ID!) {
+    gamesA: games(
+      where: { gameId_in: $gameIds, playerA: $playerA, state: "RESOLVED" }
+    ) {
+      id
+      gameId
+      playerA {
+        id
+      }
+      playerB {
+        id
+      }
+      betAmount
+      winner
+      isFinished
+      resolvedAt
+      transactionHash
+      revealedDifference
+    }
+    gamesB: games(
+      where: { gameId_in: $gameIds, playerB: $playerB, state: "RESOLVED" }
+    ) {
+      id
+      gameId
+      playerA {
+        id
+      }
+      playerB {
+        id
+      }
+      betAmount
+      winner
+      isFinished
+      resolvedAt
+      transactionHash
+      revealedDifference
+    }
+  }
+`;
+
 export function useMatches() {
   const { walletAddress: address } = useWallet();
   const queryClient = useQueryClient();
-  const PAGE_SIZE = 50;
+  const PAGE_SIZE = 500;
   const [isSyncing, setIsSyncing] = useState(false);
-  // const [initialLocalDataLoaded, setInitialLocalDataLoaded] = useState(false);
 
   // Helper functions for localStorage
   const saveLocalMatches = (address: string, matches: GameHistory[]) => {
@@ -108,6 +149,55 @@ export function useMatches() {
   function logDebug(message: string, data?: any) {
     if (process.env.NODE_ENV !== "production") {
       console.log(`[Matches] ${message}`, data ? data : "");
+    }
+  }
+
+  async function checkPendingGamesById(
+    address: string,
+    gameIds: number[]
+  ): Promise<number[]> {
+    if (!address || gameIds.length === 0) return [];
+
+    try {
+      const normalizedAddress = address.toLowerCase();
+      logDebug(`Checking specific games by ID: ${gameIds.join(", ")}`);
+
+      const response = await fetch(SUBGRAPH_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: CHECK_GAMES_BY_ID_QUERY,
+          variables: {
+            gameIds: gameIds,
+            playerA: normalizedAddress,
+            playerB: normalizedAddress,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.errors) {
+        console.error("GraphQL errors:", data.errors);
+        throw new Error("GraphQL query failed");
+      }
+
+      const confirmedGameIds = [
+        ...data.data.gamesA.map((game: any) => Number(game.gameId)),
+        ...data.data.gamesB.map((game: any) => Number(game.gameId)),
+      ];
+
+      logDebug(`Found ${confirmedGameIds.length} confirmed games on server`);
+      return confirmedGameIds;
+    } catch (error) {
+      console.error("Error checking games by ID:", error);
+      return [];
     }
   }
 
@@ -246,20 +336,75 @@ export function useMatches() {
 
         logDebug(`Total server matches found: ${markedServerMatches.length}`);
 
-        // Filter out local matches that already exist on server
-        const pendingLocalMatches = localStoredMatches
+        const pendingGamesIds = localStoredMatches
           .filter(
             (localMatch) =>
               !markedServerMatches.some(
                 (serverMatch) => serverMatch.gameId === localMatch.gameId
-              )
+              ) && localMatch.gameId !== null
           )
+          .map((match) => match.gameId as number);
+
+        let confirmedPendingGameIds: number[] = [];
+
+        if (pendingGamesIds.length > 0) {
+          logDebug(
+            `Checking status of ${pendingGamesIds.length} pending games`
+          );
+          confirmedPendingGameIds = await checkPendingGamesById(
+            address,
+            pendingGamesIds
+          );
+        }
+
+        const nowTime = Date.now();
+        const pendingLocalMatches = localStoredMatches
+          .filter((localMatch) => {
+            const isFutureTimestamp = localMatch.timestamp > Date.now();
+            if (isFutureTimestamp) {
+              logDebug(
+                `Match ${localMatch.gameId} has a future timestamp, correcting it`
+              );
+              localMatch.timestamp = Date.now();
+            }
+            if (
+              markedServerMatches.some(
+                (serverMatch) =>
+                  Number(serverMatch.gameId) === Number(localMatch.gameId)
+              )
+            ) {
+              return false;
+            }
+
+            if (
+              localMatch.gameId !== null &&
+              confirmedPendingGameIds.includes(localMatch.gameId)
+            ) {
+              return false;
+            }
+
+            const isPendingTooLong =
+              nowTime - localMatch.timestamp > MAX_PENDING_TIME;
+
+            if (isPendingTooLong) {
+              logDebug(
+                `Match ${
+                  localMatch.gameId
+                } has been pending too long (${Math.floor(
+                  (nowTime - localMatch.timestamp) / 3600000
+                )} hours), removing`
+              );
+              return false;
+            }
+
+            return true;
+          })
           .map((match) => ({
             ...match,
             syncStatus: "pending" as const,
           }));
 
-        logDebug(`Pending local matches: ${pendingLocalMatches.length}`);
+        logDebug(`Remaining pending matches: ${pendingLocalMatches.length}`);
 
         const allMatches = [...markedServerMatches, ...pendingLocalMatches];
         allMatches.sort((a, b) => b.timestamp - a.timestamp);
@@ -424,7 +569,7 @@ export function useMatches() {
     const newMatch: GameHistory = {
       id: localMatchId,
       gameId: gameData.gameId,
-      timestamp: Date.now(),
+      timestamp: Math.min(Date.now(), Date.now() + 5000),
       playerMove: gameData.playerMove,
       houseMove: gameData.houseMove,
       result: gameData.result,
