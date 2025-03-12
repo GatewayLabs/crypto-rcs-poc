@@ -1,4 +1,6 @@
 export const GAME_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS!;
+export const HOUSE_BATCHER_CONTRACT_ADDRESS =
+  process.env.NEXT_PUBLIC_HOUSE_BATCHER_ADDRESS!;
 
 export const PAILLIER_PUBLIC_KEY = {
   n: process.env.NEXT_PUBLIC_PAILLIER_N!,
@@ -440,6 +442,85 @@ export const gameContractConfig = {
       outputs: [
         {
           internalType: 'contract Paillier',
+          name: '',
+          type: 'address',
+        },
+      ],
+      stateMutability: 'view',
+      type: 'function',
+    },
+  ],
+} as const;
+
+export const houseBatcherContractConfig = {
+  address: HOUSE_BATCHER_CONTRACT_ADDRESS as `0x${string}`,
+  abi: [
+    {
+      inputs: [
+        {
+          internalType: 'address',
+          name: '_rpsAddress',
+          type: 'address',
+        },
+        {
+          internalType: 'address',
+          name: '_house',
+          type: 'address',
+        },
+      ],
+      stateMutability: 'nonpayable',
+      type: 'constructor',
+    },
+    {
+      anonymous: false,
+      inputs: [
+        {
+          indexed: true,
+          internalType: 'uint256',
+          name: 'gameId',
+          type: 'uint256',
+        },
+      ],
+      name: 'BatchedGameFlowExecuted',
+      type: 'event',
+    },
+    {
+      inputs: [
+        {
+          internalType: 'uint256',
+          name: 'gameId',
+          type: 'uint256',
+        },
+        {
+          internalType: 'bytes',
+          name: 'encChoiceB',
+          type: 'bytes',
+        },
+      ],
+      name: 'batchHouseFlow',
+      outputs: [],
+      stateMutability: 'payable',
+      type: 'function',
+    },
+    {
+      inputs: [],
+      name: 'house',
+      outputs: [
+        {
+          internalType: 'address',
+          name: '',
+          type: 'address',
+        },
+      ],
+      stateMutability: 'view',
+      type: 'function',
+    },
+    {
+      inputs: [],
+      name: 'rpsAddress',
+      outputs: [
+        {
+          internalType: 'address',
           name: '',
           type: 'address',
         },

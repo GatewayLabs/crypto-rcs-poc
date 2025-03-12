@@ -1,19 +1,25 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { playHouseMove, resolveGameAsync } from "@/app/actions/house";
-import { useWallet } from "@/contexts/wallet-context";
-import { Move } from "@/lib/crypto";
-import { useGameUIStore } from "@/stores/game-ui-store";
-import { GamePhase, GameResult } from "@/types/game";
-import { useMutation } from "@tanstack/react-query";
-import { useCallback, useEffect, useState } from "react";
-import { formatEther } from "viem";
+'use client';
+
+import {
+  finalizeGame,
+  getGameResult,
+  playHouseMove,
+} from '@/app/actions/house';
+import { useWallet } from '@/contexts/wallet-context';
+import { Move } from '@/lib/crypto';
+import { soundEffects } from '@/lib/sounds/sound-effects';
+import { useGameUIStore } from '@/stores/game-ui-store';
+import { GamePhase, GameResult } from '@/types/game';
+import { useMutation } from '@tanstack/react-query';
+import { useCallback, useEffect, useState } from 'react';
+import { formatEther } from 'viem';
 import {
   DEFAULT_BET_AMOUNT,
   DEFAULT_BET_AMOUNT_WEI,
   useGameContract,
-} from "./use-game-contract";
-import { useLeaderboard } from "./use-leaderboard";
-import { useMatches } from "./use-matches";
+} from './use-game-contract';
+import { useLeaderboard } from './use-leaderboard';
+import { useMatches } from './use-matches';
 
 export function useGame() {
   //-----------------------------------------------------------------------
@@ -37,12 +43,11 @@ export function useGame() {
     gameId,
     transactionHash,
 
-    // New states from the store
+    // Game state
     betValue,
     isCreatingGame,
     isJoiningGame,
     isResolutionPending,
-    pendingResult,
 
     // Actions
     setPlayerMove,
@@ -55,22 +60,15 @@ export function useGame() {
     setTransactionModal,
     resetGameState,
 
-    // Actions for new states
+    // Actions for states
     setBetValue,
     setIsCreatingGame,
     setIsJoiningGame,
     setIsResolutionPending,
-    setPendingResult,
   } = useGameUIStore();
 
-  // Polling state (internal to the hook)
-  const [pollingState, setPollingState] = useState({
-    isPolling: false,
-    pollCount: 0,
-    lastTxHash: null as string | null,
-    pollStartTime: 0,
-    errorCount: 0,
-  });
+  // Simple fallback state for rare cases where we need finalization
+  const [needsFinalization, setNeedsFinalization] = useState(false);
 
   //-----------------------------------------------------------------------
   // Utility Functions
@@ -84,13 +82,13 @@ export function useGame() {
         addMatch(),
       ]);
 
-      if (results.every((result) => result.status === "fulfilled")) {
-        console.log("Game stats updated successfully");
+      if (results.every((result) => result.status === 'fulfilled')) {
+        console.log('Game stats updated successfully');
       } else {
-        console.warn("Some game stats updates failed");
+        console.warn('Some game stats updates failed');
       }
     } catch (error) {
-      console.error("Error updating game stats:", error);
+      console.error('Error updating game stats:', error);
     }
   }, [updateLeaderboard, addMatch]);
 
@@ -100,6 +98,7 @@ export function useGame() {
     setIsJoiningGame(false);
     setIsResolutionPending(false);
     setError(null);
+    setNeedsFinalization(false);
   }, [
     setPhase,
     setIsCreatingGame,
@@ -107,41 +106,6 @@ export function useGame() {
     setIsResolutionPending,
     setError,
   ]);
-
-  // Determine game phase from contract data
-  function determineGamePhase(gameInfo: any) {
-    if (!gameInfo) return GamePhase.CHOOSING;
-
-    const [playerB, finished, bothCommitted] = gameInfo;
-
-    if (finished) return GamePhase.FINISHED;
-    if (bothCommitted) return GamePhase.REVEALING;
-    if (playerB !== "0x0000000000000000000000000000000000000000")
-      return GamePhase.WAITING;
-
-    return GamePhase.SELECTED;
-  }
-
-  // Infer house move based on player move and result
-  function inferHouseMove(gameResult: GameResult, userMove: Move) {
-    if (gameResult === GameResult.WIN) {
-      return userMove === "ROCK"
-        ? "SCISSORS"
-        : userMove === "PAPER"
-        ? "ROCK"
-        : "PAPER";
-    }
-
-    if (gameResult === GameResult.LOSE) {
-      return userMove === "ROCK"
-        ? "PAPER"
-        : userMove === "PAPER"
-        ? "SCISSORS"
-        : "ROCK";
-    }
-
-    return userMove; // For DRAW
-  }
 
   // Convert game difference to result
   function getResultFromDiff(diff: number | undefined) {
@@ -155,147 +119,166 @@ export function useGame() {
     return GameResult.LOSE;
   }
 
-  //-----------------------------------------------------------------------
-  // Polling Management
-  //-----------------------------------------------------------------------
+  // Infer house move based on player move and result
+  function inferHouseMove(gameResult: GameResult, userMove: Move) {
+    if (gameResult === GameResult.WIN) {
+      return userMove === 'ROCK'
+        ? 'SCISSORS'
+        : userMove === 'PAPER'
+        ? 'ROCK'
+        : 'PAPER';
+    }
 
-  const startOrUpdatePolling = useCallback(
-    (txHash: string | null = null) => {
-      setIsResolutionPending(true);
-      setPollingState((prev) => {
-        const now = Date.now();
-        const isNew = !prev.isPolling || txHash !== prev.lastTxHash;
-        const pollCount = isNew ? 0 : prev.pollCount + 1;
+    if (gameResult === GameResult.LOSE) {
+      return userMove === 'ROCK'
+        ? 'PAPER'
+        : userMove === 'PAPER'
+        ? 'SCISSORS'
+        : 'ROCK';
+    }
 
-        return {
-          isPolling: true,
-          pollCount,
-          lastTxHash: txHash || prev.lastTxHash,
-          pollStartTime: isNew ? now : prev.pollStartTime,
-          errorCount: 0,
-        };
-      });
+    return userMove; // For DRAW
+  }
+
+  // Process game result and update UI/stats
+  const processGameResult = useCallback(
+    (
+      gameId: number,
+      diffMod3: number | undefined,
+      playerMoveParam: Move | null | undefined, // Add explicit player move parameter
+      txHash: string | undefined,
+    ) => {
+      if (diffMod3 === undefined) {
+        return false;
+      }
+
+      // Use the provided playerMove parameter or fall back to state
+      const currentPlayerMove = playerMoveParam || playerMove;
+
+      if (!currentPlayerMove) {
+        return false;
+      }
+
+      // Calculate game outcome
+      const gameOutcome = getResultFromDiff(diffMod3);
+      setResult(gameOutcome);
+
+      // Infer house move from player move and result
+      const inferredHouseMove = inferHouseMove(gameOutcome, currentPlayerMove);
+      setHouseMove(inferredHouseMove);
+
+      // Play appropriate sound effect
+      if (gameOutcome === GameResult.WIN) soundEffects.win();
+      else if (gameOutcome === GameResult.LOSE) soundEffects.lose();
+      else soundEffects.draw();
+
+      // Update UI state
+      setTransactionModal(false);
+      setPhase(GamePhase.FINISHED);
+      setIsResolutionPending(false);
+      setNeedsFinalization(false);
+
+      // Update transaction hash if provided
+      if (txHash) {
+        setTransactionHash(txHash);
+      }
+
+      // Update stats if we have all required data
+      if (address && betValue !== null) {
+        let betValueChange = 0n;
+
+        if (gameOutcome === GameResult.WIN) {
+          betValueChange = betValue;
+        } else if (gameOutcome === GameResult.LOSE) {
+          betValueChange = -betValue;
+        }
+
+        updateLocalLeaderboard(
+          address,
+          gameOutcome,
+          Number(formatEther(betValueChange)),
+          gameId,
+        );
+
+        addLocalMatch({
+          gameId: gameId,
+          playerMove: currentPlayerMove,
+          houseMove: inferredHouseMove,
+          result: gameOutcome,
+          transactionHash: txHash || transactionHash || '',
+          betAmount: betValue,
+        });
+        return true;
+      } else {
+        return false;
+      }
     },
-    [setIsResolutionPending]
+    [
+      playerMove,
+      betValue,
+      address,
+      setResult,
+      setHouseMove,
+      setTransactionModal,
+      setPhase,
+      setIsResolutionPending,
+      setTransactionHash,
+      updateLocalLeaderboard,
+      addLocalMatch,
+      updateStats,
+      transactionHash,
+      inferHouseMove,
+      getResultFromDiff,
+    ],
   );
 
-  const stopPolling = useCallback(() => {
-    setIsResolutionPending(false);
-    setPollingState((prev) => ({
-      ...prev,
-      isPolling: false,
-    }));
-  }, [setIsResolutionPending]);
-
   //-----------------------------------------------------------------------
-  // Game Resolution Mutation
+  // Finalization Mutation (Fallback)
   //-----------------------------------------------------------------------
 
-  const resolveGameAsyncMutation = useMutation({
+  const finalizeGameMutation = useMutation({
     mutationFn: async (gameId: number) => {
       try {
-        // Call the server action
-        const result = await resolveGameAsync(gameId);
+        setIsResolutionPending(true);
 
-        // Store transaction hash for UI/polling
-        if (result.txHash) {
-          setTransactionHash(result.txHash);
-          // Update polling with new hash
-          startOrUpdatePolling(result.txHash);
+        // Call the finalization action
+        const result = await finalizeGame(gameId);
+
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to finalize game');
         }
 
-        // If there's a pending result...
-        if (result.pendingResult !== undefined && result.pendingResult >= 0) {
-          setPendingResult(result.pendingResult);
-
-          // Check if we're done
-          if (result.status === "completed") {
-            const gameOutcome = getResultFromDiff(result.pendingResult);
-
-            setPhase(GamePhase.FINISHED);
-            setResult(gameOutcome);
-
-            const inferredHouseMove = playerMove
-              ? inferHouseMove(gameOutcome, playerMove as Move)
-              : ("ROCK" as Move);
-
-            setHouseMove(inferredHouseMove);
-
-            // Make sure the transaction hash is set for history display
-            if (result.txHash) {
-              setTransactionHash(result.txHash);
-            }
-
-            // Update leaderboard and match history
-            if (address && playerMove && betValue !== null) {
-              let betValueChange = 0n;
-
-              if (gameOutcome === GameResult.WIN) {
-                betValueChange = betValue;
-              } else if (gameOutcome === GameResult.LOSE) {
-                betValueChange = -betValue;
-              }
-
-              updateLocalLeaderboard(
-                address,
-                gameOutcome,
-                Number(formatEther(betValueChange)),
-                gameId
-              );
-
-              addLocalMatch({
-                gameId: gameId,
-                playerMove: playerMove as Move,
-                houseMove: inferredHouseMove,
-                result: gameOutcome,
-                transactionHash: result.txHash || transactionHash || "",
-                betAmount: betValue,
-              });
-            }
-
-            setIsResolutionPending(false);
-            setTransactionHash(null);
-            setTransactionModal(false);
-            stopPolling();
-
-            return {
-              success: true,
-              gameId,
-              isComplete: true,
-              result: gameOutcome,
-              txHash: result.txHash,
-            };
-          }
-        }
+        // Process result and update UI
+        processGameResult(
+          gameId,
+          result.diffMod3,
+          undefined,
+          result.finalizeHash,
+        );
 
         return {
           success: true,
           gameId,
-          txHash: result.txHash,
-          isPending: true,
-          pendingResult: result.pendingResult,
+          result: result.diffMod3,
         };
       } catch (error) {
         if (error instanceof Error) {
-          if (error.message.includes("Player B has not joined yet")) {
-            console.log("Waiting for player to join...");
-            return { success: true, gameId, waitingForJoin: true };
-          }
-
           setError(error.message);
         } else {
-          setError("Failed to resolve game");
+          setError('Failed to finalize game');
         }
 
         setPhase(GamePhase.ERROR);
-        stopPolling();
         throw error;
+      } finally {
+        setIsResolutionPending(false);
+        setNeedsFinalization(false);
       }
     },
   });
 
   //-----------------------------------------------------------------------
-  // Create Game Mutation
+  // Game Creation Mutation
   //-----------------------------------------------------------------------
 
   const createGameMutation = useMutation({
@@ -313,32 +296,68 @@ export function useGame() {
         const gameId = await contractCreateGame(move, betAmount);
         setGameId(gameId);
         setPhase(GamePhase.WAITING);
+        setTransactionModal(true, 'validate');
 
-        // Let house make its move
+        // Let house make its move with the optimistic batched flow
         const houseResult = await playHouseMove(gameId, betAmount);
+
         if (!houseResult.success) {
-          throw new Error(houseResult.error || "Failed to play house move");
+          throw new Error(houseResult.error || 'Failed to play house move');
         }
 
-        // Start resolution process
-        startOrUpdatePolling(houseResult.hash);
-        setPhase(GamePhase.REVEALING);
-        resolveGameAsyncMutation.mutate(gameId);
+        // Store transaction hashes
+        const txHash = houseResult.finalizeHash || houseResult.batchHash;
+        if (txHash) {
+          setTransactionHash(txHash);
+        }
+
+        // Check if we have all we need to process the result
+        if (houseResult.diffMod3 !== undefined && houseResult.finalizeHash) {
+          // Process the result immediately if finalize was successful
+          processGameResult(gameId, houseResult.diffMod3, move, txHash);
+        } else if (houseResult.diffMod3 !== undefined) {
+          // We have the diff but finalization failed, need to retry finalization
+          setPhase(GamePhase.REVEALING);
+          setIsResolutionPending(true);
+
+          // Try finalization with a delay
+          setTimeout(() => {
+            finalizeGameMutation.mutate(gameId);
+          }, 5000);
+        } else {
+          // Something went wrong, but we have the batch hash
+          setPhase(GamePhase.REVEALING);
+          setIsResolutionPending(true);
+
+          // Try to check game status and recover
+          setTimeout(async () => {
+            try {
+              const gameStatus = await getGameResult(gameId);
+              if (gameStatus.success && gameStatus.result !== undefined) {
+                processGameResult(gameId, gameStatus.result, move, txHash);
+              } else {
+                finalizeGameMutation.mutate(gameId);
+              }
+            } catch (error) {
+              console.error('Error checking game status:', error);
+              finalizeGameMutation.mutate(gameId);
+            }
+          }, 5000);
+        }
 
         return {
           success: true,
           gameId,
-          txHash: houseResult.hash,
-          move: houseResult.move,
+          txHash,
         };
       } catch (error) {
         // Handle errors
         if (error instanceof Error) {
-          if (!error.message.includes("rejected the request")) {
+          if (!error.message.includes('rejected the request')) {
             setError(error.message);
           }
         } else {
-          setError("Failed to create game");
+          setError('Failed to create game');
         }
         setPhase(GamePhase.ERROR);
         throw error;
@@ -369,19 +388,47 @@ export function useGame() {
         // Set initial state
         setPlayerMove(move);
         setPhase(GamePhase.WAITING);
+        setTransactionModal(true, 'validate');
 
         // Join game on-chain
         await contractJoinGame(gameId, move, betAmount);
 
-        // Start resolution process
+        // Check game result immediately (optimistically)
+        const resultCheck = await getGameResult(gameId);
+
+        if (resultCheck.success && resultCheck.result !== undefined) {
+          // Process the result immediately, regardless of whether it's officially "finished"
+          const processed = processGameResult(
+            gameId,
+            resultCheck.result,
+            undefined,
+            undefined,
+          );
+
+          if (processed) {
+            return { success: true, gameId };
+          }
+        }
+
+        // If we couldn't process immediately, try finalization
         setPhase(GamePhase.REVEALING);
-        return resolveGameAsyncMutation.mutateAsync(gameId);
+        setIsResolutionPending(true);
+        setNeedsFinalization(true);
+
+        // Call finalization after a short delay
+        setTimeout(() => {
+          if (needsFinalization && gameId) {
+            finalizeGameMutation.mutate(gameId);
+          }
+        }, 2000);
+
+        return { success: true, gameId };
       } catch (error) {
         // Handle errors
         if (error instanceof Error) {
           setError(error.message);
         } else {
-          setError("Failed to join game");
+          setError('Failed to join game');
         }
         setPhase(GamePhase.ERROR);
         throw error;
@@ -395,119 +442,89 @@ export function useGame() {
   // Side Effects
   //-----------------------------------------------------------------------
 
-  // Adaptive polling based on elapsed time
+  // Simple polling for finalization (only as fallback)
   useEffect(() => {
-    if (!pollingState.isPolling || !gameId || phase === GamePhase.FINISHED) {
+    if (!needsFinalization || !gameId) {
       return;
     }
 
-    // Exponential backoff with jitter
-    const elapsedTimeMs = Date.now() - pollingState.pollStartTime;
-    const baseInterval = Math.min(
-      3000 * Math.pow(1.5, Math.floor(elapsedTimeMs / 10000)),
-      15000
-    );
-
-    // Add jitter (±20%)
-    const jitter = baseInterval * (0.8 + Math.random() * 0.4);
-
-    // Circuit breaker - if too many consecutive errors, slow down even more
-    const errorCount = pollingState.errorCount || 0;
-    const circuitFactor = errorCount > 3 ? 2 : 1;
-
-    const finalInterval = jitter * circuitFactor;
-
-    const timeoutId = setTimeout(async () => {
+    // Set up a check that will run every 5 seconds if we still need finalization
+    const pollingInterval = setInterval(async () => {
       try {
-        if (!gameId) return;
+        if (!needsFinalization || !gameId) {
+          clearInterval(pollingInterval);
+          return;
+        }
 
-        if (phase !== GamePhase.ERROR) {
-          await resolveGameAsyncMutation.mutateAsync(gameId);
-          setPollingState((prev) => ({ ...prev, errorCount: 0 }));
-        } else {
-          stopPolling();
+        // Check if the game is finalized
+        const resultCheck = await getGameResult(gameId);
+
+        if (resultCheck.success && resultCheck.result !== undefined) {
+          // Try to process the result
+          const processed = processGameResult(
+            gameId,
+            resultCheck.result,
+            undefined,
+            undefined,
+          );
+
+          if (processed) {
+            // Clear polling if processed successfully
+            setNeedsFinalization(false);
+            clearInterval(pollingInterval);
+          } else {
+            // If not processed but we have a result, try finalization
+            finalizeGameMutation.mutate(gameId);
+          }
         }
       } catch (error) {
-        console.error("Error in polling resolution:", error);
-
-        // Only increment error count for actual errors, not timeouts which are expected
-        const isTimeout =
-          error instanceof Error &&
-          (error.message.includes("timed out") ||
-            error.message.includes("timeout"));
-
-        setPollingState((prev) => ({
-          ...prev,
-          errorCount: isTimeout
-            ? prev.errorCount || 0
-            : (prev.errorCount || 0) + 1,
-        }));
-
-        // Allow longer total polling time (3 minutes instead of 1 minute)
-        if (Date.now() - pollingState.pollStartTime > 180000) {
-          stopPolling();
-          setError(
-            "Game resolution is taking longer than expected. Please check back later or try resolving again."
-          );
-        }
+        console.error('Error in finalization polling:', error);
       }
-    }, finalInterval);
+    }, 5000);
 
-    return () => clearTimeout(timeoutId);
-  }, [
-    pollingState.isPolling,
-    pollingState.pollCount,
-    pollingState.pollStartTime,
-    pollingState.errorCount,
-    gameId,
-    phase,
-    stopPolling,
-    setError,
-    resolveGameAsyncMutation,
-  ]);
-
-  // Monitor contract game state changes
-  useEffect(() => {
-    if (!gameInfo || !gameId) return;
-
-    const currentPhase = determineGamePhase(gameInfo);
-
-    if (currentPhase !== phase) {
-      setPhase(currentPhase);
-
-      if (currentPhase === GamePhase.FINISHED && phase !== GamePhase.FINISHED) {
-        updateStats();
-      }
-    }
-  }, [gameInfo, gameId, phase, setPhase, updateStats]);
+    return () => clearInterval(pollingInterval);
+  }, [needsFinalization, gameId, processGameResult, finalizeGameMutation]);
 
   // Handle visibility changes (tab switching)
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible" && gameId) {
-        if (phase === GamePhase.REVEALING || phase === GamePhase.WAITING) {
-          if (result) {
-            setPhase(GamePhase.FINISHED);
-            updateStats();
-          } else if (isResolutionPending) {
-            resolveGameAsyncMutation.mutate(gameId);
+    const handleVisibilityChange = async () => {
+      if (
+        document.visibilityState === 'visible' &&
+        gameId &&
+        !result &&
+        phase !== GamePhase.FINISHED
+      ) {
+        try {
+          // Check current game status when tab becomes visible
+          const resultCheck = await getGameResult(gameId);
+
+          if (resultCheck.success && resultCheck.result !== undefined) {
+            // Try to process the result
+            processGameResult(gameId, resultCheck.result, undefined, undefined);
+          } else if (needsFinalization) {
+            // If we need finalization, try again
+            finalizeGameMutation.mutate(gameId);
           }
+        } catch (error) {
+          console.error(
+            'Error checking game status on visibility change:',
+            error,
+          );
         }
       }
     };
 
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [
     gameId,
     phase,
     result,
-    isResolutionPending,
-    setPhase,
-    updateStats,
-    resolveGameAsyncMutation,
+    needsFinalization,
+    processGameResult,
+    finalizeGameMutation,
   ]);
 
   //-----------------------------------------------------------------------
@@ -521,11 +538,10 @@ export function useGame() {
     joinGame: (
       gameId: number,
       move: Move,
-      betAmount = DEFAULT_BET_AMOUNT_WEI
+      betAmount = DEFAULT_BET_AMOUNT_WEI,
     ) => joinGameMutation.mutate({ gameId, move, betAmount }),
     resetGame: resetGameState,
-    retryResolution: (gameId: number) =>
-      resolveGameAsyncMutation.mutate(gameId),
+    retryResolution: (gameId: number) => finalizeGameMutation.mutate(gameId),
     revertToChoosing,
 
     // Loading states from store
@@ -534,16 +550,15 @@ export function useGame() {
     isResolutionPending,
 
     // Computed states
-    isRevealingGame: isResolutionPending,
-    isComputingDifference: resolveGameAsyncMutation.isPending,
-    isFinalizingGame: resolveGameAsyncMutation.isPending,
+    isRevealingGame: isResolutionPending || needsFinalization,
+    isComputingDifference: false, // No longer needed
+    isFinalizingGame: finalizeGameMutation.isPending,
 
     // Bet defaults
     defaultBetAmount: DEFAULT_BET_AMOUNT,
     defaultBetAmountWei: DEFAULT_BET_AMOUNT_WEI,
 
     // Game result info from store
-    pendingResult,
     betValue,
   };
 }

@@ -1,12 +1,12 @@
-import { retry } from "@/lib/utils";
-import { Move } from "@/lib/crypto";
-import { gameContractConfig } from "@/config/contracts";
-import { publicClient } from "@/config/server";
-import { isHex } from "viem";
+import { retry } from '@/lib/utils';
+import { Move } from '@/lib/crypto';
+import { gameContractConfig } from '@/config/contracts';
+import { publicClient } from '@/config/server';
+import { isHex } from 'viem';
 
 // Generate a random house move
 export function generateHouseMove(): Move {
-  const moves: Move[] = ["ROCK", "PAPER", "SCISSORS"];
+  const moves: Move[] = ['ROCK', 'PAPER', 'SCISSORS'];
   const randomIndex = Math.floor(Math.random() * moves.length);
   return moves[randomIndex];
 }
@@ -17,7 +17,7 @@ export async function getGameState(gameId: number) {
     () =>
       publicClient.readContract({
         ...gameContractConfig,
-        functionName: "getGameInfo",
+        functionName: 'getGameInfo',
         args: [BigInt(gameId)],
       }),
     {
@@ -27,17 +27,17 @@ export async function getGameState(gameId: number) {
         const errorMessage =
           error instanceof Error ? error.message : String(error);
         return (
-          errorMessage.includes("network") ||
-          errorMessage.includes("timeout") ||
-          errorMessage.includes("connection")
+          errorMessage.includes('network') ||
+          errorMessage.includes('timeout') ||
+          errorMessage.includes('connection')
         );
       },
       onRetry: (error, attempt) => {
         console.log(
-          `Retry attempt ${attempt} for getting game state: ${error}`
+          `Retry attempt ${attempt} for getting game state: ${error}`,
         );
       },
-    }
+    },
   );
 
   // Destructure for clarity
@@ -78,7 +78,7 @@ export async function quickCheckGameFinished(gameId: number): Promise<{
       () =>
         publicClient.readContract({
           ...gameContractConfig,
-          functionName: "getGameInfo",
+          functionName: 'getGameInfo',
           args: [BigInt(gameId)],
         }),
       {
@@ -88,10 +88,10 @@ export async function quickCheckGameFinished(gameId: number): Promise<{
           const errorMessage =
             error instanceof Error ? error.message : String(error);
           return (
-            errorMessage.includes("network") || errorMessage.includes("timeout")
+            errorMessage.includes('network') || errorMessage.includes('timeout')
           );
         },
-      }
+      },
     );
 
     const [, , , finished, , , , , revealedDiff] = data;
@@ -112,7 +112,7 @@ export async function quickCheckGameFinished(gameId: number): Promise<{
 // Wait for transaction confirmation with timeout
 export async function waitForTransaction(
   txHash: string,
-  timeoutMs = 60000
+  timeoutMs = 60000,
 ): Promise<boolean> {
   // Validate the txHash
   if (!txHash || !isHex(txHash)) {
@@ -128,7 +128,7 @@ export async function waitForTransaction(
     return true;
   } catch (error) {
     console.log(
-      `Transaction ${txHash} wait timed out after ${timeoutMs}ms: ${error}`
+      `Transaction ${txHash} wait timed out after ${timeoutMs}ms: ${error}`,
     );
     return false;
   }
