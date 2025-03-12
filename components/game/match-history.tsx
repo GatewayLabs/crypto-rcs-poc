@@ -188,9 +188,9 @@ export default function MatchHistory() {
                           </div>
                         ) : (
                           <div className="flex items-center gap-2">
-                            <span className="inline-block w-2 h-2 text-[rgba(174,243,66,1)] rounded-full"></span>
+                            <span className="inline-block w-2 h-2 bg-[rgba(174,243,66,1)] rounded-full"></span>
                             <span className="text-[rgba(174,243,66,1)] text-sm">
-                              Synced
+                              Confirmed
                             </span>
                           </div>
                         )}
