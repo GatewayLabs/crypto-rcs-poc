@@ -392,7 +392,7 @@ export function useMatches() {
                   localMatch.gameId
                 } has been pending too long (${Math.floor(
                   (nowTime - localMatch.timestamp) / 3600000
-                )} hours), removing`
+                )} minutes), removing`
               );
               return false;
             }
