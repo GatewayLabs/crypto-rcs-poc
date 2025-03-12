@@ -232,6 +232,106 @@ export function useGame() {
     ],
   );
 
+  // Finalization process
+  const startFinalizationProcess = useCallback(
+    (gameId: number, move: Move, diffMod3: number) => {
+      // Create a recursive function to retry with exponential backoff
+      const attemptFinalization = async (
+        attempt: number,
+        maxAttempts: number,
+      ) => {
+        if (attempt > maxAttempts) {
+          console.log(
+            `Reached max attempts (${maxAttempts}) for game ${gameId} finalization`,
+          );
+          // Only show an error after all retries fail
+          setError(
+            'Game finalization timed out. You can try again or check back later.',
+          );
+          setPhase(GamePhase.ERROR);
+          setIsResolutionPending(false);
+          return;
+        }
+
+        console.log(
+          `Finalization attempt ${attempt}/${maxAttempts} for game ${gameId}`,
+        );
+
+        try {
+          const result = await finalizeGame(gameId);
+
+          if (result.success) {
+            console.log(`Game ${gameId} finalized successfully!`);
+            // Use the processed diffMod3 or the one from the result
+            const finalDiffMod3 =
+              result.diffMod3 !== undefined ? result.diffMod3 : diffMod3;
+
+            // Process the result
+            processGameResult(gameId, finalDiffMod3, move, result.finalizeHash);
+          } else if (
+            result.error &&
+            result.error.includes('Difference not computed yet')
+          ) {
+            // This is an expected error - just need to wait longer
+            console.log(
+              `Difference not computed yet for game ${gameId}, will retry...`,
+            );
+
+            // Compute backoff delay (exponential with jitter)
+            const baseDelay = Math.min(2000 * Math.pow(1.5, attempt), 15000);
+            const jitter = Math.random() * 1000;
+            const delay = baseDelay + jitter;
+
+            // Schedule next attempt
+            setTimeout(
+              () => attemptFinalization(attempt + 1, maxAttempts),
+              delay,
+            );
+          } else {
+            // Only show an error for non-timing issues
+            setError(result.error || 'Game finalization failed');
+            setPhase(GamePhase.ERROR);
+            setIsResolutionPending(false);
+          }
+        } catch (error) {
+          console.error(`Error in finalization attempt ${attempt}:`, error);
+
+          // Retry on network errors
+          if (
+            error instanceof Error &&
+            (error.message.includes('network') ||
+              error.message.includes('timeout'))
+          ) {
+            const delay = 2000 * Math.pow(1.5, attempt) + Math.random() * 1000;
+            setTimeout(
+              () => attemptFinalization(attempt + 1, maxAttempts),
+              delay,
+            );
+          } else {
+            // Only show an error for non-network issues
+            setError(
+              error instanceof Error
+                ? error.message
+                : 'Game finalization failed',
+            );
+            setPhase(GamePhase.ERROR);
+            setIsResolutionPending(false);
+          }
+        }
+      };
+
+      // Start the first attempt with a slight delay
+      setTimeout(() => attemptFinalization(1, 5), 3000);
+    },
+    [
+      finalizeGame,
+      processGameResult,
+      setError,
+      setPhase,
+      setIsResolutionPending,
+    ],
+  );
+
   //-----------------------------------------------------------------------
   // Finalization Mutation (Fallback)
   //-----------------------------------------------------------------------
@@ -305,50 +405,28 @@ export function useGame() {
           throw new Error(houseResult.error || 'Failed to play house move');
         }
 
-        // Store transaction hashes
-        const txHash = houseResult.finalizeHash || houseResult.batchHash;
-        if (txHash) {
-          setTransactionHash(txHash);
+        // Store transaction hash
+        if (houseResult.batchHash) {
+          setTransactionHash(houseResult.batchHash);
         }
 
-        // Check if we have all we need to process the result
-        if (houseResult.diffMod3 !== undefined && houseResult.finalizeHash) {
-          // Process the result immediately if finalize was successful
-          processGameResult(gameId, houseResult.diffMod3, move, txHash);
-        } else if (houseResult.diffMod3 !== undefined) {
-          // We have the diff but finalization failed, need to retry finalization
+        // We have the optimistic result but it needs finalization
+        if (
+          houseResult.status === 'NEEDS_FINALIZATION' &&
+          houseResult.diffMod3 !== undefined
+        ) {
+          // Show the game as "revealing" instead of showing an error
           setPhase(GamePhase.REVEALING);
           setIsResolutionPending(true);
 
-          // Try finalization with a delay
-          setTimeout(() => {
-            finalizeGameMutation.mutate(gameId);
-          }, 5000);
-        } else {
-          // Something went wrong, but we have the batch hash
-          setPhase(GamePhase.REVEALING);
-          setIsResolutionPending(true);
-
-          // Try to check game status and recover
-          setTimeout(async () => {
-            try {
-              const gameStatus = await getGameResult(gameId);
-              if (gameStatus.success && gameStatus.result !== undefined) {
-                processGameResult(gameId, gameStatus.result, move, txHash);
-              } else {
-                finalizeGameMutation.mutate(gameId);
-              }
-            } catch (error) {
-              console.error('Error checking game status:', error);
-              finalizeGameMutation.mutate(gameId);
-            }
-          }, 5000);
+          // Start a graceful retry process for finalization
+          startFinalizationProcess(gameId, move, houseResult.diffMod3);
         }
 
         return {
           success: true,
           gameId,
-          txHash,
+          txHash: houseResult.batchHash,
         };
       } catch (error) {
         // Handle errors
