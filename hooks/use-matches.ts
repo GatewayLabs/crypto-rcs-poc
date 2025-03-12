@@ -13,7 +13,7 @@ import { formatEther } from "viem";
 
 const SUBGRAPH_URL = process.env.NEXT_PUBLIC_SUBGRAPH_URL as string;
 const LOCAL_MATCHES_KEY = "local-matches";
-const MAX_PENDING_TIME = 20 * 60 * 1000;
+const MAX_PENDING_TIME = 10 * 60 * 1000;
 
 const PLAYER_GAMES_QUERY = `
   query GetPlayerGames($playerId: ID!, $first: Int, $skip: Int) {
