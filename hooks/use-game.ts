@@ -286,21 +286,70 @@ export function useGame() {
         `[startFinalizationProcess] Starting finalization process for game ${gameId}`,
       );
 
-      // Create a recursive function to retry with exponential backoff
       const attemptFinalization = async (
         attempt: number,
         maxAttempts: number,
       ) => {
         if (attempt > maxAttempts) {
           console.log(
-            `[attemptFinalization] Reached max attempts (${maxAttempts}) for game ${gameId} finalization`,
+            `[attemptFinalization] Reached retry limit, switching to background polling for game ${gameId}`,
           );
-          // Only show an error after all retries fail
-          setError(
-            'Game finalization timed out. You can try again or check back later.',
-          );
-          setPhase(GamePhase.ERROR);
-          setIsResolutionPending(false);
+
+          let backgroundAttempt = 0;
+          const maxBackgroundAttempts = 40;
+
+          const backgroundPoll = setInterval(async () => {
+            backgroundAttempt++;
+
+            if (backgroundAttempt > maxBackgroundAttempts) {
+              clearInterval(backgroundPoll);
+              console.log(
+                `[backgroundPoll] Giving up silently after ${maxBackgroundAttempts} background attempts for game ${gameId}`,
+              );
+
+              return;
+            }
+
+            console.log(
+              `[backgroundPoll] Background attempt ${backgroundAttempt}/${maxBackgroundAttempts} for game ${gameId}`,
+            );
+
+            try {
+              const result = await finalizeGame(gameId);
+
+              if (result.status === 'COMPLETED') {
+                console.log(
+                  `[backgroundPoll] Game ${gameId} successfully finalized in background attempt ${backgroundAttempt}`,
+                );
+                clearInterval(backgroundPoll);
+
+                // Process the result
+                const finalDiffMod3 =
+                  result.diffMod3 !== undefined ? result.diffMod3 : diffMod3;
+                processGameResult(
+                  gameId,
+                  finalDiffMod3,
+                  move,
+                  result.finalizeHash,
+                );
+              } else if (result.status === 'NEEDS_FINALIZATION') {
+                console.log(
+                  `[backgroundPoll] Game ${gameId} still needs finalization in background attempt ${backgroundAttempt}`,
+                );
+              } else {
+                console.log(
+                  `[backgroundPoll] Unexpected status for game ${gameId} in background attempt ${backgroundAttempt}:`,
+                  result.status,
+                );
+              }
+            } catch (error) {
+              console.error(
+                `[backgroundPoll] Error in background attempt ${backgroundAttempt} for game ${gameId}:`,
+                error,
+              );
+            }
+          }, 15000);
+
           return;
         }
 
@@ -311,27 +360,23 @@ export function useGame() {
         try {
           const result = await finalizeGame(gameId);
           console.log(
-            `[attemptFinalization] Got result from finalizeGame:`,
+            `[attemptFinalization] Got result from finalizeGame for game ${gameId}:`,
             result,
           );
 
           if (result.status === 'COMPLETED') {
             console.log(
-              `[attemptFinalization] Game ${gameId} finalized successfully!`,
+              `[attemptFinalization] Game ${gameId} finalized successfully in attempt ${attempt}!`,
             );
-            // Use the processed diffMod3 or the one from the result
             const finalDiffMod3 =
               result.diffMod3 !== undefined ? result.diffMod3 : diffMod3;
 
-            // Process the result - pass the finalize hash here
             processGameResult(gameId, finalDiffMod3, move, result.finalizeHash);
           } else if (result.status === 'NEEDS_FINALIZATION') {
-            // This is an expected state - just need to wait longer
             console.log(
               `[attemptFinalization] Difference not computed yet for game ${gameId}, will retry...`,
             );
 
-            // Compute backoff delay (exponential with jitter)
             const baseDelay = Math.min(2000 * Math.pow(1.5, attempt), 15000);
             const jitter = Math.random() * 1000;
             const delay = baseDelay + jitter;
@@ -339,30 +384,25 @@ export function useGame() {
             console.log(
               `[attemptFinalization] Scheduling next attempt in ${Math.round(
                 delay,
-              )}ms`,
+              )}ms for game ${gameId}`,
             );
 
-            // Schedule next attempt
             setTimeout(
               () => attemptFinalization(attempt + 1, maxAttempts),
               delay,
             );
           } else {
-            // Only show an error for actual failures
-            console.error(
-              `[attemptFinalization] Finalization failed with status ${result.status}: ${result.error}`,
+            console.log(
+              `[attemptFinalization] Finalization failed with status ${result.status} for game ${gameId}, switching to background polling`,
             );
-            setError(result.error || 'Game finalization failed');
-            setPhase(GamePhase.ERROR);
-            setIsResolutionPending(false);
+            attemptFinalization(maxAttempts + 1, maxAttempts);
           }
         } catch (error) {
           console.error(
-            `[attemptFinalization] Error in attempt ${attempt}:`,
+            `[attemptFinalization] Error in attempt ${attempt} for game ${gameId}:`,
             error,
           );
 
-          // Retry on network errors
           if (
             error instanceof Error &&
             (error.message.includes('network') ||
@@ -372,38 +412,27 @@ export function useGame() {
             console.log(
               `[attemptFinalization] Network error, retrying in ${Math.round(
                 delay,
-              )}ms`,
+              )}ms for game ${gameId}`,
             );
             setTimeout(
               () => attemptFinalization(attempt + 1, maxAttempts),
               delay,
             );
           } else {
-            // Only show an error for non-network issues
-            setError(
-              error instanceof Error
-                ? error.message
-                : 'Game finalization failed',
+            console.log(
+              `[attemptFinalization] Non-network error for game ${gameId}, switching to background polling`,
             );
-            setPhase(GamePhase.ERROR);
-            setIsResolutionPending(false);
+            attemptFinalization(maxAttempts + 1, maxAttempts);
           }
         }
       };
 
-      // Start the first attempt with a slight delay
       console.log(
-        `[startFinalizationProcess] Scheduling first attempt in 3000ms`,
+        `[startFinalizationProcess] Scheduling first attempt in 3000ms for game ${gameId}`,
       );
       setTimeout(() => attemptFinalization(1, 5), 3000);
     },
-    [
-      finalizeGame,
-      processGameResult,
-      setError,
-      setPhase,
-      setIsResolutionPending,
-    ],
+    [finalizeGame, processGameResult, setPhase, setIsResolutionPending],
   );
 
   //-----------------------------------------------------------------------
