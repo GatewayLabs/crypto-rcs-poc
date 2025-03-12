@@ -48,8 +48,8 @@ export default function SyncStatus({ isSynced }: SyncStatusProps) {
       <div className="flex items-center justify-between w-full">
         <div className="flex flex-col">
           {pendingCount > 0 && (
-            <span className="text-amber-500 flex items-center gap-2">
-              <span className="inline-block w-2 h-2 rounded-full bg-amber-500"></span>
+            <span className="text-yellow-500 flex items-center gap-2">
+              <span className="inline-block w-2 h-2 rounded-full bg-yellow-500"></span>
               {pendingCount === 1
                 ? "1 match pending synchronization"
                 : `${pendingCount} matches pending synchronization`}
