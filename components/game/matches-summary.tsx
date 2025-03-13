@@ -31,7 +31,7 @@ export default function MatchesSummary({
           <span className="text-zinc-400 text-sm font-normal mb-2">Rank</span>
           <span className="text-neutral-50 text-2xl font-medium">
             {playerStats ? (
-              `#${playerRank ? "1000+" : playerRank}`
+              `#${playerRank ? playerRank : "1000+"}`
             ) : (
               <div className="h-8 w-8 bg-zinc-700 rounded animate-pulse"></div>
             )}
