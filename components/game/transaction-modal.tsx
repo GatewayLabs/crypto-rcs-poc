@@ -4,21 +4,17 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { useGameUIStore } from "@/stores/game-ui-store";
-import { GamePhase } from "@/types/game";
-import { ExternalLink, RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+} from '@/components/ui/dialog';
+import { useGameUIStore } from '@/stores/game-ui-store';
+import { GamePhase } from '@/types/game';
+import { ExternalLink } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 interface TransactionModalProps {
-  onRetry?: () => void;
   onCancel?: () => void;
 }
 
-export default function TransactionModal({
-  onRetry,
-  onCancel,
-}: TransactionModalProps) {
+export default function TransactionModal({ onCancel }: TransactionModalProps) {
   const [elapsedTime, setElapsedTime] = useState(0);
 
   // Get state from the store
@@ -51,34 +47,34 @@ export default function TransactionModal({
   }, [isTransactionModalOpen]);
 
   const getMessage = () => {
-    if (transactionType === "approve") {
+    if (transactionType === 'approve') {
       return "Waiting for transaction approval to continue. Don't see your wallet? Check your other browser windows.";
     }
 
     if (phase === GamePhase.WAITING) {
       if (elapsedTime < 20) {
-        return "Please wait while we validate the moves on-chain";
+        return 'Please wait while we validate the moves on-chain';
       } else if (elapsedTime < 40) {
-        return "This is taking longer than usual. Blockchain transactions can sometimes be delayed...";
+        return 'This is taking longer than usual. Blockchain transactions can sometimes be delayed...';
       } else {
-        return "Your transaction is being processed by the blockchain. This may take a few minutes...";
+        return 'Your transaction is being processed by the blockchain. This may take a few minutes...';
       }
     }
 
     if (phase === GamePhase.REVEALING) {
       if (elapsedTime < 20) {
-        return "Computing game result on-chain...";
+        return 'Computing game result on-chain...';
       } else if (elapsedTime < 40) {
-        return "Finalizing your game. Almost there...";
+        return 'Finalizing your game. Almost there...';
       } else {
-        return "Still working on your game. The blockchain can be slower during high traffic periods.";
+        return 'Still working on your game. The blockchain can be slower during high traffic periods.';
       }
     }
 
-    return "Processing your transaction...";
+    return 'Processing your transaction...';
   };
 
-  const showExplorer = transactionType === "validate" && transactionHash;
+  const showExplorer = transactionType === 'validate' && transactionHash;
 
   const handleOpenChange = (open: boolean) => {
     // If modal is being closed and we're in SELECTED or WAITING phase
@@ -102,11 +98,11 @@ export default function TransactionModal({
         <DialogHeader className="flex flex-col items-center text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-2 border-t-transparent border-white mb-4" />
           <DialogTitle className="text-xl font-medium">
-            {transactionType === "approve"
-              ? "Approve the transaction"
+            {transactionType === 'approve'
+              ? 'Approve the transaction'
               : elapsedTime > 60
-              ? "Transaction taking longer than expected"
-              : "Validating moves..."}
+              ? 'Transaction taking longer than expected'
+              : 'Validating moves...'}
           </DialogTitle>
           <DialogDescription className="text-zinc-400 mt-2">
             {getMessage()}

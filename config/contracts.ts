@@ -26,6 +26,19 @@ export const gameContractConfig = {
     {
       inputs: [
         {
+          internalType: 'address',
+          name: 'newHouse',
+          type: 'address',
+        },
+      ],
+      name: 'changeHouse',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function',
+    },
+    {
+      inputs: [
+        {
           internalType: 'uint256',
           name: 'gameId',
           type: 'uint256',
@@ -58,6 +71,29 @@ export const gameContractConfig = {
     {
       inputs: [
         {
+          internalType: 'uint256',
+          name: 'gameId',
+          type: 'uint256',
+        },
+        {
+          internalType: 'int256',
+          name: 'diffMod3',
+          type: 'int256',
+        },
+      ],
+      name: 'finalizeGame',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function',
+    },
+    {
+      inputs: [
+        {
+          internalType: 'address',
+          name: 'initialOwner',
+          type: 'address',
+        },
+        {
           internalType: 'address',
           name: 'paillierAddress',
           type: 'address',
@@ -82,6 +118,28 @@ export const gameContractConfig = {
       type: 'constructor',
     },
     {
+      inputs: [
+        {
+          internalType: 'address',
+          name: 'owner',
+          type: 'address',
+        },
+      ],
+      name: 'OwnableInvalidOwner',
+      type: 'error',
+    },
+    {
+      inputs: [
+        {
+          internalType: 'address',
+          name: 'account',
+          type: 'address',
+        },
+      ],
+      name: 'OwnableUnauthorizedAccount',
+      type: 'error',
+    },
+    {
       anonymous: false,
       inputs: [
         {
@@ -99,24 +157,6 @@ export const gameContractConfig = {
       ],
       name: 'DifferenceComputed',
       type: 'event',
-    },
-    {
-      inputs: [
-        {
-          internalType: 'uint256',
-          name: 'gameId',
-          type: 'uint256',
-        },
-        {
-          internalType: 'int256',
-          name: 'diffMod3',
-          type: 'int256',
-        },
-      ],
-      name: 'finalizeGame',
-      outputs: [],
-      stateMutability: 'nonpayable',
-      type: 'function',
     },
     {
       anonymous: false,
@@ -195,6 +235,25 @@ export const gameContractConfig = {
       type: 'event',
     },
     {
+      anonymous: false,
+      inputs: [
+        {
+          indexed: false,
+          internalType: 'address',
+          name: 'oldHouse',
+          type: 'address',
+        },
+        {
+          indexed: false,
+          internalType: 'address',
+          name: 'newHouse',
+          type: 'address',
+        },
+      ],
+      name: 'HouseChanged',
+      type: 'event',
+    },
+    {
       inputs: [
         {
           internalType: 'uint256',
@@ -226,17 +285,51 @@ export const gameContractConfig = {
       type: 'event',
     },
     {
+      anonymous: false,
       inputs: [
         {
-          internalType: 'uint256',
-          name: 'gameId',
-          type: 'uint256',
+          indexed: true,
+          internalType: 'address',
+          name: 'previousOwner',
+          type: 'address',
+        },
+        {
+          indexed: true,
+          internalType: 'address',
+          name: 'newOwner',
+          type: 'address',
         },
       ],
-      name: 'submitMoves',
+      name: 'OwnershipTransferred',
+      type: 'event',
+    },
+    {
+      inputs: [],
+      name: 'renounceOwnership',
       outputs: [],
       stateMutability: 'nonpayable',
       type: 'function',
+    },
+    {
+      inputs: [
+        {
+          internalType: 'address',
+          name: 'newOwner',
+          type: 'address',
+        },
+      ],
+      name: 'transferOwnership',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function',
+    },
+    {
+      stateMutability: 'payable',
+      type: 'fallback',
+    },
+    {
+      stateMutability: 'payable',
+      type: 'receive',
     },
     {
       inputs: [],
@@ -275,8 +368,28 @@ export const gameContractConfig = {
       name: 'games',
       outputs: [
         {
+          internalType: 'bool',
+          name: 'bothCommitted',
+          type: 'bool',
+        },
+        {
+          internalType: 'bool',
+          name: 'finished',
+          type: 'bool',
+        },
+        {
+          internalType: 'bool',
+          name: 'fundsDistributed',
+          type: 'bool',
+        },
+        {
           internalType: 'uint256',
           name: 'gameId',
+          type: 'uint256',
+        },
+        {
+          internalType: 'uint256',
+          name: 'betAmount',
           type: 'uint256',
         },
         {
@@ -290,6 +403,11 @@ export const gameContractConfig = {
           type: 'address',
         },
         {
+          internalType: 'address',
+          name: 'winner',
+          type: 'address',
+        },
+        {
           internalType: 'bytes',
           name: 'encryptedChoiceA',
           type: 'bytes',
@@ -300,11 +418,6 @@ export const gameContractConfig = {
           type: 'bytes',
         },
         {
-          internalType: 'bool',
-          name: 'bothCommitted',
-          type: 'bool',
-        },
-        {
           internalType: 'bytes',
           name: 'differenceCiphertext',
           type: 'bytes',
@@ -313,26 +426,6 @@ export const gameContractConfig = {
           internalType: 'int256',
           name: 'revealedDifference',
           type: 'int256',
-        },
-        {
-          internalType: 'address',
-          name: 'winner',
-          type: 'address',
-        },
-        {
-          internalType: 'bool',
-          name: 'finished',
-          type: 'bool',
-        },
-        {
-          internalType: 'uint256',
-          name: 'betAmount',
-          type: 'uint256',
-        },
-        {
-          internalType: 'bool',
-          name: 'fundsDistributed',
-          type: 'bool',
         },
       ],
       stateMutability: 'view',
@@ -438,6 +531,32 @@ export const gameContractConfig = {
     },
     {
       inputs: [],
+      name: 'nSquared',
+      outputs: [
+        {
+          internalType: 'bytes',
+          name: '',
+          type: 'bytes',
+        },
+      ],
+      stateMutability: 'view',
+      type: 'function',
+    },
+    {
+      inputs: [],
+      name: 'owner',
+      outputs: [
+        {
+          internalType: 'address',
+          name: '',
+          type: 'address',
+        },
+      ],
+      stateMutability: 'view',
+      type: 'function',
+    },
+    {
+      inputs: [],
       name: 'paillier',
       outputs: [
         {
@@ -462,14 +581,30 @@ export const houseBatcherContractConfig = {
           name: '_rpsAddress',
           type: 'address',
         },
-        {
-          internalType: 'address',
-          name: '_house',
-          type: 'address',
-        },
       ],
       stateMutability: 'nonpayable',
       type: 'constructor',
+    },
+    {
+      inputs: [],
+      name: 'AccessControlBadConfirmation',
+      type: 'error',
+    },
+    {
+      inputs: [
+        {
+          internalType: 'address',
+          name: 'account',
+          type: 'address',
+        },
+        {
+          internalType: 'bytes32',
+          name: 'neededRole',
+          type: 'bytes32',
+        },
+      ],
+      name: 'AccessControlUnauthorizedAccount',
+      type: 'error',
     },
     {
       anonymous: false,
@@ -496,20 +631,281 @@ export const houseBatcherContractConfig = {
           name: 'encChoiceB',
           type: 'bytes',
         },
+        {
+          internalType: 'int256',
+          name: 'diffMod3',
+          type: 'int256',
+        },
+        {
+          internalType: 'uint256',
+          name: 'betAmount',
+          type: 'uint256',
+        },
       ],
       name: 'batchHouseFlow',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function',
+    },
+    {
+      inputs: [],
+      name: 'deposit',
       outputs: [],
       stateMutability: 'payable',
       type: 'function',
     },
     {
-      inputs: [],
-      name: 'house',
-      outputs: [
+      anonymous: false,
+      inputs: [
+        {
+          indexed: true,
+          internalType: 'address',
+          name: 'sender',
+          type: 'address',
+        },
+        {
+          indexed: false,
+          internalType: 'uint256',
+          name: 'amount',
+          type: 'uint256',
+        },
+      ],
+      name: 'Deposit',
+      type: 'event',
+    },
+    {
+      inputs: [
+        {
+          internalType: 'bytes32',
+          name: 'role',
+          type: 'bytes32',
+        },
         {
           internalType: 'address',
-          name: '',
+          name: 'account',
           type: 'address',
+        },
+      ],
+      name: 'grantRole',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function',
+    },
+    {
+      inputs: [
+        {
+          internalType: 'bytes32',
+          name: 'role',
+          type: 'bytes32',
+        },
+        {
+          internalType: 'address',
+          name: 'callerConfirmation',
+          type: 'address',
+        },
+      ],
+      name: 'renounceRole',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function',
+    },
+    {
+      inputs: [
+        {
+          internalType: 'bytes32',
+          name: 'role',
+          type: 'bytes32',
+        },
+        {
+          internalType: 'address',
+          name: 'account',
+          type: 'address',
+        },
+      ],
+      name: 'revokeRole',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function',
+    },
+    {
+      anonymous: false,
+      inputs: [
+        {
+          indexed: true,
+          internalType: 'bytes32',
+          name: 'role',
+          type: 'bytes32',
+        },
+        {
+          indexed: true,
+          internalType: 'bytes32',
+          name: 'previousAdminRole',
+          type: 'bytes32',
+        },
+        {
+          indexed: true,
+          internalType: 'bytes32',
+          name: 'newAdminRole',
+          type: 'bytes32',
+        },
+      ],
+      name: 'RoleAdminChanged',
+      type: 'event',
+    },
+    {
+      anonymous: false,
+      inputs: [
+        {
+          indexed: true,
+          internalType: 'bytes32',
+          name: 'role',
+          type: 'bytes32',
+        },
+        {
+          indexed: true,
+          internalType: 'address',
+          name: 'account',
+          type: 'address',
+        },
+        {
+          indexed: true,
+          internalType: 'address',
+          name: 'sender',
+          type: 'address',
+        },
+      ],
+      name: 'RoleGranted',
+      type: 'event',
+    },
+    {
+      anonymous: false,
+      inputs: [
+        {
+          indexed: true,
+          internalType: 'bytes32',
+          name: 'role',
+          type: 'bytes32',
+        },
+        {
+          indexed: true,
+          internalType: 'address',
+          name: 'account',
+          type: 'address',
+        },
+        {
+          indexed: true,
+          internalType: 'address',
+          name: 'sender',
+          type: 'address',
+        },
+      ],
+      name: 'RoleRevoked',
+      type: 'event',
+    },
+    {
+      inputs: [
+        {
+          internalType: 'uint256',
+          name: 'amount',
+          type: 'uint256',
+        },
+      ],
+      name: 'withdraw',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function',
+    },
+    {
+      anonymous: false,
+      inputs: [
+        {
+          indexed: true,
+          internalType: 'address',
+          name: 'receiver',
+          type: 'address',
+        },
+        {
+          indexed: false,
+          internalType: 'uint256',
+          name: 'amount',
+          type: 'uint256',
+        },
+      ],
+      name: 'Withdrawal',
+      type: 'event',
+    },
+    {
+      stateMutability: 'payable',
+      type: 'fallback',
+    },
+    {
+      stateMutability: 'payable',
+      type: 'receive',
+    },
+    {
+      inputs: [],
+      name: 'CALLER_ROLE',
+      outputs: [
+        {
+          internalType: 'bytes32',
+          name: '',
+          type: 'bytes32',
+        },
+      ],
+      stateMutability: 'view',
+      type: 'function',
+    },
+    {
+      inputs: [],
+      name: 'DEFAULT_ADMIN_ROLE',
+      outputs: [
+        {
+          internalType: 'bytes32',
+          name: '',
+          type: 'bytes32',
+        },
+      ],
+      stateMutability: 'view',
+      type: 'function',
+    },
+    {
+      inputs: [
+        {
+          internalType: 'bytes32',
+          name: 'role',
+          type: 'bytes32',
+        },
+      ],
+      name: 'getRoleAdmin',
+      outputs: [
+        {
+          internalType: 'bytes32',
+          name: '',
+          type: 'bytes32',
+        },
+      ],
+      stateMutability: 'view',
+      type: 'function',
+    },
+    {
+      inputs: [
+        {
+          internalType: 'bytes32',
+          name: 'role',
+          type: 'bytes32',
+        },
+        {
+          internalType: 'address',
+          name: 'account',
+          type: 'address',
+        },
+      ],
+      name: 'hasRole',
+      outputs: [
+        {
+          internalType: 'bool',
+          name: '',
+          type: 'bool',
         },
       ],
       stateMutability: 'view',
@@ -523,6 +919,25 @@ export const houseBatcherContractConfig = {
           internalType: 'address',
           name: '',
           type: 'address',
+        },
+      ],
+      stateMutability: 'view',
+      type: 'function',
+    },
+    {
+      inputs: [
+        {
+          internalType: 'bytes4',
+          name: 'interfaceId',
+          type: 'bytes4',
+        },
+      ],
+      name: 'supportsInterface',
+      outputs: [
+        {
+          internalType: 'bool',
+          name: '',
+          type: 'bool',
         },
       ],
       stateMutability: 'view',

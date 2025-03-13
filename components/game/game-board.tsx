@@ -1,37 +1,36 @@
-import ErrorDialog from "@/components/game/error-dialog";
-import GameButton from "@/components/game/game-button";
-import GameResultView from "@/components/game/game-result";
-import TransactionModal from "@/components/game/transaction-modal";
-import { useWallet } from "@/contexts/wallet-context";
-import { useGame } from "@/hooks/use-game";
-import { Move } from "@/lib/crypto";
-import { soundEffects } from "@/lib/sounds/sound-effects";
-import { useGameUIStore } from "@/stores/game-ui-store";
-import { GamePhase } from "@/types/game";
-import { formatEther } from "ethers";
-import { useEffect, useState } from "react";
-import { useBalance } from "wagmi";
-import GameBet from "./game-bet";
+import ErrorDialog from '@/components/game/error-dialog';
+import GameButton from '@/components/game/game-button';
+import GameResultView from '@/components/game/game-result';
+import TransactionModal from '@/components/game/transaction-modal';
+import { useWallet } from '@/contexts/wallet-context';
+import { useGame } from '@/hooks/use-game';
+import { Move } from '@/lib/crypto';
+import { soundEffects } from '@/lib/sounds/sound-effects';
+import { useGameUIStore } from '@/stores/game-ui-store';
+import { GamePhase } from '@/types/game';
+import { formatEther } from 'ethers';
+import { useEffect, useState } from 'react';
+import { useBalance } from 'wagmi';
+import GameBet from './game-bet';
 
 const GAME_BUTTONS = [
   {
-    label: "ROCK",
-    imageSrc: "/images/rock.png",
+    label: 'ROCK',
+    imageSrc: '/images/rock.png',
   },
   {
-    label: "PAPER",
-    imageSrc: "/images/paper.png",
+    label: 'PAPER',
+    imageSrc: '/images/paper.png',
   },
   {
-    label: "SCISSORS",
-    imageSrc: "/images/scissors.png",
+    label: 'SCISSORS',
+    imageSrc: '/images/scissors.png',
   },
 ];
 
 export default function GameBoard() {
   // Get game actions from useGame hook
-  const { createGame, joinGame, resetGame, retryResolution, revertToChoosing } =
-    useGame();
+  const { createGame, joinGame, resetGame, revertToChoosing } = useGame();
 
   // Get state from the store
   const {
@@ -64,8 +63,8 @@ export default function GameBoard() {
   // Sound effects for game outcomes
   useEffect(() => {
     if (phase === GamePhase.FINISHED && result) {
-      if (result === "WIN") soundEffects.win();
-      else if (result === "LOSE") soundEffects.lose();
+      if (result === 'WIN') soundEffects.win();
+      else if (result === 'LOSE') soundEffects.lose();
       else soundEffects.draw();
     }
   }, [phase, result]);
@@ -79,9 +78,9 @@ export default function GameBoard() {
   useEffect(() => {
     // Show transaction modal based on phase
     if (phase === GamePhase.SELECTED) {
-      setTransactionModal(true, "approve");
+      setTransactionModal(true, 'approve');
     } else if (phase === GamePhase.WAITING || phase === GamePhase.REVEALING) {
-      setTransactionModal(true, "validate");
+      setTransactionModal(true, 'validate');
     } else {
       setTransactionModal(false);
     }
@@ -129,10 +128,10 @@ export default function GameBoard() {
         await joinGame(gameId, move, BigInt(betValue * 10 ** 18));
       }
     } catch (error) {
-      if (error instanceof Error && error.message.includes("user rejected")) {
+      if (error instanceof Error && error.message.includes('user rejected')) {
         setPhase(GamePhase.CHOOSING);
       } else {
-        console.error("Error making move:", error);
+        console.error('Error making move:', error);
       }
     }
   };
@@ -140,11 +139,6 @@ export default function GameBoard() {
   const handlePlayAgain = () => {
     soundEffects.click();
     resetGame();
-  };
-
-  const handleRetryResolution = () => {
-    if (!gameId) return;
-    retryResolution(gameId);
   };
 
   const handleCancelTransaction = () => {
@@ -181,14 +175,14 @@ export default function GameBoard() {
         <div className="max-w-full">
           <div className="text-zinc-400 text-sm leading-none max-md:max-w-full">
             {!walletAddress
-              ? "Connect your wallet to play"
+              ? 'Connect your wallet to play'
               : phase === GamePhase.ERROR
-              ? "Something went wrong. Choose your move to try again."
+              ? 'Something went wrong. Choose your move to try again.'
               : phase === GamePhase.CHOOSING
               ? gameId
-                ? "Join the game..."
-                : "Make your move to start the match"
-              : "Processing your move..."}
+                ? 'Join the game...'
+                : 'Make your move to start the match'
+              : 'Processing your move...'}
           </div>
           <div className="text-white text-5xl font-bold leading-none tracking-[-1.2px] mt-3 max-md:max-w-full max-md:text-[40px]">
             Wager your $MON
@@ -215,7 +209,7 @@ export default function GameBoard() {
               onClick={() => handleMove(button.label as Move)}
               disabled={areButtonsDisabled}
               aria-selected={
-                typeof playerMove === "string" && playerMove === button.label
+                typeof playerMove === 'string' && playerMove === button.label
               }
             />
           ))}
@@ -223,13 +217,10 @@ export default function GameBoard() {
       </div>
 
       {/* Transaction modal with cancel handler */}
-      <TransactionModal
-        onRetry={gameId ? () => handleRetryResolution() : undefined}
-        onCancel={handleCancelTransaction}
-      />
+      <TransactionModal onCancel={handleCancelTransaction} />
 
       {/* Only show error dialog for non-cancellation errors */}
-      {error && !error.includes("user rejected") && (
+      {error && !error.includes('user rejected') && (
         <ErrorDialog
           onClose={() => {
             revertToChoosing();
