@@ -144,7 +144,7 @@ export function useLeaderboard() {
         return [];
       }
     },
-    staleTime: 5000,
+    staleTime: 2000,
     refetchInterval: 60000,
   });
 

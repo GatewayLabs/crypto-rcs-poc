@@ -1,18 +1,18 @@
-import { useQuery } from '@tanstack/react-query';
-import { formatEther } from 'viem';
+import { useQuery } from "@tanstack/react-query";
+import { formatEther } from "viem";
 
 // Subgraph URL
 const SUBGRAPH_URL =
-  'https://subgraph.satsuma-prod.com/bd8dae892d7c/gateway-dao/odyssey-rps-graph/version/0.1.0/api';
+  "https://subgraph.satsuma-prod.com/bd8dae892d7c/gateway-dao/odyssey-rps-graph/version/0.1.0/api";
 
 // Game state enum to match the subgraph
 export enum GameState {
-  CREATED = 'CREATED',
-  JOINED = 'JOINED',
-  MOVES_SUBMITTED = 'MOVES_SUBMITTED',
-  DIFFERENCE_COMPUTED = 'DIFFERENCE_COMPUTED',
-  RESOLVED = 'RESOLVED',
-  CANCELLED = 'CANCELLED',
+  CREATED = "CREATED",
+  JOINED = "JOINED",
+  MOVES_SUBMITTED = "MOVES_SUBMITTED",
+  DIFFERENCE_COMPUTED = "DIFFERENCE_COMPUTED",
+  RESOLVED = "RESOLVED",
+  CANCELLED = "CANCELLED",
 }
 
 // Game data structure
@@ -50,7 +50,7 @@ export interface PlayerGame {
   cancelledAt: Date | null;
   transactionHash: string;
   isPlayerA: boolean;
-  result: 'win' | 'loss' | 'draw' | 'pending';
+  result: "win" | "loss" | "draw" | "pending";
 }
 
 // GraphQL query for player's games
@@ -119,7 +119,7 @@ export function usePlayerGames(address: string | undefined) {
     isLoading,
     refetch,
   } = useQuery({
-    queryKey: ['playerGames', address],
+    queryKey: ["playerGames", address],
     queryFn: async (): Promise<PlayerGame[]> => {
       if (!address) return [];
 
@@ -131,9 +131,9 @@ export function usePlayerGames(address: string | undefined) {
 
         // Fetch data from the subgraph
         const response = await fetch(SUBGRAPH_URL, {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
             query: PLAYER_GAMES_QUERY,
@@ -148,48 +148,48 @@ export function usePlayerGames(address: string | undefined) {
         }
 
         const data = (await response.json()) as SubgraphGamesResponse;
-        console.log('Subgraph response:', data);
+        console.log("Subgraph response:", data);
 
         if (data.errors) {
-          console.error('GraphQL errors:', data.errors);
-          throw new Error('GraphQL query failed');
+          console.error("GraphQL errors:", data.errors);
+          throw new Error("GraphQL query failed");
         }
 
         // Process games where player is playerA
         const gamesAsPlayerA = data.data.playerA.map((game) =>
-          processGame(game, true, normalizedAddress),
+          processGame(game, true, normalizedAddress)
         );
 
         // Process games where player is playerB
         const gamesAsPlayerB = data.data.playerB.map((game) =>
-          processGame(game, false, normalizedAddress),
+          processGame(game, false, normalizedAddress)
         );
 
         // Combine and sort by createdAt (newest first)
         const allGames = [...gamesAsPlayerA, ...gamesAsPlayerB].sort(
-          (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+          (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
         );
 
         console.log(`Fetched ${allGames.length} games for player ${address}`);
         return allGames;
       } catch (error) {
         console.error(
-          'Error fetching player games from subgraph:',
-          error instanceof Error ? error.message : String(error),
+          "Error fetching player games from subgraph:",
+          error instanceof Error ? error.message : String(error)
         );
         return [];
       }
     },
     enabled: !!address,
     refetchInterval: 30000, // Refetch every 30 seconds
-    staleTime: 5000,
+    staleTime: 2000,
   });
 
   // Helper function to process game data and determine the result
   function processGame(
     game: SubgraphGame,
     isPlayerA: boolean,
-    playerAddress: string,
+    playerAddress: string
   ): PlayerGame {
     // Convert timestamps to Date objects
     const createdAt = new Date(parseInt(game.createdAt) * 1000);
@@ -214,18 +214,18 @@ export function usePlayerGames(address: string | undefined) {
       : game.playerA.id;
 
     // Determine game result for this player
-    let result: 'win' | 'loss' | 'draw' | 'pending' = 'pending';
+    let result: "win" | "loss" | "draw" | "pending" = "pending";
 
     if (game.state === GameState.RESOLVED) {
       if (game.winner === null) {
-        result = 'draw';
+        result = "draw";
       } else if (game.winner.toLowerCase() === playerAddress) {
-        result = 'win';
+        result = "win";
       } else {
-        result = 'loss';
+        result = "loss";
       }
     } else if (game.state === GameState.CANCELLED) {
-      result = 'pending'; // Consider cancelled games as pending for UI purposes
+      result = "pending"; // Consider cancelled games as pending for UI purposes
     }
 
     return {
@@ -251,8 +251,8 @@ export function usePlayerGames(address: string | undefined) {
       await refetch();
     } catch (error) {
       console.error(
-        'Error refreshing player games:',
-        error instanceof Error ? error.message : String(error),
+        "Error refreshing player games:",
+        error instanceof Error ? error.message : String(error)
       );
     }
   };

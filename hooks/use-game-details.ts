@@ -1,10 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
-import { formatEther } from 'viem';
-import { GameState } from './use-player-games';
+import { useQuery } from "@tanstack/react-query";
+import { formatEther } from "viem";
+import { GameState } from "./use-player-games";
 
 // Subgraph URL
 const SUBGRAPH_URL =
-  'https://subgraph.satsuma-prod.com/gateway-dao/odyssey-rps-graph/version/0.1.0/api';
+  "https://subgraph.satsuma-prod.com/gateway-dao/odyssey-rps-graph/version/0.1.0/api";
 
 // Game data structure
 export interface GameDetails {
@@ -99,18 +99,18 @@ export function useGameDetails(gameId: string | number | undefined) {
     isLoading,
     refetch,
   } = useQuery({
-    queryKey: ['gameDetails', gameId],
+    queryKey: ["gameDetails", gameId],
     queryFn: async (): Promise<GameDetails | null> => {
       if (!gameId) return null;
 
       try {
         // Handle different gameId formats
         // If it's a number, we need to convert it to a string ID format
-        let queryId = typeof gameId === 'number' ? gameId.toString() : gameId;
+        let queryId = typeof gameId === "number" ? gameId.toString() : gameId;
 
         // If it doesn't already have the format of a subgraph ID (which typically starts with "0x"),
         // we assume it's just the numeric part and prefix it appropriately
-        if (!queryId.startsWith('0x') && !isNaN(Number(queryId))) {
+        if (!queryId.startsWith("0x") && !isNaN(Number(queryId))) {
           console.log(`Converting numeric ID ${queryId} to subgraph ID format`);
           queryId = queryId; // In this case, the ID in the subgraph is just the number
           // Note: If the subgraph uses a different format, you may need to adjust this
@@ -120,9 +120,9 @@ export function useGameDetails(gameId: string | number | undefined) {
 
         // Fetch data from the subgraph
         const response = await fetch(SUBGRAPH_URL, {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
             query: GAME_DETAILS_QUERY,
@@ -137,11 +137,11 @@ export function useGameDetails(gameId: string | number | undefined) {
         }
 
         const data = (await response.json()) as SubgraphGameResponse;
-        console.log('Subgraph response:', data);
+        console.log("Subgraph response:", data);
 
         if (data.errors) {
-          console.error('GraphQL errors:', data.errors);
-          throw new Error('GraphQL query failed');
+          console.error("GraphQL errors:", data.errors);
+          throw new Error("GraphQL query failed");
         }
 
         // Check if game was found
@@ -188,15 +188,15 @@ export function useGameDetails(gameId: string | number | undefined) {
         };
       } catch (error) {
         console.error(
-          'Error fetching game details from subgraph:',
-          error instanceof Error ? error.message : String(error),
+          "Error fetching game details from subgraph:",
+          error instanceof Error ? error.message : String(error)
         );
         return null;
       }
     },
     enabled: !!gameId,
     refetchInterval: 10000, // Refetch every 10 seconds (useful for active games)
-    staleTime: 5000,
+    staleTime: 2000,
   });
 
   const refreshGameDetails = async () => {
@@ -204,8 +204,8 @@ export function useGameDetails(gameId: string | number | undefined) {
       await refetch();
     } catch (error) {
       console.error(
-        'Error refreshing game details:',
-        error instanceof Error ? error.message : String(error),
+        "Error refreshing game details:",
+        error instanceof Error ? error.message : String(error)
       );
     }
   };

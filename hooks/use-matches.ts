@@ -456,7 +456,7 @@ export function useMatches() {
       }
     },
     enabled: !!address,
-    staleTime: 5000,
+    staleTime: 2000,
     refetchInterval: 60000,
   });
 
