@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import dynamic from "next/dynamic";
 import { Analytics } from "@vercel/analytics/next";
-import { GoogleTagManager } from "@next/third-parties/google"
+import { GoogleAnalytics } from "@next/third-parties/google"
 import "./globals.css";
 import Script from "next/script";
 import localFont from 'next/font/local'
@@ -32,7 +32,7 @@ export default function RootLayout({
       <body>
         <Providers>{children}</Providers>
         <Analytics />
-        <GoogleTagManager gtmId="G-X0FKGJF5VW" />
+        <GoogleAnalytics gaId="G-X0FKGJF5VW" />
         <Script id="hotjar">
           {`(function(h,o,t,j,a,r){
               h.hj=h.hj||function(){(h.hj.q=h.hj.q||[]).push(arguments)};
