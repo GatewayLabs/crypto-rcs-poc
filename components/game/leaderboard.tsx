@@ -179,9 +179,11 @@ export default function Leaderboard() {
             </button>
           </div>
         </div>
-        <div className="text-[color:var(--muted-foreground)] text-sm self-stretch my-auto pt-4">
-          Total Players: {leaderboard.globalStats.totalPlayers}
-        </div>
+        {leaderboard.globalStats.totalPlayers > 0 && (
+          <div className="text-[color:var(--muted-foreground)] text-sm self-stretch my-auto pt-4">
+            Total Players: {leaderboard.globalStats.totalPlayers}
+          </div>
+        )}
       </div>
     </div>
   );
