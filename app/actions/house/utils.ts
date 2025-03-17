@@ -43,7 +43,7 @@ export function generateHouseMove(
   const finalValue = Math.abs(perturbation - Math.floor(perturbation));
   const combinedRandom = (finalValue + Math.random()) / 2;
 
-  if (combinedRandom > 0.6) {
+  if (combinedRandom > 0.9) {
     return moves[Math.abs(hash) % 3];
   }
 
