@@ -151,7 +151,7 @@ export default function Leaderboard() {
             </table>
           </div>
         </div>
-        <div className="flex w-full items-center gap-[40px_100px] text-sm leading-6 justify-between flex-wrap pt-4 max-md:max-w-full">
+        <div className="flex w-full items-center gap-[40px_100px] text-sm leading-6 justify-between flex-wrap pt-4 max-md:max-w-full min-w-full">
           <div className="text-[color:var(--muted-foreground)] font-normal self-stretch my-auto">
             Showing{" "}
             {currentPlayers.length > 0
@@ -184,8 +184,13 @@ export default function Leaderboard() {
           </div>
         </div>
         {leaderboard.globalStats.totalPlayers > 0 && (
-          <div className="text-[color:var(--muted-foreground)] text-sm self-stretch my-auto pt-4">
-            Total Players: {leaderboard.globalStats.totalPlayers}
+          <div className="flex w-full items-center text-sm leading-6 mt-4 flex-wrap pt-4 gap-6 border-t border-zinc-700 border-solid max-md:max-w-full">
+            <div className="text-[color:var(--muted-foreground)] font-normal self-stretch my-auto">
+              Players: {leaderboard.globalStats.totalPlayers}
+            </div>
+            <div className="text-[color:var(--muted-foreground)] font-normal self-stretch my-auto">
+              Games: {leaderboard.globalStats.totalGamesCreated}
+            </div>
           </div>
         )}
       </div>
