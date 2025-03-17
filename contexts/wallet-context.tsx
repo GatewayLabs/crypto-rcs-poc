@@ -7,7 +7,7 @@ import {
   useState,
   useEffect,
 } from "react";
-import { usePrivy, useWallets } from "@privy-io/react-auth";
+import { useDelegatedActions, usePrivy, useWallets } from "@privy-io/react-auth";
 import { useSetActiveWallet } from "@privy-io/wagmi";
 import { monad } from "@/config/chains";
 
@@ -29,9 +29,10 @@ interface WalletContextType {
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
-  const { ready, authenticated, login } = usePrivy();
+  const { ready, authenticated, login, logout, user } = usePrivy();
   const { wallets } = useWallets();
   const { setActiveWallet } = useSetActiveWallet();
+  const { delegateWallet } = useDelegatedActions();
 
   const [isWalletReady, setIsWalletReady] = useState(false);
   const [walletError, setWalletError] = useState<string | null>(null);
@@ -41,6 +42,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   );
   const walletAddress = embeddedWallet?.address;
   const isAuthenticated = ready && authenticated && !!walletAddress;
+
+  
+  const isDelegated =
+    !!embeddedWallet &&
+    !!user?.linkedAccounts.some(
+      (account) =>
+        account.type === "wallet" &&
+        account.chainType === "ethereum" &&
+        account.connectorType === "embedded" &&
+        account.delegated
+    );
 
   useEffect(() => {
     const activateWallet = async () => {
@@ -52,20 +64,33 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
         await setActiveWallet(embeddedWallet);
         await embeddedWallet.switchChain(monad.id);
+        
+        if(!isDelegated) {
+          await delegateWallet({
+            address: embeddedWallet.address,
+            chainType: "ethereum",
+          })
+        }
 
         setIsWalletReady(true);
         setWalletError(null);
       } catch (error) {
         console.error("Error activating wallet:", error);
+        let message = error instanceof Error ? error.message : "Unknown error";
+        if(message.includes("User declined")) {
+          message = "To access dApp you should delegate offline access to your embedded wallet";
+        }
+
         setWalletError(
-          error instanceof Error ? error.message : "Unknown wallet error"
+          message
         );
         setIsWalletReady(false);
+        await logout();
       }
     };
 
     activateWallet();
-  }, [isAuthenticated, embeddedWallet, setActiveWallet]);
+  }, [isAuthenticated, embeddedWallet, isDelegated, setActiveWallet]);
 
   const value = {
     isAuthenticated,
