@@ -3,6 +3,7 @@
 import { useMatches } from "@/hooks/use-matches";
 import { useGameUIStore } from "@/stores/game-ui-store";
 import { SubgraphPlayerStats } from "@/types/game";
+import { useEffect, useRef, useState } from "react";
 import Tooltip from "../ui/tooltip";
 
 export default function MatchesSummary({
@@ -11,7 +12,56 @@ export default function MatchesSummary({
   playerStats: SubgraphPlayerStats;
 }) {
   const { playerRank } = useGameUIStore();
-  const { totalEarnings, isSyncing } = useMatches();
+  const { totalEarnings, isSyncing, matches } = useMatches();
+  const [glowEffect, setGlowEffect] = useState<string>("");
+  const [glowTimeout, setGlowTimeout] = useState<NodeJS.Timeout | null>(null);
+  const previousPendingCountRef = useRef<number>(0);
+  const previousTotalEarningsRef = useRef<number>(totalEarnings || 0);
+
+  useEffect(() => {
+    const pendingMatches = matches.filter(
+      (match) => match.syncStatus === "pending"
+    );
+    const pendingCount = pendingMatches.length;
+    const hasSyncCompleted = !isSyncing && previousPendingCountRef.current > 0;
+
+    if (
+      (previousPendingCountRef.current > pendingCount || hasSyncCompleted) &&
+      totalEarnings !== undefined
+    ) {
+      const earningsDifference =
+        totalEarnings - previousTotalEarningsRef.current;
+
+      if (Math.abs(earningsDifference) > 0.001) {
+        if (earningsDifference > 0) {
+          setGlowEffect("earnings-glow-positive");
+        } else if (earningsDifference < 0) {
+          setGlowEffect("earnings-glow-negative");
+        }
+
+        if (glowTimeout) {
+          clearTimeout(glowTimeout);
+        }
+
+        const timeout = setTimeout(() => {
+          setGlowEffect("");
+        }, 2000);
+
+        setGlowTimeout(timeout);
+      }
+    }
+
+    previousPendingCountRef.current = pendingCount;
+    if (totalEarnings !== undefined) {
+      previousTotalEarningsRef.current = totalEarnings;
+    }
+
+    return () => {
+      if (glowTimeout) {
+        clearTimeout(glowTimeout);
+      }
+    };
+  }, [matches, totalEarnings, isSyncing]);
 
   const formattedEarnings =
     totalEarnings !== undefined ? (
@@ -88,7 +138,9 @@ export default function MatchesSummary({
             />
           </div>
           <span
-            className={`text-2xl font-medium ${isSyncing ? "opacity-70" : ""}`}
+            className={`text-2xl font-medium ${
+              isSyncing && !glowEffect ? "opacity-70" : ""
+            } ${glowEffect}`}
           >
             {isSyncing ? (
               <div className="flex items-center">
@@ -101,6 +153,67 @@ export default function MatchesSummary({
           </span>
         </div>
       </div>
+
+      {/* CSS for glow effects */}
+      <style jsx>{`
+        .earnings-glow-positive {
+          animation: glowGreen 2s ease-in-out;
+          text-shadow: 0 0 10px rgba(174, 243, 66, 0.7),
+            0 0 20px rgba(174, 243, 66, 0.5);
+          color: #aef342;
+          transition: text-shadow 0.3s ease, color 0.3s ease;
+        }
+
+        .earnings-glow-negative {
+          animation: glowRed 2s ease-in-out;
+          text-shadow: 0 0 10px rgba(255, 102, 107, 0.7),
+            0 0 20px rgba(255, 102, 107, 0.5);
+          color: #ff666b;
+          transition: text-shadow 0.3s ease, color 0.3s ease;
+        }
+
+        @keyframes glowGreen {
+          0% {
+            text-shadow: 0 0 0px rgba(174, 243, 66, 0);
+            color: inherit;
+          }
+          10% {
+            text-shadow: 0 0 15px rgba(174, 243, 66, 0.9),
+              0 0 25px rgba(174, 243, 66, 0.7);
+            color: #aef342;
+          }
+          80% {
+            text-shadow: 0 0 10px rgba(174, 243, 66, 0.7),
+              0 0 20px rgba(174, 243, 66, 0.5);
+            color: #aef342;
+          }
+          100% {
+            text-shadow: 0 0 0px rgba(174, 243, 66, 0);
+            color: inherit;
+          }
+        }
+
+        @keyframes glowRed {
+          0% {
+            text-shadow: 0 0 0px rgba(255, 102, 107, 0);
+            color: inherit;
+          }
+          10% {
+            text-shadow: 0 0 15px rgba(255, 102, 107, 0.9),
+              0 0 25px rgba(255, 102, 107, 0.7);
+            color: #ff666b;
+          }
+          80% {
+            text-shadow: 0 0 10px rgba(255, 102, 107, 0.7),
+              0 0 20px rgba(255, 102, 107, 0.5);
+            color: #ff666b;
+          }
+          100% {
+            text-shadow: 0 0 0px rgba(255, 102, 107, 0);
+            color: inherit;
+          }
+        }
+      `}</style>
     </div>
   );
 }

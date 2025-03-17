@@ -11,6 +11,7 @@ export default function Leaderboard() {
   const { address } = useAccount();
   const { setPlayerRank, setPlayerSummary } = useGameUIStore();
   const [currentPage, setCurrentPage] = useState(1);
+  const [playerIndex, setPlayerIndex] = useState(0);
 
   const rowsPerPage = 20;
   const sortedLeaderboard = leaderboard.players.sort((a, b) => {
@@ -60,15 +61,17 @@ export default function Leaderboard() {
       return b.score - a.score;
     });
 
-    const playerIndex = sorted.findIndex(
+    const player = sorted.findIndex(
       (player) => player.address.toLowerCase() === address.toLowerCase()
     );
+
+    setPlayerIndex(player);
 
     const playerSummary = playerIndex !== -1 ? sorted[playerIndex] : null;
 
     setPlayerRank(playerIndex !== -1 ? playerIndex + 1 : 0);
     setPlayerSummary(playerSummary);
-  }, [address, leaderboard, setPlayerRank, setPlayerSummary]);
+  }, [address, leaderboard, setPlayerRank, setPlayerSummary, playerIndex]);
 
   return (
     <div className="bg-zinc-950 border-l px-6 py-8 rounded-3xl border-white border-solid max-md:max-w-full max-md:px-5 flex flex-col">
@@ -107,7 +110,14 @@ export default function Leaderboard() {
                   currentPlayers.map((player, index) => (
                     <tr
                       key={player.address}
-                      className="bg-[rgba(39,39,42,0.4)]"
+                      className={`border-t border-zinc-700 border-solid ${
+                        indexOfFirstPlayer + index >= 0 &&
+                        indexOfFirstPlayer + index <= 2
+                          ? "bg-[rgba(39,39,42,0.4)]"
+                          : playerIndex === indexOfFirstPlayer + index
+                          ? "bg-[rgba(255,255,255,0.16)]"
+                          : ""
+                      }`}
                     >
                       <td className="px-4 min-h-14">
                         <div className="flex items-center h-14">
@@ -119,10 +129,13 @@ export default function Leaderboard() {
                                 ? "bg-gray-400 text-zinc-900"
                                 : indexOfFirstPlayer + index === 2
                                 ? "bg-amber-600 text-zinc-900"
-                                : "bg-zinc-700 text-zinc-300"
+                                : indexOfFirstPlayer + index >= 3 &&
+                                  indexOfFirstPlayer + index <= 9
+                                ? "bg-purple-700 text-zinc-300"
+                                : "bg-zinc-800 text-zinc-300"
                             }`}
                           >
-                            {indexOfFirstPlayer + index + 1}
+                            #{indexOfFirstPlayer + index + 1}
                           </div>
                         </div>
                       </td>
@@ -131,6 +144,11 @@ export default function Leaderboard() {
                           <div className="text-neutral-50 text-sm font-normal leading-none">
                             {player.address.slice(0, 6)}...
                             {player.address.slice(-4)}
+                            {playerIndex === indexOfFirstPlayer + index && (
+                              <span className="text-xs font-normal leading-none px-2.5 py-0.5 rounded-full bg-white text-black ml-2">
+                                Me
+                              </span>
+                            )}
                           </div>
                         </div>
                       </td>
