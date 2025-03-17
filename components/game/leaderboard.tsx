@@ -44,11 +44,15 @@ export default function Leaderboard() {
   };
 
   useEffect(() => {
-    if (!Array.isArray(leaderboard) || leaderboard.length === 0 || !address) {
+    if (
+      !Array.isArray(leaderboard.players) ||
+      leaderboard.players.length === 0 ||
+      !address
+    ) {
       return;
     }
 
-    const sorted = [...leaderboard].sort((a, b) => {
+    const sorted = [...leaderboard.players].sort((a, b) => {
       // Use earnings if available, otherwise fall back to score
       if ("earnings" in a && "earnings" in b) {
         return (b.earnings ?? 0) - (a.earnings ?? 0);
