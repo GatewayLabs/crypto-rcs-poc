@@ -191,25 +191,53 @@ export function useLeaderboard() {
   ) => {
     queryClient.setQueryData(
       ["leaderboard"],
-      (oldData: LeaderboardEntry[] | undefined) => {
+      (
+        oldData:
+          | {
+              players: LeaderboardEntry[];
+              globalStats: {
+                totalPlayers: number;
+                totalGamesV1: number;
+                totalGamesV2: number;
+                totalGamesCreated: number;
+                totalGamesFinished: number;
+              };
+            }
+          | undefined
+      ) => {
         if (!oldData) {
           const newEntry = {
-            address,
-            gamesPlayed: 1,
-            wins: result === "WIN" ? 1 : 0,
-            losses: result === "LOSE" ? 1 : 0,
-            draws: result === "DRAW" ? 1 : 0,
-            score: result === "WIN" ? 1 : result === "LOSE" ? -1 : 0,
-            earnings:
-              result === "WIN" ? betAmount : result === "LOSE" ? -betAmount : 0,
-            lastGameId: gameId,
+            players: [
+              {
+                address,
+                gamesPlayed: 1,
+                wins: result === "WIN" ? 1 : 0,
+                losses: result === "LOSE" ? 1 : 0,
+                draws: result === "DRAW" ? 1 : 0,
+                score: result === "WIN" ? 1 : result === "LOSE" ? -1 : 0,
+                earnings:
+                  result === "WIN"
+                    ? betAmount
+                    : result === "LOSE"
+                    ? -betAmount
+                    : 0,
+                lastGameId: gameId,
+              },
+            ],
+            globalStats: {
+              totalPlayers: 0,
+              totalGamesV1: 0,
+              totalGamesV2: 0,
+              totalGamesCreated: 0,
+              totalGamesFinished: 0,
+            },
           };
-          return [newEntry];
+          return newEntry;
         }
 
-        const newData = [...oldData];
+        const playersData = oldData.players.slice();
 
-        let playerEntry = newData.find(
+        let playerEntry = playersData.find(
           (entry) => entry.address.toLowerCase() === address.toLowerCase()
         );
 
@@ -223,11 +251,11 @@ export function useLeaderboard() {
             score: 0,
             earnings: 0,
           };
-          newData.push(playerEntry);
+          playersData.push(playerEntry);
         }
 
         if (playerEntry.lastGameId === gameId) {
-          return newData;
+          return playersData;
         }
 
         if (playerEntry.earnings === undefined) {
@@ -249,9 +277,12 @@ export function useLeaderboard() {
           playerEntry.draws += 1;
         }
 
-        newData.sort((a, b) => (b.earnings ?? 0) - (a.earnings ?? 0));
+        playersData.sort((a, b) => (b.earnings ?? 0) - (a.earnings ?? 0));
 
-        return newData;
+        return {
+          players: playersData,
+          globalStats: oldData.globalStats,
+        };
       }
     );
 
