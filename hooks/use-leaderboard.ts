@@ -19,18 +19,23 @@ interface SubgraphPlayer {
   updatedAt: string;
 }
 
+interface GlobalStats {
+  totalPlayers: number;
+  totalGamesV1: number;
+  totalGamesV2: number;
+  totalGamesCreated: number;
+  totalGamesFinished: number;
+}
+
+interface Leaderboard {
+  players: LeaderboardEntry[];
+  globalStats: GlobalStats;
+}
+
 interface SubgraphResponse {
   data: {
     players: SubgraphPlayer[];
-    globalStats: [
-      {
-        totalPlayers: number;
-        totalGamesV1: number;
-        totalGamesV2: number;
-        totalGamesCreated: number;
-        totalGamesFinished: number;
-      }
-    ];
+    globalStats: GlobalStats[];
   };
   errors?: Array<{
     message: string;
@@ -64,36 +69,31 @@ const PLAYERS_QUERY = `
   }
 `;
 
+const emptyGlobalStats = {
+  totalPlayers: 0,
+  totalGamesV1: 0,
+  totalGamesV2: 0,
+  totalGamesCreated: 0,
+  totalGamesFinished: 0,
+};
+
+const emptyLeaderboard = {
+  players: [],
+  globalStats: emptyGlobalStats,
+};
+
 /**
  * Fetch leaderboard data from the subgraph
  */
 export function useLeaderboard() {
   const queryClient = useQueryClient();
   const {
-    data: leaderboard = {
-      players: [],
-      globalStats: {
-        totalPlayers: 0,
-        totalGamesV1: 0,
-        totalGamesV2: 0,
-        totalGamesCreated: 0,
-        totalGamesFinished: 0,
-      },
-    },
+    data: leaderboard = emptyLeaderboard,
     isLoading,
     refetch,
   } = useQuery({
     queryKey: ["leaderboard"],
-    queryFn: async (): Promise<{
-      players: LeaderboardEntry[];
-      globalStats: {
-        totalPlayers: number;
-        totalGamesV1: number;
-        totalGamesV2: number;
-        totalGamesCreated: number;
-        totalGamesFinished: number;
-      };
-    }> => {
+    queryFn: async (): Promise<Leaderboard> => {
       try {
         // Fetch data from the subgraph
         const response = await fetch(SUBGRAPH_URL, {
@@ -156,16 +156,7 @@ export function useLeaderboard() {
           "Error fetching leaderboard from subgraph:",
           error instanceof Error ? error.message : String(error)
         );
-        return {
-          players: [],
-          globalStats: {
-            totalPlayers: 0,
-            totalGamesV1: 0,
-            totalGamesV2: 0,
-            totalGamesCreated: 0,
-            totalGamesFinished: 0,
-          },
-        };
+        return emptyLeaderboard;
       }
     },
     staleTime: 1000,
@@ -191,20 +182,7 @@ export function useLeaderboard() {
   ) => {
     queryClient.setQueryData(
       ["leaderboard"],
-      (
-        oldData:
-          | {
-              players: LeaderboardEntry[];
-              globalStats: {
-                totalPlayers: number;
-                totalGamesV1: number;
-                totalGamesV2: number;
-                totalGamesCreated: number;
-                totalGamesFinished: number;
-              };
-            }
-          | undefined
-      ) => {
+      (oldData: Leaderboard | undefined) => {
         if (!oldData) {
           const newEntry = {
             players: [
@@ -224,13 +202,7 @@ export function useLeaderboard() {
                 lastGameId: gameId,
               },
             ],
-            globalStats: {
-              totalPlayers: 0,
-              totalGamesV1: 0,
-              totalGamesV2: 0,
-              totalGamesCreated: 0,
-              totalGamesFinished: 0,
-            },
+            globalStats: emptyGlobalStats,
           };
           return newEntry;
         }

@@ -4,6 +4,7 @@ import { Move } from "@/lib/crypto";
 import {
   GameHistory,
   GameResult,
+  SubgraphGame,
   SubgraphGamesResponse,
   SubgraphPlayerStats,
 } from "@/types/game";
@@ -152,7 +153,7 @@ export function useMatches() {
     }
   }
 
-  async function checkPendingGamesById(
+  async function checkConfirmedGamesById(
     address: string,
     gameIds: number[]
   ): Promise<number[]> {
@@ -199,6 +200,166 @@ export function useMatches() {
       console.error("Error checking games by ID:", error);
       return [];
     }
+  }
+
+  function processPlayerGame(
+    player: SubgraphGame[],
+    normalizedAddress: string,
+    serverMatches: GameHistory[],
+    totalEarnings: number,
+    isWinner: boolean
+  ): {
+    totalEarnings: number;
+    serverMatches: GameHistory[];
+  } {
+    for (const game of player) {
+      if (!game.resolvedAt || game.revealedDifference === null) {
+        continue;
+      }
+
+      const betAmount = Number(formatEther(BigInt(game.betAmount)));
+      const timestamp = Number(game.resolvedAt) * 1000;
+
+      const diffMod3Value = ((game.revealedDifference % 3) + 3) % 3;
+
+      const { playerMove, houseMove, result, betValue } = inferGameResult(
+        diffMod3Value,
+        isWinner,
+        game.winner?.toLowerCase() === normalizedAddress,
+        betAmount
+      );
+
+      totalEarnings += betValue;
+
+      serverMatches.push({
+        id: game.id,
+        gameId: Number(game.gameId),
+        timestamp,
+        playerMove,
+        houseMove,
+        result,
+        playerAddress: normalizedAddress,
+        transactionHash: game.transactionHash,
+        betValue: betValue,
+      });
+    }
+
+    return {
+      totalEarnings,
+      serverMatches,
+    };
+  }
+
+  function handleServerMatches(
+    playerA: SubgraphGame[],
+    playerB: SubgraphGame[],
+    normalizedAddress: string
+  ): {
+    confirmedMatches: GameHistory[];
+    totalEarnings: number;
+  } {
+    let serverMatches: GameHistory[] = [];
+
+    logDebug(`Processing ${playerA.length} playerA games`);
+    const processedPlayerA = processPlayerGame(
+      playerA,
+      normalizedAddress,
+      serverMatches,
+      0,
+      true
+    );
+
+    let totalEarnings = processedPlayerA.totalEarnings;
+    serverMatches = processedPlayerA.serverMatches;
+
+    logDebug(`Processing ${playerB.length} playerB games`);
+    const processedPlayerB = processPlayerGame(
+      playerB,
+      normalizedAddress,
+      serverMatches,
+      totalEarnings,
+      false
+    );
+
+    totalEarnings = processedPlayerB.totalEarnings;
+    serverMatches = processedPlayerB.serverMatches;
+
+    serverMatches.sort((a, b) => b.timestamp - a.timestamp);
+
+    const confirmedMatches = serverMatches.map((match) => ({
+      ...match,
+      syncStatus: "synced" as const,
+    }));
+
+    return { confirmedMatches, totalEarnings };
+  }
+
+  async function handlePendingMatches(
+    localStoredMatches: GameHistory[],
+    confirmedMatches: GameHistory[],
+    address: string
+  ): Promise<GameHistory[]> {
+    const pendingGamesIds = localStoredMatches
+      .filter(
+        (localMatch) =>
+          !confirmedMatches.some(
+            (serverMatch) => serverMatch.gameId === localMatch.gameId
+          ) && localMatch.gameId !== null
+      )
+      .map((match) => match.gameId as number);
+
+    let confirmedGames: number[];
+
+    if (pendingGamesIds.length > 0) {
+      logDebug(`Checking status of ${pendingGamesIds.length} pending games`);
+      confirmedGames = await checkConfirmedGamesById(address, pendingGamesIds);
+    }
+
+    const nowTime = Date.now();
+
+    return localStoredMatches
+      .filter((localMatch) => {
+        const isFutureTimestamp = localMatch.timestamp > Date.now();
+        if (isFutureTimestamp) {
+          logDebug(
+            `Match ${localMatch.gameId} has a future timestamp, correcting it`
+          );
+          localMatch.timestamp = Date.now();
+        }
+        if (
+          confirmedMatches.some(
+            (serverMatch) =>
+              Number(serverMatch.gameId) === Number(localMatch.gameId)
+          )
+        ) {
+          return false;
+        }
+
+        if (
+          localMatch.gameId !== null &&
+          confirmedGames.includes(localMatch.gameId)
+        ) {
+          return false;
+        }
+
+        const isPendingTooLong =
+          nowTime - localMatch.timestamp > MAX_PENDING_TIME;
+
+        if (isPendingTooLong) {
+          logDebug(
+            `Match ${localMatch.gameId} has been pending too long (${Math.floor(
+              (nowTime - localMatch.timestamp) / 3600000
+            )} minutes), removing`
+          );
+          return false;
+        }
+
+        return true;
+      })
+      .map((match) => ({
+        ...match,
+        syncStatus: "pending" as const,
+      }));
   }
 
   const {
@@ -258,155 +419,23 @@ export function useMatches() {
           throw new Error("GraphQL query failed");
         }
 
-        const serverMatches: GameHistory[] = [];
-        let totalEarnings = 0;
+        const { confirmedMatches, totalEarnings } = handleServerMatches(
+          data.data.playerA,
+          data.data.playerB,
+          normalizedAddress
+        );
 
-        logDebug(`Processing ${data.data.playerA.length} playerA games`);
-        for (const game of data.data.playerA) {
-          if (!game.resolvedAt || game.revealedDifference === null) {
-            continue;
-          }
+        logDebug(`Total server matches found: ${confirmedMatches.length}`);
 
-          const betAmount = Number(formatEther(BigInt(game.betAmount)));
-          const timestamp = Number(game.resolvedAt) * 1000;
-
-          const diffMod3Value = ((game.revealedDifference % 3) + 3) % 3;
-
-          const { playerMove, houseMove, result, betValue } = inferGameResult(
-            diffMod3Value,
-            true,
-            game.winner?.toLowerCase() === normalizedAddress,
-            betAmount
-          );
-
-          totalEarnings += betValue;
-
-          serverMatches.push({
-            id: game.id,
-            gameId: Number(game.gameId),
-            timestamp,
-            playerMove,
-            houseMove,
-            result,
-            playerAddress: normalizedAddress,
-            transactionHash: game.transactionHash,
-            betValue: betValue,
-          });
-        }
-
-        logDebug(`Processing ${data.data.playerB.length} playerB games`);
-        for (const game of data.data.playerB) {
-          if (!game.resolvedAt || game.revealedDifference === null) {
-            continue;
-          }
-
-          const betAmount = Number(formatEther(BigInt(game.betAmount)));
-          const timestamp = Number(game.resolvedAt) * 1000;
-
-          const diffMod3Value = ((game.revealedDifference % 3) + 3) % 3;
-
-          const { playerMove, houseMove, result, betValue } = inferGameResult(
-            diffMod3Value,
-            false,
-            game.winner?.toLowerCase() === normalizedAddress,
-            betAmount
-          );
-
-          totalEarnings += betValue;
-
-          serverMatches.push({
-            id: game.id,
-            gameId: Number(game.gameId),
-            timestamp,
-            playerMove,
-            houseMove,
-            result,
-            playerAddress: normalizedAddress,
-            transactionHash: game.transactionHash,
-            betValue: betValue,
-          });
-        }
-
-        serverMatches.sort((a, b) => b.timestamp - a.timestamp);
-
-        const markedServerMatches = serverMatches.map((match) => ({
-          ...match,
-          syncStatus: "synced" as const,
-        }));
-
-        logDebug(`Total server matches found: ${markedServerMatches.length}`);
-
-        const pendingGamesIds = localStoredMatches
-          .filter(
-            (localMatch) =>
-              !markedServerMatches.some(
-                (serverMatch) => serverMatch.gameId === localMatch.gameId
-              ) && localMatch.gameId !== null
-          )
-          .map((match) => match.gameId as number);
-
-        let confirmedPendingGameIds: number[] = [];
-
-        if (pendingGamesIds.length > 0) {
-          logDebug(
-            `Checking status of ${pendingGamesIds.length} pending games`
-          );
-          confirmedPendingGameIds = await checkPendingGamesById(
-            address,
-            pendingGamesIds
-          );
-        }
-
-        const nowTime = Date.now();
-        const pendingLocalMatches = localStoredMatches
-          .filter((localMatch) => {
-            const isFutureTimestamp = localMatch.timestamp > Date.now();
-            if (isFutureTimestamp) {
-              logDebug(
-                `Match ${localMatch.gameId} has a future timestamp, correcting it`
-              );
-              localMatch.timestamp = Date.now();
-            }
-            if (
-              markedServerMatches.some(
-                (serverMatch) =>
-                  Number(serverMatch.gameId) === Number(localMatch.gameId)
-              )
-            ) {
-              return false;
-            }
-
-            if (
-              localMatch.gameId !== null &&
-              confirmedPendingGameIds.includes(localMatch.gameId)
-            ) {
-              return false;
-            }
-
-            const isPendingTooLong =
-              nowTime - localMatch.timestamp > MAX_PENDING_TIME;
-
-            if (isPendingTooLong) {
-              logDebug(
-                `Match ${
-                  localMatch.gameId
-                } has been pending too long (${Math.floor(
-                  (nowTime - localMatch.timestamp) / 3600000
-                )} minutes), removing`
-              );
-              return false;
-            }
-
-            return true;
-          })
-          .map((match) => ({
-            ...match,
-            syncStatus: "pending" as const,
-          }));
+        const pendingLocalMatches = await handlePendingMatches(
+          localStoredMatches,
+          confirmedMatches,
+          address
+        );
 
         logDebug(`Remaining pending matches: ${pendingLocalMatches.length}`);
 
-        const allMatches = [...markedServerMatches, ...pendingLocalMatches];
+        const allMatches = [...confirmedMatches, ...pendingLocalMatches];
         allMatches.sort((a, b) => b.timestamp - a.timestamp);
 
         // Only save pending matches to localStorage
@@ -420,14 +449,16 @@ export function useMatches() {
           `Sync completed at ${new Date(syncTime).toLocaleTimeString()}`
         );
 
+        const earnings = data.data.playerStats?.netProfitLoss
+          ? Number(formatEther(BigInt(data.data.playerStats.netProfitLoss)))
+          : pendingLocalMatches.reduce(
+              (sum, match) => sum + match.betValue,
+              0
+            ) + totalEarnings;
+
         return {
           matches: allMatches,
-          totalEarnings: data.data.playerStats?.netProfitLoss
-            ? Number(formatEther(BigInt(data.data.playerStats.netProfitLoss)))
-            : pendingLocalMatches.reduce(
-                (sum, match) => sum + match.betValue,
-                0
-              ) + totalEarnings,
+          totalEarnings: earnings,
           playerStats: data.data.playerStats,
           lastSyncTime: syncTime,
         };
