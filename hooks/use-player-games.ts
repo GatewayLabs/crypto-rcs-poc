@@ -182,7 +182,7 @@ export function usePlayerGames(address: string | undefined) {
     },
     enabled: !!address,
     refetchInterval: 30000, // Refetch every 30 seconds
-    staleTime: 2000,
+    staleTime: 1000,
   });
 
   // Helper function to process game data and determine the result
