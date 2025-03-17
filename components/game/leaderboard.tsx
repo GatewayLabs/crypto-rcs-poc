@@ -44,11 +44,15 @@ export default function Leaderboard() {
   };
 
   useEffect(() => {
-    if (!Array.isArray(leaderboard) || leaderboard.length === 0 || !address) {
+    if (
+      !Array.isArray(leaderboard.players) ||
+      leaderboard.players.length === 0 ||
+      !address
+    ) {
       return;
     }
 
-    const sorted = [...leaderboard].sort((a, b) => {
+    const sorted = [...leaderboard.players].sort((a, b) => {
       // Use earnings if available, otherwise fall back to score
       if ("earnings" in a && "earnings" in b) {
         return (b.earnings ?? 0) - (a.earnings ?? 0);
@@ -147,7 +151,7 @@ export default function Leaderboard() {
             </table>
           </div>
         </div>
-        <div className="flex w-full items-center gap-[40px_100px] text-sm leading-6 justify-between flex-wrap pt-4 max-md:max-w-full">
+        <div className="flex w-full items-center gap-[40px_100px] text-sm leading-6 justify-between flex-wrap pt-4 max-md:max-w-full min-w-full">
           <div className="text-[color:var(--muted-foreground)] font-normal self-stretch my-auto">
             Showing{" "}
             {currentPlayers.length > 0
@@ -179,9 +183,16 @@ export default function Leaderboard() {
             </button>
           </div>
         </div>
-        <div className="text-[color:var(--muted-foreground)] text-sm self-stretch my-auto pt-4">
-          Total Players: {leaderboard.globalStats.totalPlayers}
-        </div>
+        {leaderboard.globalStats.totalPlayers > 0 && (
+          <div className="flex w-full items-center text-sm leading-6 mt-4 flex-wrap pt-4 gap-6 border-t border-zinc-700 border-solid max-md:max-w-full">
+            <div className="text-[color:var(--muted-foreground)] font-normal self-stretch my-auto">
+              Players: {leaderboard.globalStats.totalPlayers}
+            </div>
+            <div className="text-[color:var(--muted-foreground)] font-normal self-stretch my-auto">
+              Games: {leaderboard.globalStats.totalGamesCreated}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
