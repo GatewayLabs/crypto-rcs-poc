@@ -89,7 +89,7 @@ export async function playHouseMove(
     }
 
     // 2. Generate and encrypt house move
-    const houseMove = generateHouseMove();
+    const houseMove = generateHouseMove(gameId, playerA, playerB);
     console.log(`Generated house move for game ${gameId}: ${houseMove}`);
 
     // 3. Encrypt move
