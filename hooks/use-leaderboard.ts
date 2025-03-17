@@ -19,86 +19,50 @@ interface SubgraphPlayer {
   updatedAt: string;
 }
 
-/**
- * Fetches data from the subgraph with pagination support
- */
-const fetchGraphQL = async <T>(query: string, skip = 0): Promise<T> => {
-  const response = await fetch(SUBGRAPH_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      query,
-      variables: { skip },
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`HTTP error! Status: ${response.status}`);
-  }
-
-  const result = await response.json();
-
-  if (result.errors) {
-    console.error("GraphQL errors:", result.errors);
-    throw new Error("GraphQL query failed");
-  }
-
-  return result.data as T;
-};
-
-/**
- * Fetches all players by paginating through the subgraph data
- */
-async function getAllPlayers(): Promise<{
-  totalCount: number;
-  players: SubgraphPlayer[];
-}> {
-  const PAGE_SIZE = 1000;
-  const PLAYERS_PAGINATED_QUERY = `
-    query GetPlayers($skip: Int!) {
-      players(
-        orderBy: netProfitLoss, 
-        orderDirection: desc, 
-        first: ${PAGE_SIZE}, 
-        skip: $skip,
-        where: {id_not: "0xcef4f72bb733654f0ef86a1612c82210891b0559"}
-      ) {
-        id
-        address
-        totalGamesPlayed
-        wins
-        losses
-        draws
-        netProfitLoss
-        totalReturned
-        createdAt
-        updatedAt
+interface SubgraphResponse {
+  data: {
+    players: SubgraphPlayer[];
+    globalStats: [
+      {
+        totalPlayers: number;
+        totalGamesV1: number;
+        totalGamesV2: number;
+        totalGamesCreated: number;
+        totalGamesFinished: number;
       }
-    }
-  `;
-
-  let allPlayers: SubgraphPlayer[] = [];
-  let skip = 0;
-  let hasMore = true;
-
-  while (hasMore) {
-    const response = await fetchGraphQL<{ players: SubgraphPlayer[] }>(
-      PLAYERS_PAGINATED_QUERY,
-      skip
-    );
-
-    const players = response.players;
-
-    allPlayers = [...allPlayers, ...players];
-    hasMore = players.length === PAGE_SIZE;
-    skip += PAGE_SIZE;
-  }
-
-  return {
-    totalCount: allPlayers.length,
-    players: allPlayers,
+    ];
   };
+  errors?: Array<{
+    message: string;
+    locations: Array<{ line: number; column: number }>;
+    path: string[];
+  }>;
 }
+
+// GraphQL query for players data
+const PLAYERS_QUERY = `
+  query GetPlayers {
+    globalStats {
+      totalPlayers
+      totalGamesV1
+      totalGamesV2
+      totalGamesCreated
+      totalGamesFinished
+    }
+    players(orderBy: netProfitLoss, orderDirection: desc, first: 1000, where:{id_not: "0xcef4f72bb733654f0ef86a1612c82210891b0559"}) {
+      id
+      address
+      totalGamesPlayed
+      wins
+      losses
+      draws
+      netProfitLoss
+      totalReturned
+      createdAt
+      updatedAt
+    }
+  }
+`;
 
 /**
  * Fetch leaderboard data from the subgraph
@@ -106,17 +70,55 @@ async function getAllPlayers(): Promise<{
 export function useLeaderboard() {
   const queryClient = useQueryClient();
   const {
-    data: leaderboard = [],
+    data: leaderboard = {
+      players: [],
+      globalStats: {
+        totalPlayers: 0,
+        totalGamesV1: 0,
+        totalGamesV2: 0,
+        totalGamesCreated: 0,
+        totalGamesFinished: 0,
+      },
+    },
     isLoading,
     refetch,
   } = useQuery({
     queryKey: ["leaderboard"],
-    queryFn: async (): Promise<LeaderboardEntry[]> => {
+    queryFn: async (): Promise<{
+      players: LeaderboardEntry[];
+      globalStats: {
+        totalPlayers: number;
+        totalGamesV1: number;
+        totalGamesV2: number;
+        totalGamesCreated: number;
+        totalGamesFinished: number;
+      };
+    }> => {
       try {
-        const response = await getAllPlayers();
+        // Fetch data from the subgraph
+        const response = await fetch(SUBGRAPH_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            query: PLAYERS_QUERY,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+
+        const data = (await response.json()) as SubgraphResponse;
+
+        if (data.errors) {
+          console.error("GraphQL errors:", data.errors);
+          throw new Error("GraphQL query failed");
+        }
 
         // Transform the data to match our LeaderboardEntry structure
-        const players: LeaderboardEntry[] = response.players.map((player) => {
+        const players: LeaderboardEntry[] = data.data.players.map((player) => {
           // Calculate earnings from netProfitLoss
           const earnings = Number(formatEther(BigInt(player.netProfitLoss)));
 
@@ -134,14 +136,36 @@ export function useLeaderboard() {
           };
         });
 
-        console.log(`Fetched ${players.length} players from subgraph`);
-        return players;
+        const globalStats = data.data.globalStats[0];
+
+        console.log(
+          `Fetched ${globalStats.totalPlayers} players from subgraph`
+        );
+        return {
+          players,
+          globalStats: {
+            totalPlayers: globalStats.totalPlayers,
+            totalGamesV1: globalStats.totalGamesV1,
+            totalGamesV2: globalStats.totalGamesV2,
+            totalGamesCreated: globalStats.totalGamesCreated,
+            totalGamesFinished: globalStats.totalGamesFinished,
+          },
+        };
       } catch (error) {
         console.error(
           "Error fetching leaderboard from subgraph:",
           error instanceof Error ? error.message : String(error)
         );
-        return [];
+        return {
+          players: [],
+          globalStats: {
+            totalPlayers: 0,
+            totalGamesV1: 0,
+            totalGamesV2: 0,
+            totalGamesCreated: 0,
+            totalGamesFinished: 0,
+          },
+        };
       }
     },
     staleTime: 2000,

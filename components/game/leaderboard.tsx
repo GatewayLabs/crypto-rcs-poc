@@ -13,7 +13,7 @@ export default function Leaderboard() {
   const [currentPage, setCurrentPage] = useState(1);
 
   const rowsPerPage = 20;
-  const sortedLeaderboard = [...leaderboard].sort((a, b) => {
+  const sortedLeaderboard = leaderboard.players.sort((a, b) => {
     if ("earnings" in a && "earnings" in b) {
       return (b.earnings ?? 0) - (a.earnings ?? 0);
     }
@@ -178,6 +178,9 @@ export default function Leaderboard() {
               <div className="self-stretch my-auto px-1">Next</div>
             </button>
           </div>
+        </div>
+        <div className="text-[color:var(--muted-foreground)] text-sm self-stretch my-auto pt-4">
+          Total Players: {leaderboard.globalStats.totalPlayers}
         </div>
       </div>
     </div>
