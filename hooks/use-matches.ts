@@ -383,12 +383,41 @@ export function useMatches() {
           lastSyncTime: 0,
         };
 
+      const cachedData = queryClient.getQueryData(["matches", address]) as
+        | {
+            matches: GameHistory[];
+            totalEarnings: number;
+            playerStats: SubgraphPlayerStats | null;
+            lastSyncTime: number;
+          }
+        | undefined;
+
+      const now = Date.now();
+      const timeSinceLastSync = cachedData?.lastSyncTime
+        ? now - cachedData.lastSyncTime
+        : Infinity;
+
+      // Throttling: if the last sync was less than 5 seconds ago, use cached data
+      // You can adjust this value as needed (e.g., 5000ms = 5s)
+      const MIN_SYNC_INTERVAL = 15000;
+
+      if (cachedData && timeSinceLastSync < MIN_SYNC_INTERVAL) {
+        logDebug(
+          `Using cached data - last sync was ${timeSinceLastSync}ms ago`
+        );
+        return cachedData;
+      }
+
+      setIsSyncing(true);
+      logDebug("Starting sync with server");
+
       setIsSyncing(true);
       logDebug("Starting sync with server");
 
       try {
         const localStoredMatches = getLocalMatches(address);
         const normalizedAddress = address.toLowerCase();
+        localStorage.setItem(`last-successful-sync-${address}`, now.toString());
 
         logDebug(
           `Fetching data from subgraph for address ${normalizedAddress}`
@@ -466,6 +495,26 @@ export function useMatches() {
         console.error("Error fetching matches:", error);
         logDebug("Recovering with local matches due to server error");
 
+        const lastSuccessfulSync = localStorage.getItem(
+          `last-successful-sync-${address}`
+        );
+        const lastSuccessTime = lastSuccessfulSync
+          ? parseInt(lastSuccessfulSync)
+          : 0;
+        const timeSinceSuccess = now - lastSuccessTime;
+        const CACHE_FALLBACK_WINDOW = 10 * 60 * 1000;
+
+        if (cachedData && timeSinceSuccess < CACHE_FALLBACK_WINDOW) {
+          logDebug(
+            "Using cached data due to API error (recent successful sync)"
+          );
+          return {
+            ...cachedData,
+            lastSyncTime: now,
+          };
+        }
+
+        logDebug("Recovering with local matches due to server error");
         const localMatches = getLocalMatches(address).map((match) => ({
           ...match,
           syncStatus: "pending" as const,
@@ -487,7 +536,16 @@ export function useMatches() {
       }
     },
     enabled: !!address,
-    refetchInterval: 600000,
+    staleTime: 5000,
+    retry: (failureCount, error: any) => {
+      if (error?.message?.includes("too many requests")) {
+        logDebug("Rate limit detected, stopping retry");
+        return false;
+      }
+      return failureCount < 3;
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    refetchInterval: 60000,
   });
 
   // Helper function to infer game results from diffMod3
