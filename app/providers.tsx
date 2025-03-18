@@ -1,13 +1,12 @@
 "use client";
 
-import { config } from "@/config/wagmi";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { WagmiProvider } from "@privy-io/wagmi";
-import { PrivyProvider } from "@privy-io/react-auth";
 import { privyConfig } from "@/config/privy";
-import { WalletProvider } from "@/contexts/wallet-context";
-import { useEffect } from "react";
+import { config } from "@/config/wagmi";
 import OdysseyContextProvider from "@/contexts/odyssey-context";
+import { WalletProvider } from "@/contexts/wallet-context";
+import { PrivyProvider } from "@privy-io/react-auth";
+import { WagmiProvider } from "@privy-io/wagmi";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const queryClient = new QueryClient();
 
