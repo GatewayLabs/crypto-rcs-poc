@@ -196,7 +196,6 @@ export function useGameDetails(gameId: string | number | undefined) {
     },
     enabled: !!gameId,
     refetchInterval: 10000, // Refetch every 10 seconds (useful for active games)
-    staleTime: 1000,
   });
 
   const refreshGameDetails = async () => {
