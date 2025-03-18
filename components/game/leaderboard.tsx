@@ -146,7 +146,7 @@ export default function Leaderboard() {
                             {player.address.slice(-4)}
                             {playerIndex === indexOfFirstPlayer + index && (
                               <span className="text-xs font-normal leading-none px-2.5 py-0.5 rounded-full bg-white text-black ml-2">
-                                Me
+                                You
                               </span>
                             )}
                           </div>
