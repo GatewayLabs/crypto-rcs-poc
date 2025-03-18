@@ -1,16 +1,17 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-"use server";
+'use server';
 
 import {
   gameContractConfig,
   houseBatcherContractConfig,
-} from "@/config/contracts";
-import { houseAccount, publicClient, walletClient } from "@/config/server";
-import { encryptMove } from "@/lib/crypto";
-import { retry } from "@/lib/utils";
-import { executeContractFunction } from "@/lib/wallet-utils";
-import { computeDifferenceLocally, decryptDifference } from "./crypto";
-import { generateHouseMove } from "./utils";
+} from '@/config/contracts';
+import { houseAccount, publicClient, walletClient } from '@/config/server';
+import { encryptMove } from '@/lib/crypto';
+import { retry } from '@/lib/utils';
+import { executeContractFunction } from '@/lib/wallet-utils';
+import { computeDifferenceLocally, decryptDifference } from './crypto';
+import { generateHouseMove } from './utils';
+import { rateLimit } from '@/lib/rate-limiter';
 
 // Result types
 export type PlayHouseMoveResult = {
@@ -26,11 +27,11 @@ export type PlayHouseMoveResult = {
  */
 export async function playHouseMove(
   gameId: number,
-  betAmount: bigint
+  betAmount: bigint,
 ): Promise<PlayHouseMoveResult> {
   try {
     if (gameId === undefined || gameId === null || isNaN(gameId)) {
-      throw new Error("Invalid game ID");
+      throw new Error('Invalid game ID');
     }
 
     console.log(`Starting house move for game ${gameId} with bet ${betAmount}`);
@@ -42,7 +43,7 @@ export async function playHouseMove(
         () =>
           publicClient.readContract({
             ...gameContractConfig,
-            functionName: "getGameInfo",
+            functionName: 'getGameInfo',
             args: [BigInt(gameId)],
           }),
         {
@@ -52,35 +53,37 @@ export async function playHouseMove(
             const errorMessage =
               error instanceof Error ? error.message : String(error);
             return (
-              errorMessage.includes("network") ||
-              errorMessage.includes("timeout") ||
-              errorMessage.includes("connection")
+              errorMessage.includes('network') ||
+              errorMessage.includes('timeout') ||
+              errorMessage.includes('connection')
             );
           },
           onRetry: (error, attempt) => {
             console.log(
-              `Retry attempt ${attempt} for reading game data: ${error}`
+              `Retry attempt ${attempt} for reading game data: ${error}`,
             );
           },
-        }
+        },
       );
     } catch (error) {
-      console.error("Error fetching game data:", error);
+      console.error('Error fetching game data:', error);
       throw new Error(
-        `Failed to fetch game data: Game ID ${gameId} may not exist`
+        `Failed to fetch game data: Game ID ${gameId} may not exist`,
       );
     }
 
     const [playerA, playerB, winner, finished, bothCommitted] = gameData;
 
+    await rateLimit(playerA, 10, 30000);
+
     // Validation checks
-    if (playerB !== "0x0000000000000000000000000000000000000000") {
+    if (playerB !== '0x0000000000000000000000000000000000000000') {
       throw new Error(
-        `Game ID ${gameId} has already been joined by another player (${playerB})`
+        `Game ID ${gameId} has already been joined by another player (${playerB})`,
       );
     }
 
-    if (playerA === "0x0000000000000000000000000000000000000000") {
+    if (playerA === '0x0000000000000000000000000000000000000000') {
       throw new Error(`Game ID ${gameId} has not been properly created`);
     }
 
@@ -99,15 +102,15 @@ export async function playHouseMove(
 
       paddedEncryptedMove = encryptedMove;
       if (encryptedMove.length % 2 !== 0) {
-        paddedEncryptedMove = encryptedMove.replace("0x", "0x0");
+        paddedEncryptedMove = encryptedMove.replace('0x', '0x0');
       }
 
       while (paddedEncryptedMove.length < 258) {
-        paddedEncryptedMove = paddedEncryptedMove.replace("0x", "0x0");
+        paddedEncryptedMove = paddedEncryptedMove.replace('0x', '0x0');
       }
     } catch (error) {
-      console.error("Error encrypting move:", error);
-      throw new Error("Failed to encrypt house move");
+      console.error('Error encrypting move:', error);
+      throw new Error('Failed to encrypt house move');
     }
 
     // 4. Calculate the result off-chain for finalizing
@@ -119,32 +122,32 @@ export async function playHouseMove(
       // First compute the homomorphic difference
       const differenceCipher = computeDifferenceLocally(
         encryptedPlayerMove,
-        paddedEncryptedMove
+        paddedEncryptedMove,
       );
 
       // Then decrypt it to get the mod 3 value
       diffMod3 = decryptDifference(differenceCipher);
       console.log(`Computed difference for game ${gameId}: ${diffMod3}`);
     } catch (error) {
-      console.error("Error computing game result:", error);
-      throw new Error("Failed to compute game result");
+      console.error('Error computing game result:', error);
+      throw new Error('Failed to compute game result');
     }
 
     // 5. Execute the batcher contract transaction
     // Note: Now we use the batcher's balance instead of sending ETH with the transaction
     const hash = await executeContractFunction(
       houseBatcherContractConfig,
-      "batchHouseFlow",
+      'batchHouseFlow',
       [
         BigInt(gameId),
         paddedEncryptedMove as `0x${string}`,
         BigInt(diffMod3),
         betAmount,
-      ]
+      ],
     );
 
     console.log(
-      `House move for game ${gameId} executed in single transaction: ${hash}`
+      `House move for game ${gameId} executed in single transaction: ${hash}`,
     );
 
     return {
@@ -153,10 +156,10 @@ export async function playHouseMove(
       result: diffMod3,
     };
   } catch (error) {
-    console.error("Error in house move:", error);
+    console.error('Error in house move:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
@@ -175,7 +178,7 @@ export async function getGameResult(gameId: number): Promise<{
       () =>
         publicClient.readContract({
           ...gameContractConfig,
-          functionName: "getGameInfo",
+          functionName: 'getGameInfo',
           args: [BigInt(gameId)],
         }),
       {
@@ -185,12 +188,12 @@ export async function getGameResult(gameId: number): Promise<{
           const errorMessage =
             error instanceof Error ? error.message : String(error);
           return (
-            errorMessage.includes("network") ||
-            errorMessage.includes("timeout") ||
-            errorMessage.includes("connection")
+            errorMessage.includes('network') ||
+            errorMessage.includes('timeout') ||
+            errorMessage.includes('connection')
           );
         },
-      }
+      },
     );
 
     const [, , , finished, , , , , revealedDiff] = gameData;
@@ -244,7 +247,7 @@ export async function depositToBatcher(amount: bigint): Promise<{
   try {
     const hash = await walletClient.writeContract({
       ...houseBatcherContractConfig,
-      functionName: "deposit",
+      functionName: 'deposit',
       value: amount,
       account: houseAccount,
     });
