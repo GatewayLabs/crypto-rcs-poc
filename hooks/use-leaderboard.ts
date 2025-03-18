@@ -159,8 +159,7 @@ export function useLeaderboard() {
         return emptyLeaderboard;
       }
     },
-    staleTime: 2000,
-    refetchInterval: 60000,
+    refetchInterval: 600000,
   });
 
   const updateLeaderboard = async () => {
