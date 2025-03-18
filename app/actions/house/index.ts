@@ -144,6 +144,9 @@ export async function playHouseMove(
         BigInt(diffMod3),
         betAmount,
       ],
+      {
+        retries: 5,
+      },
     );
 
     console.log(
