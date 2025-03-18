@@ -487,6 +487,7 @@ export function useMatches() {
       }
     },
     enabled: !!address,
+    staleTime: 2000,
     refetchInterval: 60000,
   });
 

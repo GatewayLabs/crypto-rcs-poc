@@ -61,7 +61,7 @@ export default function MatchesSummary({
         clearTimeout(glowTimeout);
       }
     };
-  }, [matches, totalEarnings, isSyncing]);
+  }, [matches, totalEarnings, isSyncing, glowTimeout]);
 
   const formattedEarnings =
     totalEarnings !== undefined ? (

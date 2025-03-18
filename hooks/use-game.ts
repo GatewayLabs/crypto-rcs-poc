@@ -457,7 +457,7 @@ export function useGame() {
 
             setTransactionModal(false);
             setPhase(GamePhase.FINISHED);
-            updateStats();
+            // updateStats();
           }
         } catch (error) {
           console.error(
