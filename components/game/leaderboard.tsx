@@ -7,8 +7,8 @@ import { useAccount } from "wagmi";
 import Tooltip from "../ui/tooltip";
 
 export default function Leaderboard() {
-  const { leaderboard } = useLeaderboard();
   const { address } = useAccount();
+  const { leaderboard } = useLeaderboard(address as string);
   const { setPlayerRank, setPlayerSummary } = useGameUIStore();
   const [currentPage, setCurrentPage] = useState(1);
   const [playerIndex, setPlayerIndex] = useState(0);

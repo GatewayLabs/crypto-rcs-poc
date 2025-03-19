@@ -1,5 +1,6 @@
 "use client";
 
+import { useWallet } from "@/contexts/wallet-context";
 import { useLeaderboard } from "@/hooks/use-leaderboard";
 import { useMatches } from "@/hooks/use-matches";
 import { RefreshCcw } from "lucide-react";
@@ -11,11 +12,13 @@ interface SyncStatusProps {
 }
 
 export default function SyncStatus({ isSynced }: SyncStatusProps) {
+  const { walletAddress: address } = useWallet();
+  const { updateLeaderboard } = useLeaderboard(address as string);
   const { isSyncing, lastSyncTime, syncMatches, matches } = useMatches();
-  const { updateLeaderboard } = useLeaderboard();
   const [cooldown, setCooldown] = useState(0);
 
-  const pendingMatches = matches.filter((m) => m.syncStatus === "pending");
+  const pendingMatches =
+    matches?.filter((m) => m.syncStatus === "pending") ?? [];
   const pendingCount = pendingMatches.length;
 
   useEffect(() => {

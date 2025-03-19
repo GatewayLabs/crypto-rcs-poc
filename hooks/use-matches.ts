@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useWallet } from "@/contexts/wallet-context";
 import { Move } from "@/lib/crypto";
+import { catchUsingCache, logDebug, tryUseCache } from "@/lib/utils";
 import {
   GameHistory,
   GameResult,
@@ -115,6 +116,20 @@ const CHECK_GAMES_BY_ID_QUERY = `
   }
 `;
 
+interface MatchesData {
+  matches: GameHistory[];
+  totalEarnings: number;
+  playerStats: SubgraphPlayerStats | null;
+  lastSyncTime: number;
+}
+
+const emptyMatchData = {
+  matches: [],
+  totalEarnings: 0,
+  playerStats: null,
+  lastSyncTime: 0,
+};
+
 export function useMatches() {
   const { walletAddress: address } = useWallet();
   const queryClient = useQueryClient();
@@ -128,7 +143,10 @@ export function useMatches() {
         `${LOCAL_MATCHES_KEY}-${address}`,
         JSON.stringify(matches)
       );
-      logDebug(`Saved ${matches.length} local matches to localStorage`);
+      logDebug(
+        "matches",
+        `Saved ${matches.length} local matches to localStorage`
+      );
     } catch (error) {
       console.error("Error saving matches to localStorage:", error);
     }
@@ -138,20 +156,16 @@ export function useMatches() {
     try {
       const data = localStorage.getItem(`${LOCAL_MATCHES_KEY}-${address}`);
       const matches = data ? JSON.parse(data) : [];
-      logDebug(`Retrieved ${matches.length} local matches from localStorage`);
+      logDebug(
+        "matches",
+        `Retrieved ${matches.length} local matches from localStorage`
+      );
       return matches;
     } catch (error) {
       console.error("Error loading matches from localStorage:", error);
       return [];
     }
   };
-
-  // Logging utility
-  function logDebug(message: string, data?: any) {
-    if (process.env.NODE_ENV !== "production") {
-      console.log(`[Matches] ${message}`, data ? data : "");
-    }
-  }
 
   async function checkConfirmedGamesById(
     address: string,
@@ -161,7 +175,10 @@ export function useMatches() {
 
     try {
       const normalizedAddress = address.toLowerCase();
-      logDebug(`Checking specific games by ID: ${gameIds.join(", ")}`);
+      logDebug(
+        "matches",
+        `Checking specific games by ID: ${gameIds.join(", ")}`
+      );
 
       const response = await fetch(SUBGRAPH_URL, {
         method: "POST",
@@ -194,7 +211,10 @@ export function useMatches() {
         ...data.data.gamesB.map((game: any) => Number(game.gameId)),
       ];
 
-      logDebug(`Found ${confirmedGameIds.length} confirmed games on server`);
+      logDebug(
+        "matches",
+        `Found ${confirmedGameIds.length} confirmed games on server`
+      );
       return confirmedGameIds;
     } catch (error) {
       console.error("Error checking games by ID:", error);
@@ -260,7 +280,7 @@ export function useMatches() {
   } {
     let serverMatches: GameHistory[] = [];
 
-    logDebug(`Processing ${playerA.length} playerA games`);
+    logDebug("matches", `Processing ${playerA.length} playerA games`);
     const processedPlayerA = processPlayerGame(
       playerA,
       normalizedAddress,
@@ -272,7 +292,7 @@ export function useMatches() {
     let totalEarnings = processedPlayerA.totalEarnings;
     serverMatches = processedPlayerA.serverMatches;
 
-    logDebug(`Processing ${playerB.length} playerB games`);
+    logDebug("matches", `Processing ${playerB.length} playerB games`);
     const processedPlayerB = processPlayerGame(
       playerB,
       normalizedAddress,
@@ -311,7 +331,10 @@ export function useMatches() {
     let confirmedGames: number[];
 
     if (pendingGamesIds.length > 0) {
-      logDebug(`Checking status of ${pendingGamesIds.length} pending games`);
+      logDebug(
+        "matches",
+        `Checking status of ${pendingGamesIds.length} pending games`
+      );
       confirmedGames = await checkConfirmedGamesById(address, pendingGamesIds);
     }
 
@@ -322,6 +345,7 @@ export function useMatches() {
         const isFutureTimestamp = localMatch.timestamp > Date.now();
         if (isFutureTimestamp) {
           logDebug(
+            "matches",
             `Match ${localMatch.gameId} has a future timestamp, correcting it`
           );
           localMatch.timestamp = Date.now();
@@ -347,6 +371,7 @@ export function useMatches() {
 
         if (isPendingTooLong) {
           logDebug(
+            "matches",
             `Match ${localMatch.gameId} has been pending too long (${Math.floor(
               (nowTime - localMatch.timestamp) / 3600000
             )} minutes), removing`
@@ -363,63 +388,33 @@ export function useMatches() {
   }
 
   const {
-    data: matchesData = {
-      matches: [],
-      totalEarnings: 0,
-      playerStats: null,
-      lastSyncTime: 0,
-    },
+    data: matchesData = emptyMatchData,
     isLoading,
     refetch,
     isFetching,
   } = useQuery({
     queryKey: ["matches", address],
     queryFn: async () => {
-      if (!address)
-        return {
-          matches: [],
-          totalEarnings: 0,
-          playerStats: null,
-          lastSyncTime: 0,
-        };
-
-      const cachedData = queryClient.getQueryData(["matches", address]) as
-        | {
-            matches: GameHistory[];
-            totalEarnings: number;
-            playerStats: SubgraphPlayerStats | null;
-            lastSyncTime: number;
-          }
-        | undefined;
+      if (!address) return emptyMatchData;
 
       const now = Date.now();
-      const timeSinceLastSync = cachedData?.lastSyncTime
-        ? now - cachedData.lastSyncTime
-        : Infinity;
+      const cachedData = queryClient.getQueryData(["matches", address]) as
+        | MatchesData
+        | undefined;
 
-      // Throttling: if the last sync was less than 5 seconds ago, use cached data
-      // You can adjust this value as needed (e.g., 5000ms = 5s)
-      const MIN_SYNC_INTERVAL = 15000;
-
-      if (cachedData && timeSinceLastSync < MIN_SYNC_INTERVAL) {
-        logDebug(
-          `Using cached data - last sync was ${timeSinceLastSync}ms ago`
-        );
+      if (tryUseCache(cachedData, now, address, "cache matches")) {
         return cachedData;
       }
 
       setIsSyncing(true);
-      logDebug("Starting sync with server");
-
-      setIsSyncing(true);
-      logDebug("Starting sync with server");
+      logDebug("matches", "Starting sync with server");
 
       try {
         const localStoredMatches = getLocalMatches(address);
         const normalizedAddress = address.toLowerCase();
-        localStorage.setItem(`last-successful-sync-${address}`, now.toString());
 
         logDebug(
+          "matches",
           `Fetching data from subgraph for address ${normalizedAddress}`
         );
         const response = await fetch(SUBGRAPH_URL, {
@@ -454,7 +449,10 @@ export function useMatches() {
           normalizedAddress
         );
 
-        logDebug(`Total server matches found: ${confirmedMatches.length}`);
+        logDebug(
+          "matches",
+          `Total server matches found: ${confirmedMatches.length}`
+        );
 
         const pendingLocalMatches = await handlePendingMatches(
           localStoredMatches,
@@ -462,7 +460,10 @@ export function useMatches() {
           address
         );
 
-        logDebug(`Remaining pending matches: ${pendingLocalMatches.length}`);
+        logDebug(
+          "matches",
+          `Remaining pending matches: ${pendingLocalMatches.length}`
+        );
 
         const allMatches = [...confirmedMatches, ...pendingLocalMatches];
         allMatches.sort((a, b) => b.timestamp - a.timestamp);
@@ -473,9 +474,9 @@ export function useMatches() {
           allMatches.filter((match) => match.syncStatus === "pending")
         );
 
-        const syncTime = Date.now();
         logDebug(
-          `Sync completed at ${new Date(syncTime).toLocaleTimeString()}`
+          "matches",
+          `Sync completed at ${new Date(now).toLocaleTimeString()}`
         );
 
         const earnings = data.data.playerStats?.netProfitLoss
@@ -489,38 +490,27 @@ export function useMatches() {
           matches: allMatches,
           totalEarnings: earnings,
           playerStats: data.data.playerStats,
-          lastSyncTime: syncTime,
+          lastSyncTime: now,
         };
       } catch (error) {
         console.error("Error fetching matches:", error);
-        logDebug("Recovering with local matches due to server error");
-
-        const lastSuccessfulSync = localStorage.getItem(
-          `last-successful-sync-${address}`
-        );
-        const lastSuccessTime = lastSuccessfulSync
-          ? parseInt(lastSuccessfulSync)
-          : 0;
-        const timeSinceSuccess = now - lastSuccessTime;
-        const CACHE_FALLBACK_WINDOW = 10 * 60 * 1000;
-
-        if (cachedData && timeSinceSuccess < CACHE_FALLBACK_WINDOW) {
-          logDebug(
-            "Using cached data due to API error (recent successful sync)"
-          );
-          return {
-            ...cachedData,
-            lastSyncTime: now,
-          };
+        if (catchUsingCache(address, cachedData, now, "cache matches")) {
+          return cachedData;
         }
 
-        logDebug("Recovering with local matches due to server error");
+        logDebug(
+          "matches",
+          "Recovering with local matches due to server error"
+        );
         const localMatches = getLocalMatches(address).map((match) => ({
           ...match,
           syncStatus: "pending" as const,
         }));
 
-        logDebug(`Found ${localMatches.length} local matches to recover with`);
+        logDebug(
+          "matches",
+          `Found ${localMatches.length} local matches to recover with`
+        );
 
         return {
           matches: localMatches,
@@ -539,7 +529,7 @@ export function useMatches() {
     staleTime: 5000,
     retry: (failureCount, error: any) => {
       if (error?.message?.includes("too many requests")) {
-        logDebug("Rate limit detected, stopping retry");
+        logDebug("matches", "Rate limit detected, stopping retry");
         return false;
       }
       return failureCount < 3;
@@ -623,7 +613,7 @@ export function useMatches() {
 
   const addMatch = async () => {
     try {
-      logDebug("Manually refreshing match history");
+      logDebug("matches", "Manually refreshing match history");
       await refetch();
     } catch (error) {
       console.error("Error refetching match history:", error);
@@ -639,11 +629,11 @@ export function useMatches() {
     betAmount: bigint;
   }) => {
     if (!address) {
-      console.log("Cannot add local match: wallet address not available");
+      console.error("Cannot add local match: wallet address not available");
       return;
     }
 
-    logDebug("Adding local match:", gameData);
+    logDebug("matches", "Adding local match:", gameData);
 
     const betValue =
       gameData.result === GameResult.WIN
@@ -669,19 +659,10 @@ export function useMatches() {
 
     queryClient.setQueryData(
       ["matches", address],
-      (
-        oldData:
-          | {
-              matches: GameHistory[];
-              totalEarnings: number;
-              playerStats: SubgraphPlayerStats | null;
-              lastSyncTime: number;
-            }
-          | undefined
-      ) => {
+      (oldData: MatchesData | undefined) => {
         if (!oldData) {
           saveLocalMatches(address, [newMatch]);
-          logDebug("No existing matches data, creating new");
+          logDebug("matches", "No existing matches data, creating new");
           return {
             matches: [newMatch],
             totalEarnings: betValue,
@@ -696,10 +677,10 @@ export function useMatches() {
 
         let updatedMatches;
         if (existingMatchIndex === -1) {
-          logDebug("Adding new match to existing data");
+          logDebug("matches", "Adding new match to existing data");
           updatedMatches = [newMatch, ...oldData.matches];
         } else {
-          logDebug("Updating existing match");
+          logDebug("matches", "Updating existing match");
           updatedMatches = [...oldData.matches];
           updatedMatches[existingMatchIndex] = newMatch;
         }
@@ -727,25 +708,20 @@ export function useMatches() {
 
   const syncMatches = async () => {
     if (isSyncing) return;
-    logDebug("Manual sync triggered");
+    logDebug("matches", "Manual sync triggered");
     await refetch();
   };
 
   const clearHistoryMutation = async () => {
     if (address) {
       try {
-        logDebug("Clearing local matches history");
+        logDebug("matches", "Clearing local matches history");
         localStorage.removeItem(`${LOCAL_MATCHES_KEY}-${address}`);
       } catch (error) {
         console.error("Error clearing localStorage:", error);
       }
 
-      queryClient.setQueryData(["matches", address], {
-        matches: [],
-        totalEarnings: 0,
-        playerStats: null,
-        lastSyncTime: 0,
-      });
+      queryClient.setQueryData(["matches", address], emptyMatchData);
     }
   };
 

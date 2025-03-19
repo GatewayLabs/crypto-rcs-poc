@@ -29,9 +29,11 @@ export function useGame() {
   const { createGame: contractCreateGame, joinGame: contractJoinGame } =
     useGameContract();
 
-  const { updateLocalLeaderboard, updateLeaderboard } = useLeaderboard();
-  const { addLocalMatch, addMatch } = useMatches();
   const { walletAddress: address } = useWallet();
+  const { addLocalMatch, addMatch } = useMatches();
+  const { updateLocalLeaderboard, updateLeaderboard } = useLeaderboard(
+    address as string
+  );
 
   // Use the game UI store for state management
   const {
@@ -457,7 +459,7 @@ export function useGame() {
 
             setTransactionModal(false);
             setPhase(GamePhase.FINISHED);
-            // updateStats();
+            updateStats();
           }
         } catch (error) {
           console.error(

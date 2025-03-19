@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { catchUsingCache, logDebug, tryUseCache } from "@/lib/utils";
 import { LeaderboardEntry } from "@/types/game";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatEther } from "viem";
@@ -30,6 +32,7 @@ interface GlobalStats {
 interface Leaderboard {
   players: LeaderboardEntry[];
   globalStats: GlobalStats;
+  lastSyncTime: number;
 }
 
 interface SubgraphResponse {
@@ -80,12 +83,13 @@ const emptyGlobalStats = {
 const emptyLeaderboard = {
   players: [],
   globalStats: emptyGlobalStats,
+  lastSyncTime: 0,
 };
 
 /**
  * Fetch leaderboard data from the subgraph
  */
-export function useLeaderboard() {
+export function useLeaderboard(address: string) {
   const queryClient = useQueryClient();
   const {
     data: leaderboard = emptyLeaderboard,
@@ -94,6 +98,15 @@ export function useLeaderboard() {
   } = useQuery({
     queryKey: ["leaderboard"],
     queryFn: async (): Promise<Leaderboard> => {
+      const now = Date.now();
+      const cachedData = queryClient.getQueryData([
+        "leaderboard",
+      ]) as Leaderboard;
+
+      if (tryUseCache(cachedData, now, address, "cache leaderboard")) {
+        return cachedData;
+      }
+
       try {
         // Fetch data from the subgraph
         const response = await fetch(SUBGRAPH_URL, {
@@ -138,9 +151,6 @@ export function useLeaderboard() {
 
         const globalStats = data.data.globalStats[0];
 
-        console.log(
-          `Fetched ${globalStats.totalPlayers} players from subgraph`
-        );
         return {
           players,
           globalStats: {
@@ -150,17 +160,30 @@ export function useLeaderboard() {
             totalGamesCreated: globalStats.totalGamesCreated,
             totalGamesFinished: globalStats.totalGamesFinished,
           },
+          lastSyncTime: now,
         };
       } catch (error) {
         console.error(
           "Error fetching leaderboard from subgraph:",
           error instanceof Error ? error.message : String(error)
         );
+        if (catchUsingCache(address, cachedData, now, "cache leaderboard")) {
+          return cachedData;
+        }
         return emptyLeaderboard;
       }
     },
-    refetchInterval: 120000,
-    staleTime: 30000,
+    enabled: !!address,
+    staleTime: 5000,
+    retry: (failureCount, error: any) => {
+      if (error?.message?.includes("too many requests")) {
+        logDebug("leaderboard", "Rate limit detected, stopping retry");
+        return false;
+      }
+      return failureCount < 3;
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    refetchInterval: 60000,
   });
 
   const updateLeaderboard = async () => {
@@ -203,6 +226,7 @@ export function useLeaderboard() {
               },
             ],
             globalStats: emptyGlobalStats,
+            lastSyncTime: 0,
           };
           return newEntry;
         }
