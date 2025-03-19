@@ -2,6 +2,8 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
+const MIN_SYNC_INTERVAL = 18000;
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
@@ -75,9 +77,6 @@ export function tryUseCache(
     ? now - cachedData.lastSyncTime
     : Infinity;
 
-  // Throttling: if the last sync was less than 15 seconds ago, use cached data
-  const MIN_SYNC_INTERVAL = 15000;
-
   if (timeSinceLastSync < MIN_SYNC_INTERVAL) {
     logDebug(
       method,
@@ -112,6 +111,20 @@ export function catchUsingCache(
   }
 
   return false;
+}
+
+export function remainingCacheTime(address: string, now: number): number {
+  const lastSuccessfulSync = localStorage.getItem(
+    `last-successful-sync-${address}`
+  );
+  const lastSuccessTime = lastSuccessfulSync ? parseInt(lastSuccessfulSync) : 0;
+  const timeSinceSuccess = now - lastSuccessTime;
+
+  if (timeSinceSuccess < MIN_SYNC_INTERVAL) {
+    return MIN_SYNC_INTERVAL - timeSinceSuccess;
+  }
+
+  return 0;
 }
 
 export function logDebug(method: string, message: string, data?: any) {

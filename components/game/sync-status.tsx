@@ -3,6 +3,7 @@
 import { useWallet } from "@/contexts/wallet-context";
 import { useLeaderboard } from "@/hooks/use-leaderboard";
 import { useMatches } from "@/hooks/use-matches";
+import { remainingCacheTime } from "@/lib/utils";
 import { RefreshCcw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { format } from "util";
@@ -20,6 +21,16 @@ export default function SyncStatus({ isSynced }: SyncStatusProps) {
   const pendingMatches =
     matches?.filter((m) => m.syncStatus === "pending") ?? [];
   const pendingCount = pendingMatches.length;
+
+  useEffect(() => {
+    const remainingTime: number = remainingCacheTime(
+      address as string,
+      Date.now()
+    );
+    if (remainingTime > 0) {
+      setCooldown(Math.floor(remainingTime / 1000));
+    }
+  }, [address, lastSyncTime]);
 
   useEffect(() => {
     let timer: NodeJS.Timeout;

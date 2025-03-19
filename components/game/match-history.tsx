@@ -28,7 +28,7 @@ export default function MatchHistory() {
   const indexOfLastMatch = currentPage * rowsPerPage;
   const indexOfFirstMatch = indexOfLastMatch - rowsPerPage;
   const currentMatches = matches.slice(indexOfFirstMatch, indexOfLastMatch);
-  const hasPendingMatch = currentMatches.some(
+  const hasPendingMatch = matches.some(
     (match) => match.syncStatus === "pending"
   );
 
