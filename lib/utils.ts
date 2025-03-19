@@ -2,7 +2,7 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
-export const MIN_SYNC_INTERVAL = 20000;
+export const MIN_SYNC_INTERVAL = 22000;
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
