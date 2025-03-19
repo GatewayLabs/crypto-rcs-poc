@@ -535,7 +535,7 @@ export function useMatches() {
       return failureCount < 3;
     },
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
-    refetchInterval: 60000,
+    refetchInterval: 120000,
   });
 
   // Helper function to infer game results from diffMod3
