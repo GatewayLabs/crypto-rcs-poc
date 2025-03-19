@@ -76,7 +76,7 @@ export function tryUseCache(
     : Infinity;
 
   // Throttling: if the last sync was less than 15 seconds ago, use cached data
-  const MIN_SYNC_INTERVAL = 10000;
+  const MIN_SYNC_INTERVAL = 15000;
 
   if (timeSinceLastSync < MIN_SYNC_INTERVAL) {
     logDebug(
