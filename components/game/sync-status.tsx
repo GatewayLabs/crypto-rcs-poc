@@ -3,7 +3,7 @@
 import { useWallet } from "@/contexts/wallet-context";
 import { useLeaderboard } from "@/hooks/use-leaderboard";
 import { useMatches } from "@/hooks/use-matches";
-import { remainingCacheTime } from "@/lib/utils";
+import { MIN_SYNC_INTERVAL, remainingCacheTime } from "@/lib/utils";
 import { RefreshCcw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { format } from "util";
@@ -49,7 +49,12 @@ export default function SyncStatus({ isSynced }: SyncStatusProps) {
   const handleSync = () => {
     syncMatches();
     updateLeaderboard();
-    setCooldown(30);
+    const remainingTime: number = remainingCacheTime(
+      address as string,
+      Date.now()
+    );
+    const remainingTimeS = Math.floor(remainingTime / 1000);
+    setCooldown(remainingTimeS > 0 ? remainingTimeS : MIN_SYNC_INTERVAL / 1000);
   };
 
   const formatSyncTime = (timestamp: number) => {
