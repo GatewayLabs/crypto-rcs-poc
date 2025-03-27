@@ -5,7 +5,12 @@ import {
   gameContractConfig,
   houseBatcherContractConfig,
 } from '@/config/contracts';
-import { houseAccount, publicClient, walletClient } from '@/config/server';
+import {
+  houseAccount,
+  publicClient,
+  walletClient,
+  walletClient2,
+} from '@/config/server';
 import { encryptMove } from '@/lib/crypto';
 import { retry } from '@/lib/utils';
 import { executeContractFunction } from '@/lib/wallet-utils';

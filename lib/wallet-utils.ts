@@ -1,5 +1,6 @@
-import { publicClient, walletClient } from "@/config/server";
-import { retry } from "@/lib/utils";
+import { publicClient, walletClient, walletClient2 } from '@/config/server';
+import { retry } from '@/lib/utils';
+import { WalletClient } from 'viem';
 
 interface ExecuteTransactionOptions {
   retries?: number;
@@ -12,7 +13,9 @@ interface ExecuteTransactionOptions {
 let localNonce: number | null = null;
 let nonceLastUpdated = 0;
 
-async function getAndIncrementNonce(): Promise<number> {
+async function getAndIncrementNonce(
+  houseAccount: WalletClient,
+): Promise<number> {
   const now = Date.now();
 
   // Refresh from chain if nonce is null or was last updated more than 10 seconds ago
@@ -20,9 +23,9 @@ async function getAndIncrementNonce(): Promise<number> {
     try {
       localNonce = Number(
         await publicClient.getTransactionCount({
-          address: walletClient.account.address,
-          blockTag: "pending",
-        })
+          address: houseAccount.account?.address!,
+          blockTag: 'pending',
+        }),
       );
       nonceLastUpdated = now;
       console.log(`Refreshed nonce from chain: ${localNonce}`);
@@ -45,7 +48,7 @@ export async function executeContractFunction(
   config: { address: `0x${string}`; abi: readonly any[] | any[] },
   functionName: string,
   args: any[],
-  options: ExecuteTransactionOptions = {}
+  options: ExecuteTransactionOptions = {},
 ): Promise<`0x${string}`> {
   const {
     retries = 3,
@@ -57,7 +60,12 @@ export async function executeContractFunction(
   return retry(
     async () => {
       // Get the current nonce (locally tracked)
-      const nonce = await getAndIncrementNonce();
+      const houseAccount = Math.random() > 0.5 ? walletClient2 : walletClient;
+      console.log(
+        `${logPrefix}: Using house account ${houseAccount.account.address}`,
+      );
+
+      const nonce = await getAndIncrementNonce(houseAccount);
       console.log(`${logPrefix}: Using nonce ${nonce}`);
 
       try {
@@ -67,7 +75,7 @@ export async function executeContractFunction(
           abi: config.abi,
           functionName,
           args,
-          account: walletClient.account,
+          account: houseAccount.account,
           nonce,
           value,
         });
@@ -78,7 +86,7 @@ export async function executeContractFunction(
         }
 
         // Execute the transaction
-        const txHash = await walletClient.writeContract({
+        const txHash = await houseAccount.writeContract({
           ...request,
           nonce,
           value,
@@ -92,11 +100,11 @@ export async function executeContractFunction(
 
         // Handle nonce errors
         if (
-          errorMessage.includes("nonce too low") ||
-          errorMessage.includes("nonce too high")
+          errorMessage.includes('nonce too low') ||
+          errorMessage.includes('nonce too high')
         ) {
           console.log(
-            `${logPrefix}: Nonce error detected, resetting nonce state`
+            `${logPrefix}: Nonce error detected, resetting nonce state`,
           );
           // Reset the nonce tracking completely
           localNonce = null;
@@ -106,10 +114,10 @@ export async function executeContractFunction(
 
         // Business logic errors - don't retry these
         if (
-          errorMessage.includes("Game already finalized") ||
-          errorMessage.includes("Game is already finished") ||
-          errorMessage.includes("Moves already submitted") ||
-          errorMessage.includes("Difference already computed")
+          errorMessage.includes('Game already finalized') ||
+          errorMessage.includes('Game is already finished') ||
+          errorMessage.includes('Moves already submitted') ||
+          errorMessage.includes('Difference already computed')
         ) {
           // These are expected errors in some cases, rethrow with clear message
           throw new Error(`Contract state error: ${errorMessage}`);
@@ -128,28 +136,28 @@ export async function executeContractFunction(
 
         // Don't retry business logic errors
         if (
-          errorMessage.includes("Game already finalized") ||
-          errorMessage.includes("Game is already finished") ||
-          errorMessage.includes("Moves already submitted") ||
-          errorMessage.includes("Difference already computed")
+          errorMessage.includes('Game already finalized') ||
+          errorMessage.includes('Game is already finished') ||
+          errorMessage.includes('Moves already submitted') ||
+          errorMessage.includes('Difference already computed')
         ) {
           return false;
         }
 
         // Retry network/nonce/timeout errors
         return (
-          errorMessage.includes("network") ||
-          errorMessage.includes("gas") ||
-          errorMessage.includes("nonce") ||
-          errorMessage.includes("timeout") ||
-          errorMessage.includes("connection")
+          errorMessage.includes('network') ||
+          errorMessage.includes('gas') ||
+          errorMessage.includes('nonce') ||
+          errorMessage.includes('timeout') ||
+          errorMessage.includes('connection')
         );
       },
       onRetry: (error, attempt) => {
         console.log(
-          `${logPrefix}: Retry attempt ${attempt} due to: ${error.message}`
+          `${logPrefix}: Retry attempt ${attempt} due to: ${error.message}`,
         );
       },
-    }
+    },
   );
 }
