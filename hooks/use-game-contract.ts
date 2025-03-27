@@ -1,6 +1,6 @@
 'use client';
 
-import { Move, encryptMove } from '@/lib/crypto';
+import { Move, encryptMove, ElGamalCiphertext } from '@/lib/crypto';
 import { gameContractConfig } from '@/config/contracts';
 import { usePublicClient, useReadContract, useWriteContract } from 'wagmi';
 import { useCallback } from 'react';
@@ -70,22 +70,18 @@ export function useGameContract(gameId?: number) {
   const createGame = useCallback(
     async (move: Move, betAmount = DEFAULT_BET_AMOUNT_WEI) => {
       try {
-        const encryptedMove = await encryptMove(move);
-
-        let paddedEncryptedMove = encryptedMove;
-        if (encryptedMove.length % 2 !== 0) {
-          paddedEncryptedMove = encryptedMove.replace('0x', '0x0');
-        }
-
-        while (paddedEncryptedMove.length < 258) {
-          paddedEncryptedMove = paddedEncryptedMove.replace('0x', '0x0');
-        }
+        const encryptedMove = (await encryptMove(move)) as ElGamalCiphertext;
 
         // Estimate gas with retry
         const gas = await estimateGasWithRetry({
           ...gameContractConfig,
           functionName: 'createGame',
-          args: [paddedEncryptedMove as `0x${string}`],
+          args: [
+            ('0x' +
+              encryptedMove.c1.toString(16).padStart(64, '0')) as `0x${string}`,
+            ('0x' +
+              encryptedMove.c2.toString(16).padStart(64, '0')) as `0x${string}`,
+          ],
           value: betAmount,
         });
 
@@ -95,7 +91,16 @@ export function useGameContract(gameId?: number) {
             writeContract({
               ...gameContractConfig,
               functionName: 'createGame',
-              args: [paddedEncryptedMove as `0x${string}`],
+              args: [
+                ('0x' +
+                  encryptedMove.c1
+                    .toString(16)
+                    .padStart(64, '0')) as `0x${string}`,
+                ('0x' +
+                  encryptedMove.c2
+                    .toString(16)
+                    .padStart(64, '0')) as `0x${string}`,
+              ],
               value: betAmount,
               gas,
             }),
@@ -144,32 +149,38 @@ export function useGameContract(gameId?: number) {
   const joinGame = useCallback(
     async (gameId: number, move: Move, betAmount = DEFAULT_BET_AMOUNT_WEI) => {
       try {
-        const encryptedMove = await encryptMove(move);
-
-        let paddedEncryptedMove = encryptedMove;
-        if (encryptedMove.length % 2 !== 0) {
-          paddedEncryptedMove = encryptedMove.replace('0x', '0x0');
-        }
-
-        while (paddedEncryptedMove.length < 258) {
-          paddedEncryptedMove = paddedEncryptedMove.replace('0x', '0x0');
-        }
+        const encryptedMove = (await encryptMove(move)) as ElGamalCiphertext;
 
         // Estimate gas with retry
         const gas = await estimateGasWithRetry({
           ...gameContractConfig,
           functionName: 'joinGame',
-          args: [BigInt(gameId), paddedEncryptedMove as `0x${string}`],
+          args: [
+            BigInt(gameId),
+            ('0x' +
+              encryptedMove.c1.toString(16).padStart(64, '0')) as `0x${string}`,
+            ('0x' +
+              encryptedMove.c2.toString(16).padStart(64, '0')) as `0x${string}`,
+          ],
           value: betAmount,
         });
-
         // Execute transaction with retry
         await retry(
           () =>
             writeContract({
               ...gameContractConfig,
               functionName: 'joinGame',
-              args: [BigInt(gameId), paddedEncryptedMove as `0x${string}`],
+              args: [
+                BigInt(gameId),
+                ('0x' +
+                  encryptedMove.c1
+                    .toString(16)
+                    .padStart(64, '0')) as `0x${string}`,
+                ('0x' +
+                  encryptedMove.c2
+                    .toString(16)
+                    .padStart(64, '0')) as `0x${string}`,
+              ],
               value: betAmount,
               gas,
             }),

@@ -1,26 +1,26 @@
-"use client";
+'use client';
 
 import {
   checkBatcherBalance,
   depositToBatcher,
   getGameResult,
   playHouseMove,
-} from "@/app/actions/house";
-import { useWallet } from "@/contexts/wallet-context";
-import { Move } from "@/lib/crypto";
-import { soundEffects } from "@/lib/sounds/sound-effects";
-import { useGameUIStore } from "@/stores/game-ui-store";
-import { GamePhase, GameResult } from "@/types/game";
-import { useMutation } from "@tanstack/react-query";
-import { useCallback, useEffect, useState } from "react";
-import { formatEther } from "viem";
+} from '@/app/actions/house';
+import { useWallet } from '@/contexts/wallet-context';
+import { Move } from '@/lib/crypto';
+import { soundEffects } from '@/lib/sounds/sound-effects';
+import { useGameUIStore } from '@/stores/game-ui-store';
+import { GamePhase, GameResult } from '@/types/game';
+import { useMutation } from '@tanstack/react-query';
+import { useCallback, useEffect, useState } from 'react';
+import { formatEther } from 'viem';
 import {
   DEFAULT_BET_AMOUNT,
   DEFAULT_BET_AMOUNT_WEI,
   useGameContract,
-} from "./use-game-contract";
-import { useLeaderboard } from "./use-leaderboard";
-import { useMatches } from "./use-matches";
+} from './use-game-contract';
+import { useLeaderboard } from './use-leaderboard';
+import { useMatches } from './use-matches';
 
 export function useGame() {
   //-----------------------------------------------------------------------
@@ -32,7 +32,7 @@ export function useGame() {
   const { walletAddress: address } = useWallet();
   const { addLocalMatch, addMatch } = useMatches();
   const { updateLocalLeaderboard, updateLeaderboard } = useLeaderboard(
-    address as string
+    address as string,
   );
 
   // Use the game UI store for state management
@@ -101,7 +101,7 @@ export function useGame() {
 
       const depositResult = await depositToBatcher(depositAmount);
       if (!depositResult.success) {
-        console.error("Failed to deposit to batcher:", depositResult.error);
+        console.error('Failed to deposit to batcher:', depositResult.error);
         return false;
       }
 
@@ -112,7 +112,7 @@ export function useGame() {
       await checkBalance();
       return true;
     },
-    [checkBalance]
+    [checkBalance],
   );
 
   // Update leaderboard and match history stats
@@ -123,13 +123,13 @@ export function useGame() {
         addMatch(),
       ]);
 
-      if (results.every((result) => result.status === "fulfilled")) {
-        console.log("Game stats updated successfully");
+      if (results.every((result) => result.status === 'fulfilled')) {
+        console.log('Game stats updated successfully');
       } else {
-        console.warn("Some game stats updates failed");
+        console.warn('Some game stats updates failed');
       }
     } catch (error) {
-      console.error("Error updating game stats:", error);
+      console.error('Error updating game stats:', error);
     }
   }, [updateLeaderboard, addMatch]);
 
@@ -155,19 +155,19 @@ export function useGame() {
   // Infer house move based on player move and result
   function inferHouseMove(gameResult: GameResult, userMove: Move) {
     if (gameResult === GameResult.WIN) {
-      return userMove === "ROCK"
-        ? "SCISSORS"
-        : userMove === "PAPER"
-        ? "ROCK"
-        : "PAPER";
+      return userMove === 'ROCK'
+        ? 'SCISSORS'
+        : userMove === 'PAPER'
+        ? 'ROCK'
+        : 'PAPER';
     }
 
     if (gameResult === GameResult.LOSE) {
-      return userMove === "ROCK"
-        ? "PAPER"
-        : userMove === "PAPER"
-        ? "SCISSORS"
-        : "ROCK";
+      return userMove === 'ROCK'
+        ? 'PAPER'
+        : userMove === 'PAPER'
+        ? 'SCISSORS'
+        : 'ROCK';
     }
 
     return userMove; // For DRAW
@@ -198,7 +198,7 @@ export function useGame() {
         const hasFunds = await ensureBatcherFunds(betAmount);
         if (!hasFunds) {
           throw new Error(
-            "House does not have enough funds. Please try again later."
+            'House does not have enough funds. Please try again later.',
           );
         }
 
@@ -206,13 +206,13 @@ export function useGame() {
         const gameId = await contractCreateGame(move, betAmount);
         setGameId(gameId);
         setPhase(GamePhase.WAITING);
-        setTransactionModal(true, "validate");
+        setTransactionModal(true, 'validate');
 
         // Let house make its move with the batched flow
         const houseResult = await playHouseMove(gameId, betAmount);
 
         if (!houseResult.success) {
-          throw new Error(houseResult.error || "Failed to play house move");
+          throw new Error(houseResult.error || 'Failed to play house move');
         }
 
         // Set transaction hash for history
@@ -251,7 +251,7 @@ export function useGame() {
               address,
               gameOutcome,
               Number(formatEther(betValueChange)),
-              gameId
+              gameId,
             );
 
             addLocalMatch({
@@ -259,7 +259,7 @@ export function useGame() {
               playerMove: move,
               houseMove: inferHouseMove(gameOutcome, move),
               result: gameOutcome,
-              transactionHash: houseResult.hash || "",
+              transactionHash: houseResult.hash || '',
               betAmount: betValue,
             });
 
@@ -279,11 +279,11 @@ export function useGame() {
       } catch (error) {
         // Handle errors
         if (error instanceof Error) {
-          if (!error.message.includes("rejected the request")) {
+          if (!error.message.includes('rejected the request')) {
             setError(error.message);
           }
         } else {
-          setError("Failed to create game");
+          setError('Failed to create game');
         }
         setPhase(GamePhase.ERROR);
         throw error;
@@ -313,7 +313,7 @@ export function useGame() {
         // Set initial state
         setPlayerMove(move);
         setPhase(GamePhase.WAITING);
-        setTransactionModal(true, "validate");
+        setTransactionModal(true, 'validate');
 
         // Join game on-chain
         await contractJoinGame(gameId, move, betAmount);
@@ -359,7 +359,7 @@ export function useGame() {
               address,
               gameOutcome,
               Number(formatEther(betValueChange)),
-              gameId
+              gameId,
             );
 
             addLocalMatch({
@@ -367,7 +367,7 @@ export function useGame() {
               playerMove: move,
               houseMove: inferHouseMove(gameOutcome, move),
               result: gameOutcome,
-              transactionHash: transactionHash || "",
+              transactionHash: transactionHash || '',
               betAmount: betValue,
             });
 
@@ -401,7 +401,7 @@ export function useGame() {
             } else {
               // Something went wrong
               setError(
-                "Game resolution failed. Please check game status later."
+                'Game resolution failed. Please check game status later.',
               );
               setPhase(GamePhase.ERROR);
             }
@@ -414,7 +414,7 @@ export function useGame() {
         if (error instanceof Error) {
           setError(error.message);
         } else {
-          setError("Failed to join game");
+          setError('Failed to join game');
         }
         setPhase(GamePhase.ERROR);
         throw error;
@@ -432,7 +432,7 @@ export function useGame() {
   useEffect(() => {
     const handleVisibilityChange = async () => {
       if (
-        document.visibilityState === "visible" &&
+        document.visibilityState === 'visible' &&
         gameId &&
         !result &&
         phase !== GamePhase.FINISHED
@@ -452,7 +452,7 @@ export function useGame() {
             if (playerMove) {
               const inferredHouseMove = inferHouseMove(
                 gameOutcome,
-                playerMove as Move
+                playerMove as Move,
               );
               setHouseMove(inferredHouseMove);
             }
@@ -463,16 +463,16 @@ export function useGame() {
           }
         } catch (error) {
           console.error(
-            "Error checking game status on visibility change:",
-            error
+            'Error checking game status on visibility change:',
+            error,
           );
         }
       }
     };
 
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [
     gameId,
@@ -497,7 +497,7 @@ export function useGame() {
     joinGame: (
       gameId: number,
       move: Move,
-      betAmount = DEFAULT_BET_AMOUNT_WEI
+      betAmount = DEFAULT_BET_AMOUNT_WEI,
     ) => joinGameMutation.mutate({ gameId, move, betAmount }),
     resetGame: resetGameState,
     revertToChoosing,
