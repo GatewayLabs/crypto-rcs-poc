@@ -118,11 +118,11 @@ export async function quickCheckGameFinished(gameId: number): Promise<{
       },
     );
 
-    const [, , , finished, , , , , revealedDiff] = data;
+    const [, , , , , , finished, , , revealedDiff] = data;
 
     return {
       exists: true,
-      finished: finished,
+      finished,
       result:
         finished && revealedDiff !== undefined
           ? Number(revealedDiff)

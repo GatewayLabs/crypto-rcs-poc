@@ -11,7 +11,7 @@ import {
   walletClient,
   walletClient2,
 } from '@/config/server';
-import { encryptMove } from '@/lib/crypto';
+import { ElGamalCiphertext, encryptMove } from '@/lib/crypto';
 import { retry } from '@/lib/utils';
 import { executeContractFunction } from '@/lib/wallet-utils';
 import { computeDifferenceLocally, decryptDifference } from './crypto';
@@ -77,7 +77,16 @@ export async function playHouseMove(
       );
     }
 
-    const [playerA, playerB, winner, finished, bothCommitted] = gameData;
+    const [
+      playerA,
+      playerB,
+      ,
+      encMoveA,
+      encMoveB,
+      bothCommitted,
+      finished,
+      winner,
+    ] = gameData;
 
     await rateLimit(playerA, 10, 30000);
 
@@ -101,33 +110,33 @@ export async function playHouseMove(
     console.log(`Generated house move for game ${gameId}: ${houseMove}`);
 
     // 3. Encrypt move
-    let encryptedMove, paddedEncryptedMove;
+    let encryptedMove;
     try {
-      encryptedMove = await encryptMove(houseMove);
-
-      paddedEncryptedMove = encryptedMove;
-      if (encryptedMove.length % 2 !== 0) {
-        paddedEncryptedMove = encryptedMove.replace('0x', '0x0');
-      }
-
-      while (paddedEncryptedMove.length < 258) {
-        paddedEncryptedMove = paddedEncryptedMove.replace('0x', '0x0');
-      }
+      encryptedMove = (await encryptMove(
+        houseMove,
+        'elgamal',
+      )) as ElGamalCiphertext;
     } catch (error) {
       console.error('Error encrypting move:', error);
       throw new Error('Failed to encrypt house move');
     }
 
     // 4. Calculate the result off-chain for finalizing
-    const encryptedPlayerMove = gameData[5]; // encChoiceA from getGameInfo
+    const encryptedPlayerMove = encMoveA;
 
     // Pre-compute the difference for finalization
     let diffMod3: number;
     try {
       // First compute the homomorphic difference
       const differenceCipher = computeDifferenceLocally(
-        encryptedPlayerMove,
-        paddedEncryptedMove,
+        {
+          c1: BigInt(encryptedPlayerMove.c1),
+          c2: BigInt(encryptedPlayerMove.c2),
+        },
+        {
+          c1: BigInt(encryptedMove.c1),
+          c2: BigInt(encryptedMove.c2),
+        },
       );
 
       // Then decrypt it to get the mod 3 value
@@ -145,7 +154,10 @@ export async function playHouseMove(
       'batchHouseFlow',
       [
         BigInt(gameId),
-        paddedEncryptedMove as `0x${string}`,
+        ('0x' +
+          encryptedMove.c1.toString(16).padStart(64, '0')) as `0x${string}`,
+        ('0x' +
+          encryptedMove.c2.toString(16).padStart(64, '0')) as `0x${string}`,
         BigInt(diffMod3),
         betAmount,
       ],
@@ -204,7 +216,7 @@ export async function getGameResult(gameId: number): Promise<{
       },
     );
 
-    const [, , , finished, , , , , revealedDiff] = gameData;
+    const [, , , , , , finished, , , revealedDiff] = gameData;
 
     return {
       success: true,

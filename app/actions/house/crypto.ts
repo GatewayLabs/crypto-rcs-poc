@@ -1,83 +1,96 @@
-import * as paillier from "paillier-bigint";
+import { modInverse } from '@/lib/crypto/arithmetic';
+import {
+  decrypt as elgamalDecrypt,
+  ElGamalCiphertext,
+} from '@/lib/crypto/elgamal';
 
-let publicKey: paillier.PublicKey | null = null;
-let privateKey: paillier.PrivateKey | null = null;
-
-export function getPaillierKeys() {
-  if (!publicKey || !privateKey) {
-    const publicKeyN = BigInt("0x" + process.env.NEXT_PUBLIC_PAILLIER_N);
-    const publicKeyG = BigInt("0x" + process.env.NEXT_PUBLIC_PAILLIER_G);
-    const privateKeyLambda = BigInt("0x" + process.env.PAILLIER_LAMBDA);
-    const privateKeyMu = BigInt("0x" + process.env.PAILLIER_MU);
-
-    publicKey = new paillier.PublicKey(publicKeyN, publicKeyG);
-    privateKey = new paillier.PrivateKey(
-      privateKeyLambda,
-      privateKeyMu,
-      publicKey
-    );
-  }
-
+/**
+ * Retrieve the ElGamal keys.
+ * The public key is read from NEXT_PUBLIC_ELGAMAL_* env variables,
+ * and the private key is read from ELGAMAL_PRIVATE_KEY.
+ */
+export function getElGamalKeys() {
+  const publicKey = {
+    p: BigInt('0x' + process.env.NEXT_PUBLIC_ELGAMAL_P),
+    g: BigInt('0x' + process.env.NEXT_PUBLIC_ELGAMAL_G),
+    h: BigInt('0x' + process.env.NEXT_PUBLIC_ELGAMAL_H),
+  };
+  const privateKey = {
+    x: BigInt('0x' + process.env.ELGAMAL_X),
+  };
   return { publicKey, privateKey };
 }
 
-export function decryptDifference(ciphertext: string): number {
+/**
+ * Computes the homomorphic difference between two ElGamal-encrypted moves.
+ *
+ * Both moves should be provided as JSON strings representing objects of the form:
+ * { c1: string, c2: string }.
+ *
+ * The difference is computed componentwise (via division modulo p) and returned
+ * as a JSON string of an object with the new { c1, c2 }.
+ */
+export function computeDifferenceLocally(
+  encryptedA: ElGamalCiphertext,
+  encryptedB: ElGamalCiphertext,
+): ElGamalCiphertext {
   try {
-    const { publicKey, privateKey } = getPaillierKeys();
+    // Parse the ciphertexts
+    const encA = encryptedA;
+    const encB = encryptedB;
 
-    let decryptedDifference = privateKey.decrypt(BigInt(ciphertext));
+    console.log('encA', encA);
+    console.log('encB', encB);
 
-    // Handle negative numbers properly
-    const halfN = publicKey.n / 2n;
-    if (decryptedDifference > halfN) {
-      decryptedDifference = decryptedDifference - publicKey.n;
-    }
+    const { publicKey } = getElGamalKeys();
+    const p = publicKey.p;
 
-    // Use a proper modulo function for negative numbers
-    const mod = (n: bigint, m: bigint) => ((n % m) + m) % m;
-    return Number(mod(decryptedDifference, 3n));
+    console.log('p', p);
+
+    // Compute difference: componentwise division
+    const diffC1 = (BigInt(encA.c1) * modInverse(BigInt(encB.c1), p)) % p;
+    const diffC2 = (BigInt(encA.c2) * modInverse(BigInt(encB.c2), p)) % p;
+
+    const diff = { c1: diffC1, c2: diffC2 };
+
+    return diff;
   } catch (error) {
-    console.error("Error decrypting difference:", error);
+    console.error(
+      'Error computing homomorphic difference with ElGamal:',
+      error,
+    );
     throw new Error(
-      `Failed to decrypt difference: ${
+      `Failed to compute homomorphic difference using ElGamal: ${
         error instanceof Error ? error.message : String(error)
-      }`
+      }`,
     );
   }
 }
 
 /**
- * Computes homomorphic difference between two encrypted values locally
- * This replicates what the smart contract does but runs on the server
- * @param encryptedA Encrypted player A move
- * @param encryptedB Encrypted player B move
- * @returns Encrypted difference that can be decrypted with the private key
+ * Decrypts an ElGamal-encrypted difference ciphertext and returns the normalized result modulo 3.
+ *
+ * The ciphertext is expected as a JSON string representing an object { c1, c2 }.
  */
-export function computeDifferenceLocally(
-  encryptedA: string,
-  encryptedB: string
-): string {
+export function decryptDifference(ciphertext: ElGamalCiphertext): number {
   try {
-    const { publicKey } = getPaillierKeys();
+    const elgamalCipher: ElGamalCiphertext = {
+      c1: BigInt(ciphertext.c1),
+      c2: BigInt(ciphertext.c2),
+    };
 
-    // Ensure we're working with BigInt values
-    const encA = BigInt(encryptedA);
-    const encB = BigInt(encryptedB);
+    const { publicKey, privateKey } = getElGamalKeys();
+    const m = elgamalDecrypt(elgamalCipher, privateKey, publicKey);
 
-    // Compute Enc(A-B) = Enc(A) * Enc(-B) mod n^2
-    // For Paillier, Enc(-B) = Enc(B)^-1 mod n^2
-    const encBInverse = publicKey.multiply(encB, -1n);
-
-    // Multiply to get the encrypted difference
-    const encryptedDiff = publicKey.addition(encA, encBInverse);
-
-    return encryptedDiff.toString();
+    // Normalize the decrypted difference modulo 3.
+    const mod = (n: number, m: number) => ((n % m) + m) % m;
+    return mod(Number(m), 3);
   } catch (error) {
-    console.error("Error computing homomorphic difference:", error);
+    console.error('Error decrypting difference with ElGamal:', error);
     throw new Error(
-      `Failed to compute homomorphic difference: ${
+      `Failed to decrypt difference using ElGamal: ${
         error instanceof Error ? error.message : String(error)
-      }`
+      }`,
     );
   }
 }
