@@ -39,13 +39,8 @@ export function computeDifferenceLocally(
     const encA = encryptedA;
     const encB = encryptedB;
 
-    console.log('encA', encA);
-    console.log('encB', encB);
-
     const { publicKey } = getElGamalKeys();
     const p = publicKey.p;
-
-    console.log('p', p);
 
     // Compute difference: componentwise division
     const diffC1 = (BigInt(encA.c1) * modInverse(BigInt(encB.c1), p)) % p;
