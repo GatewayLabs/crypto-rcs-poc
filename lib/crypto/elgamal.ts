@@ -174,10 +174,19 @@ export function decrypt(
   const xC1 = ecMul(ciphertext.C1, privateKey.x, publicKey.p);
   const neg_xC1 = ecNeg(xC1, publicKey.p);
   const M = ecAdd(ciphertext.C2, neg_xC1, publicKey.p);
-  // Try possible m values (for your RPS game, for example m ∈ {-2, -1, 0, 1, 2})
+
   const possibleExponents = [-2n, -1n, 0n, 1n, 2n];
   for (const candidate of possibleExponents) {
-    const candidateM = ecMul(publicKey.G, candidate, publicKey.p);
+    let candidateM: ECPoint;
+    if (candidate < 0n) {
+      // Compute candidateM = - (|candidate| * G)
+      candidateM = ecNeg(
+        ecMul(publicKey.G, -candidate, publicKey.p),
+        publicKey.p,
+      );
+    } else {
+      candidateM = ecMul(publicKey.G, candidate, publicKey.p);
+    }
     if (candidateM.x === M.x && candidateM.y === M.y) {
       return candidate;
     }
