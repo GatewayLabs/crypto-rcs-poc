@@ -5,13 +5,12 @@ import {
   gameContractConfig,
   houseBatcherContractConfig,
 } from '@/config/contracts';
+import { houseAccount, publicClient, walletClient } from '@/config/server';
 import {
-  houseAccount,
-  publicClient,
-  walletClient,
-  walletClient2,
-} from '@/config/server';
-import { ElGamalCiphertext, encryptMove } from '@/lib/crypto';
+  ElGamalCiphertext,
+  encryptMove,
+  generateEncryptedMoveHash,
+} from '@/lib/crypto';
 import { retry } from '@/lib/utils';
 import { executeContractFunction } from '@/lib/wallet-utils';
 import { computeDifferenceLocally, decryptDifference } from './crypto';
@@ -33,6 +32,7 @@ export type PlayHouseMoveResult = {
 export async function playHouseMove(
   gameId: number,
   betAmount: bigint,
+  encryptedPlayerMove: ElGamalCiphertext,
 ): Promise<PlayHouseMoveResult> {
   try {
     if (gameId === undefined || gameId === null || isNaN(gameId)) {
@@ -121,22 +121,14 @@ export async function playHouseMove(
       throw new Error('Failed to encrypt house move');
     }
 
-    // 4. Calculate the result off-chain for finalizing
-    const encryptedPlayerMove = encMoveA;
-
     // Pre-compute the difference for finalization
     let diffMod3: number;
+    let differenceCipher: ElGamalCiphertext;
     try {
       // First compute the homomorphic difference
-      const differenceCipher = computeDifferenceLocally(
-        {
-          c1: BigInt(encryptedPlayerMove.c1),
-          c2: BigInt(encryptedPlayerMove.c2),
-        },
-        {
-          c1: BigInt(encryptedMove.c1),
-          c2: BigInt(encryptedMove.c2),
-        },
+      differenceCipher = computeDifferenceLocally(
+        encryptedPlayerMove,
+        encryptedMove,
       );
 
       // Then decrypt it to get the mod 3 value
@@ -147,18 +139,29 @@ export async function playHouseMove(
       throw new Error('Failed to compute game result');
     }
 
-    // 5. Execute the batcher contract transaction
+    // 4. Execute the batcher contract transaction
     // Note: Now we use the batcher's balance instead of sending ETH with the transaction
+    const moveHash = generateEncryptedMoveHash(encryptedMove);
+
     const hash = await executeContractFunction(
       houseBatcherContractConfig,
       'batchHouseFlow',
       [
         BigInt(gameId),
-        ('0x' +
-          encryptedMove.c1.toString(16).padStart(64, '0')) as `0x${string}`,
-        ('0x' +
-          encryptedMove.c2.toString(16).padStart(64, '0')) as `0x${string}`,
+        moveHash,
+        {
+          c1: encryptedPlayerMove.C1,
+          c2: encryptedPlayerMove.C2,
+        },
+        {
+          c1: encryptedMove.C1,
+          c2: encryptedMove.C2,
+        },
         BigInt(diffMod3),
+        {
+          c1: differenceCipher.C1,
+          c2: differenceCipher.C2,
+        },
         betAmount,
       ],
       {
