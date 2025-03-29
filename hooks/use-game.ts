@@ -7,7 +7,7 @@ import {
   playHouseMove,
 } from '@/app/actions/house';
 import { useWallet } from '@/contexts/wallet-context';
-import { Move } from '@/lib/crypto';
+import { Move, ElGamalCiphertext, encryptMove } from '@/lib/crypto';
 import { soundEffects } from '@/lib/sounds/sound-effects';
 import { useGameUIStore } from '@/stores/game-ui-store';
 import { GamePhase, GameResult } from '@/types/game';
@@ -26,7 +26,7 @@ export function useGame() {
   //-----------------------------------------------------------------------
   // Dependencies & State
   //-----------------------------------------------------------------------
-  const { createGame: contractCreateGame, joinGame: contractJoinGame } =
+  const { createGame: contractCreateGame, cancelGame: contractCancelGame } =
     useGameContract();
 
   const { walletAddress: address } = useWallet();
@@ -195,7 +195,7 @@ export function useGame() {
         setPhase(GamePhase.SELECTED);
 
         // Ensure batcher has enough funds
-        const hasFunds = await ensureBatcherFunds(betAmount);
+        const hasFunds = await ensureBatcherFunds(betAmount * (110n / 100n));
         if (!hasFunds) {
           throw new Error(
             'House does not have enough funds. Please try again later.',
@@ -203,13 +203,22 @@ export function useGame() {
         }
 
         // Create game on-chain
-        const gameId = await contractCreateGame(move, betAmount);
+        const encryptedMove = (await encryptMove(
+          move,
+          'elgamal',
+        )) as ElGamalCiphertext;
+
+        const gameId = await contractCreateGame(encryptedMove, betAmount);
         setGameId(gameId);
         setPhase(GamePhase.WAITING);
         setTransactionModal(true, 'validate');
 
         // Let house make its move with the batched flow
-        const houseResult = await playHouseMove(gameId, betAmount);
+        const houseResult = await playHouseMove(
+          gameId,
+          betAmount,
+          encryptedMove,
+        );
 
         if (!houseResult.success) {
           throw new Error(houseResult.error || 'Failed to play house move');
@@ -294,128 +303,19 @@ export function useGame() {
   });
 
   //-----------------------------------------------------------------------
-  // Join Game Mutation
+  // Cancel Game Mutation
   //-----------------------------------------------------------------------
-  const joinGameMutation = useMutation({
-    mutationFn: async ({
-      gameId,
-      move,
-      betAmount = DEFAULT_BET_AMOUNT_WEI,
-    }: {
-      gameId: number;
-      move: Move;
-      betAmount?: bigint;
-    }) => {
+  const cancelGameMutation = useMutation({
+    mutationFn: async ({ gameId: newGameId }: { gameId?: number }) => {
       try {
-        setBetValue(betAmount);
-        setIsJoiningGame(true);
+        const idToCancel = newGameId ?? gameId;
 
-        // Set initial state
-        setPlayerMove(move);
-        setPhase(GamePhase.WAITING);
-        setTransactionModal(true, 'validate');
-
-        // Join game on-chain
-        await contractJoinGame(gameId, move, betAmount);
-
-        // Check game result directly (no resolution flow needed)
-        const resultCheck = await getGameResult(gameId);
-
-        if (
-          resultCheck.success &&
-          resultCheck.finished &&
-          resultCheck.result !== undefined
-        ) {
-          // Game is already finished - display result immediately
-          const gameOutcome = getResultFromDiff(resultCheck.result);
-          setResult(gameOutcome);
-
-          // Infer the house move from the result
-          if (move) {
-            const inferredHouseMove = inferHouseMove(gameOutcome, move);
-            setHouseMove(inferredHouseMove);
-          }
-
-          // Play sound effect based on outcome
-          if (gameOutcome === GameResult.WIN) soundEffects.win();
-          else if (gameOutcome === GameResult.LOSE) soundEffects.lose();
-          else soundEffects.draw();
-
-          // Update UI to finished state
-          setTransactionModal(false);
-          setPhase(GamePhase.FINISHED);
-
-          // Update stats
-          if (address && move && betValue !== null) {
-            let betValueChange = 0n;
-
-            if (gameOutcome === GameResult.WIN) {
-              betValueChange = betValue;
-            } else if (gameOutcome === GameResult.LOSE) {
-              betValueChange = -betValue;
-            }
-
-            updateLocalLeaderboard(
-              address,
-              gameOutcome,
-              Number(formatEther(betValueChange)),
-              gameId,
-            );
-
-            addLocalMatch({
-              gameId: gameId,
-              playerMove: move,
-              houseMove: inferHouseMove(gameOutcome, move),
-              result: gameOutcome,
-              transactionHash: transactionHash || '',
-              betAmount: betValue,
-            });
-
-            updateStats();
-          }
-        } else {
-          // Game is still processing - this is unexpected since we should get results immediately
-          // but we'll handle it gracefully by checking again after a delay
-          setTimeout(async () => {
-            const finalCheck = await getGameResult(gameId);
-            if (
-              finalCheck.success &&
-              finalCheck.finished &&
-              finalCheck.result !== undefined
-            ) {
-              const gameOutcome = getResultFromDiff(finalCheck.result);
-              setResult(gameOutcome);
-
-              if (move) {
-                const inferredHouseMove = inferHouseMove(gameOutcome, move);
-                setHouseMove(inferredHouseMove);
-              }
-
-              setTransactionModal(false);
-              setPhase(GamePhase.FINISHED);
-
-              // Update stats
-              if (address && move && betValue !== null) {
-                updateStats();
-              }
-            } else {
-              // Something went wrong
-              setError(
-                'Game resolution failed. Please check game status later.',
-              );
-              setPhase(GamePhase.ERROR);
-            }
-          }, 5000);
+        if (idToCancel !== null) {
+          await contractCancelGame(idToCancel);
+          resetGameState();
         }
-
-        return { success: true, gameId };
       } catch (error) {
-        // Handle errors
-        if (error instanceof Error) {
-          setError(error.message);
-        } else {
-          setError('Failed to join game');
-        }
+        setError('Failed to cancel game');
         setPhase(GamePhase.ERROR);
         throw error;
       } finally {
@@ -494,11 +394,7 @@ export function useGame() {
     // Game actions
     createGame: (move: Move, betAmount = DEFAULT_BET_AMOUNT_WEI) =>
       createGameMutation.mutate({ move, betAmount }),
-    joinGame: (
-      gameId: number,
-      move: Move,
-      betAmount = DEFAULT_BET_AMOUNT_WEI,
-    ) => joinGameMutation.mutate({ gameId, move, betAmount }),
+    cancelGame: (gameId?: number) => cancelGameMutation.mutate({ gameId }),
     resetGame: resetGameState,
     revertToChoosing,
 

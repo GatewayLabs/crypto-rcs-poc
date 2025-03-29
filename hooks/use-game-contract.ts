@@ -1,6 +1,11 @@
 'use client';
 
-import { Move, encryptMove, ElGamalCiphertext } from '@/lib/crypto';
+import {
+  Move,
+  encryptMove,
+  ElGamalCiphertext,
+  generateEncryptedMoveHash,
+} from '@/lib/crypto';
 import { gameContractConfig } from '@/config/contracts';
 import { usePublicClient, useReadContract, useWriteContract } from 'wagmi';
 import { useCallback } from 'react';
@@ -68,20 +73,21 @@ export function useGameContract(gameId?: number) {
    * Create a new game with retry logic
    */
   const createGame = useCallback(
-    async (move: Move, betAmount = DEFAULT_BET_AMOUNT_WEI) => {
+    async (
+      encryptedMove: ElGamalCiphertext,
+      betAmount = DEFAULT_BET_AMOUNT_WEI,
+    ) => {
       try {
-        const encryptedMove = (await encryptMove(move)) as ElGamalCiphertext;
+        // Convert the EC points to hex strings.
+        const moveHash = generateEncryptedMoveHash(
+          encryptedMove,
+        ) as `0x${string}`;
 
         // Estimate gas with retry
         const gas = await estimateGasWithRetry({
           ...gameContractConfig,
           functionName: 'createGame',
-          args: [
-            ('0x' +
-              encryptedMove.c1.toString(16).padStart(64, '0')) as `0x${string}`,
-            ('0x' +
-              encryptedMove.c2.toString(16).padStart(64, '0')) as `0x${string}`,
-          ],
+          args: [moveHash],
           value: betAmount,
         });
 
@@ -91,16 +97,7 @@ export function useGameContract(gameId?: number) {
             writeContract({
               ...gameContractConfig,
               functionName: 'createGame',
-              args: [
-                ('0x' +
-                  encryptedMove.c1
-                    .toString(16)
-                    .padStart(64, '0')) as `0x${string}`,
-                ('0x' +
-                  encryptedMove.c2
-                    .toString(16)
-                    .padStart(64, '0')) as `0x${string}`,
-              ],
+              args: [moveHash],
               value: betAmount,
               gas,
             }),
@@ -144,84 +141,15 @@ export function useGameContract(gameId?: number) {
   );
 
   /**
-   * Join an existing game with retry logic
+   * Cancel a game with retry logic
    */
-  const joinGame = useCallback(
-    async (gameId: number, move: Move, betAmount = DEFAULT_BET_AMOUNT_WEI) => {
-      try {
-        const encryptedMove = (await encryptMove(move)) as ElGamalCiphertext;
-
-        // Estimate gas with retry
-        const gas = await estimateGasWithRetry({
-          ...gameContractConfig,
-          functionName: 'joinGame',
-          args: [
-            BigInt(gameId),
-            ('0x' +
-              encryptedMove.c1.toString(16).padStart(64, '0')) as `0x${string}`,
-            ('0x' +
-              encryptedMove.c2.toString(16).padStart(64, '0')) as `0x${string}`,
-          ],
-          value: betAmount,
-        });
-        // Execute transaction with retry
-        await retry(
-          () =>
-            writeContract({
-              ...gameContractConfig,
-              functionName: 'joinGame',
-              args: [
-                BigInt(gameId),
-                ('0x' +
-                  encryptedMove.c1
-                    .toString(16)
-                    .padStart(64, '0')) as `0x${string}`,
-                ('0x' +
-                  encryptedMove.c2
-                    .toString(16)
-                    .padStart(64, '0')) as `0x${string}`,
-              ],
-              value: betAmount,
-              gas,
-            }),
-          {
-            retries: 3,
-            backoffMs: 1000,
-            shouldRetry: (error) => {
-              const errorMessage =
-                error instanceof Error ? error.message : String(error);
-              // Don't retry user rejections
-              return (
-                !errorMessage.includes('user rejected') &&
-                (errorMessage.includes('network') ||
-                  errorMessage.includes('timeout') ||
-                  errorMessage.includes('gas') ||
-                  errorMessage.includes('connection'))
-              );
-            },
-            onRetry: (error, attempt) => {
-              console.log(`Joining game retry attempt ${attempt}: ${error}`);
-            },
-          },
-        );
-      } catch (error) {
-        console.error('Error joining game:', error);
-        throw error;
-      }
-    },
-    [writeContract, publicClient],
-  );
-
-  /**
-   * Compute difference for a game with retry logic
-   */
-  const computeDifference = useCallback(
+  const cancelGame = useCallback(
     async (gameId: number) => {
       try {
         // Estimate gas with retry
         const gas = await estimateGasWithRetry({
           ...gameContractConfig,
-          functionName: 'computeDifference',
+          functionName: 'cancelGame',
           args: [BigInt(gameId)],
         });
 
@@ -230,7 +158,7 @@ export function useGameContract(gameId?: number) {
           () =>
             writeContract({
               ...gameContractConfig,
-              functionName: 'computeDifference',
+              functionName: 'cancelGame',
               args: [BigInt(gameId)],
               gas,
             }),
@@ -243,7 +171,8 @@ export function useGameContract(gameId?: number) {
               // Don't retry user rejections or business logic failures
               return (
                 !errorMessage.includes('user rejected') &&
-                !errorMessage.includes('Difference already computed') &&
+                !errorMessage.includes('Game already finalized') &&
+                !errorMessage.includes('Game is already finished') &&
                 (errorMessage.includes('network') ||
                   errorMessage.includes('timeout') ||
                   errorMessage.includes('gas') ||
@@ -251,14 +180,12 @@ export function useGameContract(gameId?: number) {
               );
             },
             onRetry: (error, attempt) => {
-              console.log(
-                `Computing difference retry attempt ${attempt}: ${error}`,
-              );
+              console.log(`Cancelling game retry attempt ${attempt}: ${error}`);
             },
           },
         );
       } catch (error) {
-        console.error('Error computing difference:', error);
+        console.error('Error canceling game:', error);
         throw error;
       }
     },
@@ -269,13 +196,13 @@ export function useGameContract(gameId?: number) {
    * Finalize a game with retry logic
    */
   const finalizeGame = useCallback(
-    async (gameId: number, diffMod3: number) => {
+    async (gameId: number, diffMod3: number, difference: ElGamalCiphertext) => {
       try {
         // Estimate gas with retry
         const gas = await estimateGasWithRetry({
           ...gameContractConfig,
           functionName: 'finalizeGame',
-          args: [BigInt(gameId), BigInt(diffMod3)],
+          args: [BigInt(gameId), BigInt(diffMod3), difference],
         });
 
         // Execute transaction with retry
@@ -284,7 +211,14 @@ export function useGameContract(gameId?: number) {
             writeContract({
               ...gameContractConfig,
               functionName: 'finalizeGame',
-              args: [BigInt(gameId), BigInt(diffMod3)],
+              args: [
+                BigInt(gameId),
+                BigInt(diffMod3),
+                {
+                  c1: difference.C1,
+                  c2: difference.C2,
+                },
+              ],
               gas,
             }),
           {
@@ -324,9 +258,8 @@ export function useGameContract(gameId?: number) {
 
     // Actions
     createGame,
-    joinGame,
-    computeDifference,
     finalizeGame,
+    cancelGame,
 
     // States
     isLoading: isPending,
