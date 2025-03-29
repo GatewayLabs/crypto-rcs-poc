@@ -1,3 +1,5 @@
+import { ElGamalPublicKey, FIELD_MODULUS } from '@/lib/crypto/elgamal';
+
 export const GAME_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS!;
 export const HOUSE_BATCHER_CONTRACT_ADDRESS =
   process.env.NEXT_PUBLIC_HOUSE_BATCHER_ADDRESS!;
@@ -8,10 +10,16 @@ export const PAILLIER_PUBLIC_KEY = {
 } as const;
 
 export const ELGAMAL_PUBLIC_KEY = {
-  p: process.env.NEXT_PUBLIC_ELGAMAL_P!,
-  g: process.env.NEXT_PUBLIC_ELGAMAL_G!,
-  h: process.env.NEXT_PUBLIC_ELGAMAL_H!,
-} as const;
+  G: {
+    x: BigInt(process.env.NEXT_PUBLIC_ELGAMAL_GEN_X!),
+    y: BigInt(process.env.NEXT_PUBLIC_ELGAMAL_GEN_Y!),
+  },
+  Q: {
+    x: BigInt(process.env.NEXT_PUBLIC_ELGAMAL_X!),
+    y: BigInt(process.env.NEXT_PUBLIC_ELGAMAL_Y!),
+  },
+  p: FIELD_MODULUS,
+} as ElGamalPublicKey;
 
 export const gameContractConfig = {
   address: GAME_CONTRACT_ADDRESS as `0x${string}`,
@@ -20,132 +28,47 @@ export const gameContractConfig = {
       inputs: [
         {
           internalType: 'address',
-          name: '_user',
-          type: 'address',
-        },
-        {
-          internalType: 'uint256',
-          name: '_hours',
-          type: 'uint256',
-        },
-      ],
-      name: 'banUser',
-      outputs: [],
-      stateMutability: 'nonpayable',
-      type: 'function',
-    },
-    {
-      inputs: [
-        {
-          internalType: 'uint256',
-          name: 'gameId',
-          type: 'uint256',
-        },
-      ],
-      name: 'cancelGame',
-      outputs: [],
-      stateMutability: 'nonpayable',
-      type: 'function',
-    },
-    {
-      inputs: [
-        {
-          internalType: 'address',
-          name: 'newHouse',
-          type: 'address',
-        },
-      ],
-      name: 'changeHouse',
-      outputs: [],
-      stateMutability: 'nonpayable',
-      type: 'function',
-    },
-    {
-      inputs: [
-        {
-          internalType: 'uint256',
-          name: 'gameId',
-          type: 'uint256',
-        },
-      ],
-      name: 'computeDifference',
-      outputs: [],
-      stateMutability: 'nonpayable',
-      type: 'function',
-    },
-    {
-      inputs: [
-        {
-          internalType: 'bytes',
-          name: 'c1A',
-          type: 'bytes',
-        },
-        {
-          internalType: 'bytes',
-          name: 'c2A',
-          type: 'bytes',
-        },
-      ],
-      name: 'createGame',
-      outputs: [
-        {
-          internalType: 'uint256',
-          name: '',
-          type: 'uint256',
-        },
-      ],
-      stateMutability: 'payable',
-      type: 'function',
-    },
-    {
-      inputs: [
-        {
-          internalType: 'uint256',
-          name: 'gameId',
-          type: 'uint256',
-        },
-        {
-          internalType: 'int256',
-          name: 'diffMod3',
-          type: 'int256',
-        },
-      ],
-      name: 'finalizeGame',
-      outputs: [],
-      stateMutability: 'nonpayable',
-      type: 'function',
-    },
-    {
-      inputs: [
-        {
-          internalType: 'address',
           name: '_owner',
           type: 'address',
         },
         {
-          internalType: 'contract ElGamalAdditive',
+          internalType: 'contract ECCElGamal',
           name: '_elgamal',
           type: 'address',
         },
         {
-          internalType: 'bytes',
-          name: '_p',
-          type: 'bytes',
-        },
-        {
-          internalType: 'bytes',
-          name: '_g',
-          type: 'bytes',
-        },
-        {
-          internalType: 'bytes',
-          name: '_h',
-          type: 'bytes',
+          components: [
+            {
+              components: [
+                {
+                  internalType: 'uint256',
+                  name: 'x',
+                  type: 'uint256',
+                },
+                {
+                  internalType: 'uint256',
+                  name: 'y',
+                  type: 'uint256',
+                },
+              ],
+              internalType: 'struct ECPoint',
+              name: 'Q',
+              type: 'tuple',
+            },
+          ],
+          internalType: 'struct PublicKey',
+          name: '_pk',
+          type: 'tuple',
         },
         {
           internalType: 'address',
           name: '_house',
           type: 'address',
+        },
+        {
+          internalType: 'uint16',
+          name: '_fee',
+          type: 'uint16',
         },
       ],
       stateMutability: 'nonpayable',
@@ -184,15 +107,27 @@ export const gameContractConfig = {
         },
         {
           indexed: false,
-          internalType: 'bytes',
-          name: 'c1',
-          type: 'bytes',
+          internalType: 'uint256',
+          name: 'diff_c1_x',
+          type: 'uint256',
         },
         {
           indexed: false,
-          internalType: 'bytes',
-          name: 'c2',
-          type: 'bytes',
+          internalType: 'uint256',
+          name: 'diff_c1_y',
+          type: 'uint256',
+        },
+        {
+          indexed: false,
+          internalType: 'uint256',
+          name: 'diff_c2_x',
+          type: 'uint256',
+        },
+        {
+          indexed: false,
+          internalType: 'uint256',
+          name: 'diff_c2_y',
+          type: 'uint256',
         },
       ],
       name: 'DifferenceComputed',
@@ -264,6 +199,12 @@ export const gameContractConfig = {
           name: 'playerA',
           type: 'address',
         },
+        {
+          indexed: false,
+          internalType: 'bytes32',
+          name: 'hashMoveA',
+          type: 'bytes32',
+        },
       ],
       name: 'GameCreated',
       type: 'event',
@@ -282,6 +223,12 @@ export const gameContractConfig = {
           internalType: 'address',
           name: 'playerB',
           type: 'address',
+        },
+        {
+          indexed: false,
+          internalType: 'bytes32',
+          name: 'hashMoveB',
+          type: 'bytes32',
         },
       ],
       name: 'GameJoined',
@@ -332,27 +279,65 @@ export const gameContractConfig = {
       type: 'event',
     },
     {
+      anonymous: false,
       inputs: [
         {
+          indexed: true,
           internalType: 'uint256',
           name: 'gameId',
           type: 'uint256',
         },
         {
-          internalType: 'bytes',
-          name: 'c1B',
-          type: 'bytes',
+          indexed: false,
+          internalType: 'uint256',
+          name: 'encMoveA_c1_x',
+          type: 'uint256',
         },
         {
-          internalType: 'bytes',
-          name: 'c2B',
-          type: 'bytes',
+          indexed: false,
+          internalType: 'uint256',
+          name: 'encMoveA_c1_y',
+          type: 'uint256',
+        },
+        {
+          indexed: false,
+          internalType: 'uint256',
+          name: 'encMoveA_c2_x',
+          type: 'uint256',
+        },
+        {
+          indexed: false,
+          internalType: 'uint256',
+          name: 'encMoveA_c2_y',
+          type: 'uint256',
+        },
+        {
+          indexed: false,
+          internalType: 'uint256',
+          name: 'encMoveB_c1_x',
+          type: 'uint256',
+        },
+        {
+          indexed: false,
+          internalType: 'uint256',
+          name: 'encMoveB_c1_y',
+          type: 'uint256',
+        },
+        {
+          indexed: false,
+          internalType: 'uint256',
+          name: 'encMoveB_c2_x',
+          type: 'uint256',
+        },
+        {
+          indexed: false,
+          internalType: 'uint256',
+          name: 'encMoveB_c2_y',
+          type: 'uint256',
         },
       ],
-      name: 'joinGame',
-      outputs: [],
-      stateMutability: 'payable',
-      type: 'function',
+      name: 'MovesSubmitted',
+      type: 'event',
     },
     {
       anonymous: false,
@@ -372,52 +357,6 @@ export const gameContractConfig = {
       ],
       name: 'OwnershipTransferred',
       type: 'event',
-    },
-    {
-      inputs: [],
-      name: 'renounceOwnership',
-      outputs: [],
-      stateMutability: 'nonpayable',
-      type: 'function',
-    },
-    {
-      inputs: [
-        {
-          internalType: 'uint256',
-          name: 'newFeePercent',
-          type: 'uint256',
-        },
-      ],
-      name: 'setFeePercentage',
-      outputs: [],
-      stateMutability: 'nonpayable',
-      type: 'function',
-    },
-    {
-      inputs: [
-        {
-          internalType: 'address',
-          name: 'newOwner',
-          type: 'address',
-        },
-      ],
-      name: 'transferOwnership',
-      outputs: [],
-      stateMutability: 'nonpayable',
-      type: 'function',
-    },
-    {
-      inputs: [
-        {
-          internalType: 'address',
-          name: 'user',
-          type: 'address',
-        },
-      ],
-      name: 'unbanUser',
-      outputs: [],
-      stateMutability: 'nonpayable',
-      type: 'function',
     },
     {
       anonymous: false,
@@ -456,15 +395,22 @@ export const gameContractConfig = {
       type: 'fallback',
     },
     {
-      inputs: [],
-      name: 'withdrawFees',
+      inputs: [
+        {
+          internalType: 'address',
+          name: '_user',
+          type: 'address',
+        },
+        {
+          internalType: 'uint256',
+          name: '_hours',
+          type: 'uint256',
+        },
+      ],
+      name: 'banUser',
       outputs: [],
       stateMutability: 'nonpayable',
       type: 'function',
-    },
-    {
-      stateMutability: 'payable',
-      type: 'receive',
     },
     {
       inputs: [
@@ -486,11 +432,56 @@ export const gameContractConfig = {
       type: 'function',
     },
     {
+      inputs: [
+        {
+          internalType: 'uint256',
+          name: 'gameId',
+          type: 'uint256',
+        },
+      ],
+      name: 'cancelGame',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function',
+    },
+    {
+      inputs: [
+        {
+          internalType: 'address',
+          name: 'newHouse',
+          type: 'address',
+        },
+      ],
+      name: 'changeHouse',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function',
+    },
+    {
+      inputs: [
+        {
+          internalType: 'bytes32',
+          name: 'hashMoveA',
+          type: 'bytes32',
+        },
+      ],
+      name: 'createGame',
+      outputs: [
+        {
+          internalType: 'uint256',
+          name: '',
+          type: 'uint256',
+        },
+      ],
+      stateMutability: 'payable',
+      type: 'function',
+    },
+    {
       inputs: [],
       name: 'elgamal',
       outputs: [
         {
-          internalType: 'contract ElGamalAdditive',
+          internalType: 'contract ECCElGamal',
           name: '',
           type: 'address',
         },
@@ -503,9 +494,9 @@ export const gameContractConfig = {
       name: 'feePercent',
       outputs: [
         {
-          internalType: 'uint256',
+          internalType: 'uint16',
           name: '',
-          type: 'uint256',
+          type: 'uint16',
         },
       ],
       stateMutability: 'view',
@@ -522,6 +513,65 @@ export const gameContractConfig = {
         },
       ],
       stateMutability: 'view',
+      type: 'function',
+    },
+    {
+      inputs: [
+        {
+          internalType: 'uint256',
+          name: 'gameId',
+          type: 'uint256',
+        },
+        {
+          internalType: 'int256',
+          name: 'diffMod3',
+          type: 'int256',
+        },
+        {
+          components: [
+            {
+              components: [
+                {
+                  internalType: 'uint256',
+                  name: 'x',
+                  type: 'uint256',
+                },
+                {
+                  internalType: 'uint256',
+                  name: 'y',
+                  type: 'uint256',
+                },
+              ],
+              internalType: 'struct ECPoint',
+              name: 'c1',
+              type: 'tuple',
+            },
+            {
+              components: [
+                {
+                  internalType: 'uint256',
+                  name: 'x',
+                  type: 'uint256',
+                },
+                {
+                  internalType: 'uint256',
+                  name: 'y',
+                  type: 'uint256',
+                },
+              ],
+              internalType: 'struct ECPoint',
+              name: 'c2',
+              type: 'tuple',
+            },
+          ],
+          internalType: 'struct Ciphertext',
+          name: 'diffCipher',
+          type: 'tuple',
+        },
+      ],
+      name: 'finalizeGame',
+      outputs: [],
+      stateMutability: 'nonpayable',
       type: 'function',
     },
     {
@@ -568,38 +618,14 @@ export const gameContractConfig = {
           type: 'uint256',
         },
         {
-          components: [
-            {
-              internalType: 'bytes',
-              name: 'c1',
-              type: 'bytes',
-            },
-            {
-              internalType: 'bytes',
-              name: 'c2',
-              type: 'bytes',
-            },
-          ],
-          internalType: 'struct Ciphertext',
-          name: 'encMoveA',
-          type: 'tuple',
+          internalType: 'bytes32',
+          name: 'hashMoveA',
+          type: 'bytes32',
         },
         {
-          components: [
-            {
-              internalType: 'bytes',
-              name: 'c1',
-              type: 'bytes',
-            },
-            {
-              internalType: 'bytes',
-              name: 'c2',
-              type: 'bytes',
-            },
-          ],
-          internalType: 'struct Ciphertext',
-          name: 'encMoveB',
-          type: 'tuple',
+          internalType: 'bytes32',
+          name: 'hashMoveB',
+          type: 'bytes32',
         },
         {
           internalType: 'bool',
@@ -617,21 +643,9 @@ export const gameContractConfig = {
           type: 'address',
         },
         {
-          components: [
-            {
-              internalType: 'bytes',
-              name: 'c1',
-              type: 'bytes',
-            },
-            {
-              internalType: 'bytes',
-              name: 'c2',
-              type: 'bytes',
-            },
-          ],
-          internalType: 'struct Ciphertext',
-          name: 'differenceCipher',
-          type: 'tuple',
+          internalType: 'bytes32',
+          name: 'hashDifference',
+          type: 'bytes32',
         },
         {
           internalType: 'int256',
@@ -681,38 +695,14 @@ export const gameContractConfig = {
           type: 'uint256',
         },
         {
-          components: [
-            {
-              internalType: 'bytes',
-              name: 'c1',
-              type: 'bytes',
-            },
-            {
-              internalType: 'bytes',
-              name: 'c2',
-              type: 'bytes',
-            },
-          ],
-          internalType: 'struct Ciphertext',
-          name: 'encMoveA',
-          type: 'tuple',
+          internalType: 'bytes32',
+          name: 'hashMoveA',
+          type: 'bytes32',
         },
         {
-          components: [
-            {
-              internalType: 'bytes',
-              name: 'c1',
-              type: 'bytes',
-            },
-            {
-              internalType: 'bytes',
-              name: 'c2',
-              type: 'bytes',
-            },
-          ],
-          internalType: 'struct Ciphertext',
-          name: 'encMoveB',
-          type: 'tuple',
+          internalType: 'bytes32',
+          name: 'hashMoveB',
+          type: 'bytes32',
         },
         {
           internalType: 'bool',
@@ -730,21 +720,9 @@ export const gameContractConfig = {
           type: 'address',
         },
         {
-          components: [
-            {
-              internalType: 'bytes',
-              name: 'c1',
-              type: 'bytes',
-            },
-            {
-              internalType: 'bytes',
-              name: 'c2',
-              type: 'bytes',
-            },
-          ],
-          internalType: 'struct Ciphertext',
-          name: 'differenceCipher',
-          type: 'tuple',
+          internalType: 'bytes32',
+          name: 'hashDifference',
+          type: 'bytes32',
         },
         {
           internalType: 'int256',
@@ -769,6 +747,106 @@ export const gameContractConfig = {
       type: 'function',
     },
     {
+      inputs: [
+        {
+          internalType: 'uint256',
+          name: 'gameId',
+          type: 'uint256',
+        },
+        {
+          internalType: 'bytes32',
+          name: 'hashMoveB',
+          type: 'bytes32',
+        },
+        {
+          components: [
+            {
+              components: [
+                {
+                  internalType: 'uint256',
+                  name: 'x',
+                  type: 'uint256',
+                },
+                {
+                  internalType: 'uint256',
+                  name: 'y',
+                  type: 'uint256',
+                },
+              ],
+              internalType: 'struct ECPoint',
+              name: 'c1',
+              type: 'tuple',
+            },
+            {
+              components: [
+                {
+                  internalType: 'uint256',
+                  name: 'x',
+                  type: 'uint256',
+                },
+                {
+                  internalType: 'uint256',
+                  name: 'y',
+                  type: 'uint256',
+                },
+              ],
+              internalType: 'struct ECPoint',
+              name: 'c2',
+              type: 'tuple',
+            },
+          ],
+          internalType: 'struct Ciphertext',
+          name: 'encMoveA',
+          type: 'tuple',
+        },
+        {
+          components: [
+            {
+              components: [
+                {
+                  internalType: 'uint256',
+                  name: 'x',
+                  type: 'uint256',
+                },
+                {
+                  internalType: 'uint256',
+                  name: 'y',
+                  type: 'uint256',
+                },
+              ],
+              internalType: 'struct ECPoint',
+              name: 'c1',
+              type: 'tuple',
+            },
+            {
+              components: [
+                {
+                  internalType: 'uint256',
+                  name: 'x',
+                  type: 'uint256',
+                },
+                {
+                  internalType: 'uint256',
+                  name: 'y',
+                  type: 'uint256',
+                },
+              ],
+              internalType: 'struct ECPoint',
+              name: 'c2',
+              type: 'tuple',
+            },
+          ],
+          internalType: 'struct Ciphertext',
+          name: 'encMoveB',
+          type: 'tuple',
+        },
+      ],
+      name: 'joinGame',
+      outputs: [],
+      stateMutability: 'payable',
+      type: 'function',
+    },
+    {
       inputs: [],
       name: 'owner',
       outputs: [
@@ -786,23 +864,82 @@ export const gameContractConfig = {
       name: 'pk',
       outputs: [
         {
-          internalType: 'bytes',
-          name: 'p',
-          type: 'bytes',
-        },
-        {
-          internalType: 'bytes',
-          name: 'g',
-          type: 'bytes',
-        },
-        {
-          internalType: 'bytes',
-          name: 'h',
-          type: 'bytes',
+          components: [
+            {
+              internalType: 'uint256',
+              name: 'x',
+              type: 'uint256',
+            },
+            {
+              internalType: 'uint256',
+              name: 'y',
+              type: 'uint256',
+            },
+          ],
+          internalType: 'struct ECPoint',
+          name: 'Q',
+          type: 'tuple',
         },
       ],
       stateMutability: 'view',
       type: 'function',
+    },
+    {
+      inputs: [],
+      name: 'renounceOwnership',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function',
+    },
+    {
+      inputs: [
+        {
+          internalType: 'uint16',
+          name: 'newFeePercent',
+          type: 'uint16',
+        },
+      ],
+      name: 'setFeePercent',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function',
+    },
+    {
+      inputs: [
+        {
+          internalType: 'address',
+          name: 'newOwner',
+          type: 'address',
+        },
+      ],
+      name: 'transferOwnership',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function',
+    },
+    {
+      inputs: [
+        {
+          internalType: 'address',
+          name: 'user',
+          type: 'address',
+        },
+      ],
+      name: 'unbanUser',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function',
+    },
+    {
+      inputs: [],
+      name: 'withdrawFees',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function',
+    },
+    {
+      stateMutability: 'payable',
+      type: 'receive',
     },
   ],
 } as const;
@@ -856,46 +993,6 @@ export const houseBatcherContractConfig = {
       type: 'event',
     },
     {
-      inputs: [
-        {
-          internalType: 'uint256',
-          name: 'gameId',
-          type: 'uint256',
-        },
-        {
-          internalType: 'bytes',
-          name: 'c1B',
-          type: 'bytes',
-        },
-        {
-          internalType: 'bytes',
-          name: 'c2B',
-          type: 'bytes',
-        },
-        {
-          internalType: 'int256',
-          name: 'diffMod3',
-          type: 'int256',
-        },
-        {
-          internalType: 'uint256',
-          name: 'betAmount',
-          type: 'uint256',
-        },
-      ],
-      name: 'batchHouseFlow',
-      outputs: [],
-      stateMutability: 'nonpayable',
-      type: 'function',
-    },
-    {
-      inputs: [],
-      name: 'deposit',
-      outputs: [],
-      stateMutability: 'payable',
-      type: 'function',
-    },
-    {
       anonymous: false,
       inputs: [
         {
@@ -913,60 +1010,6 @@ export const houseBatcherContractConfig = {
       ],
       name: 'Deposit',
       type: 'event',
-    },
-    {
-      inputs: [
-        {
-          internalType: 'bytes32',
-          name: 'role',
-          type: 'bytes32',
-        },
-        {
-          internalType: 'address',
-          name: 'account',
-          type: 'address',
-        },
-      ],
-      name: 'grantRole',
-      outputs: [],
-      stateMutability: 'nonpayable',
-      type: 'function',
-    },
-    {
-      inputs: [
-        {
-          internalType: 'bytes32',
-          name: 'role',
-          type: 'bytes32',
-        },
-        {
-          internalType: 'address',
-          name: 'callerConfirmation',
-          type: 'address',
-        },
-      ],
-      name: 'renounceRole',
-      outputs: [],
-      stateMutability: 'nonpayable',
-      type: 'function',
-    },
-    {
-      inputs: [
-        {
-          internalType: 'bytes32',
-          name: 'role',
-          type: 'bytes32',
-        },
-        {
-          internalType: 'address',
-          name: 'account',
-          type: 'address',
-        },
-      ],
-      name: 'revokeRole',
-      outputs: [],
-      stateMutability: 'nonpayable',
-      type: 'function',
     },
     {
       anonymous: false,
@@ -1044,19 +1087,6 @@ export const houseBatcherContractConfig = {
       type: 'event',
     },
     {
-      inputs: [
-        {
-          internalType: 'uint256',
-          name: 'amount',
-          type: 'uint256',
-        },
-      ],
-      name: 'withdraw',
-      outputs: [],
-      stateMutability: 'nonpayable',
-      type: 'function',
-    },
-    {
       anonymous: false,
       inputs: [
         {
@@ -1078,10 +1108,6 @@ export const houseBatcherContractConfig = {
     {
       stateMutability: 'payable',
       type: 'fallback',
-    },
-    {
-      stateMutability: 'payable',
-      type: 'receive',
     },
     {
       inputs: [],
@@ -1107,6 +1133,164 @@ export const houseBatcherContractConfig = {
         },
       ],
       stateMutability: 'view',
+      type: 'function',
+    },
+    {
+      inputs: [
+        {
+          internalType: 'uint256',
+          name: 'gameId',
+          type: 'uint256',
+        },
+        {
+          internalType: 'bytes32',
+          name: 'hashMoveB',
+          type: 'bytes32',
+        },
+        {
+          components: [
+            {
+              components: [
+                {
+                  internalType: 'uint256',
+                  name: 'x',
+                  type: 'uint256',
+                },
+                {
+                  internalType: 'uint256',
+                  name: 'y',
+                  type: 'uint256',
+                },
+              ],
+              internalType: 'struct ECPoint',
+              name: 'c1',
+              type: 'tuple',
+            },
+            {
+              components: [
+                {
+                  internalType: 'uint256',
+                  name: 'x',
+                  type: 'uint256',
+                },
+                {
+                  internalType: 'uint256',
+                  name: 'y',
+                  type: 'uint256',
+                },
+              ],
+              internalType: 'struct ECPoint',
+              name: 'c2',
+              type: 'tuple',
+            },
+          ],
+          internalType: 'struct Ciphertext',
+          name: 'encMoveA',
+          type: 'tuple',
+        },
+        {
+          components: [
+            {
+              components: [
+                {
+                  internalType: 'uint256',
+                  name: 'x',
+                  type: 'uint256',
+                },
+                {
+                  internalType: 'uint256',
+                  name: 'y',
+                  type: 'uint256',
+                },
+              ],
+              internalType: 'struct ECPoint',
+              name: 'c1',
+              type: 'tuple',
+            },
+            {
+              components: [
+                {
+                  internalType: 'uint256',
+                  name: 'x',
+                  type: 'uint256',
+                },
+                {
+                  internalType: 'uint256',
+                  name: 'y',
+                  type: 'uint256',
+                },
+              ],
+              internalType: 'struct ECPoint',
+              name: 'c2',
+              type: 'tuple',
+            },
+          ],
+          internalType: 'struct Ciphertext',
+          name: 'encMoveB',
+          type: 'tuple',
+        },
+        {
+          internalType: 'int256',
+          name: 'diffMod3',
+          type: 'int256',
+        },
+        {
+          components: [
+            {
+              components: [
+                {
+                  internalType: 'uint256',
+                  name: 'x',
+                  type: 'uint256',
+                },
+                {
+                  internalType: 'uint256',
+                  name: 'y',
+                  type: 'uint256',
+                },
+              ],
+              internalType: 'struct ECPoint',
+              name: 'c1',
+              type: 'tuple',
+            },
+            {
+              components: [
+                {
+                  internalType: 'uint256',
+                  name: 'x',
+                  type: 'uint256',
+                },
+                {
+                  internalType: 'uint256',
+                  name: 'y',
+                  type: 'uint256',
+                },
+              ],
+              internalType: 'struct ECPoint',
+              name: 'c2',
+              type: 'tuple',
+            },
+          ],
+          internalType: 'struct Ciphertext',
+          name: 'diffCipher',
+          type: 'tuple',
+        },
+        {
+          internalType: 'uint256',
+          name: 'betAmount',
+          type: 'uint256',
+        },
+      ],
+      name: 'batchHouseFlow',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function',
+    },
+    {
+      inputs: [],
+      name: 'deposit',
+      outputs: [],
+      stateMutability: 'payable',
       type: 'function',
     },
     {
@@ -1141,6 +1325,24 @@ export const houseBatcherContractConfig = {
           type: 'address',
         },
       ],
+      name: 'grantRole',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function',
+    },
+    {
+      inputs: [
+        {
+          internalType: 'bytes32',
+          name: 'role',
+          type: 'bytes32',
+        },
+        {
+          internalType: 'address',
+          name: 'account',
+          type: 'address',
+        },
+      ],
       name: 'hasRole',
       outputs: [
         {
@@ -1150,6 +1352,42 @@ export const houseBatcherContractConfig = {
         },
       ],
       stateMutability: 'view',
+      type: 'function',
+    },
+    {
+      inputs: [
+        {
+          internalType: 'bytes32',
+          name: 'role',
+          type: 'bytes32',
+        },
+        {
+          internalType: 'address',
+          name: 'callerConfirmation',
+          type: 'address',
+        },
+      ],
+      name: 'renounceRole',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function',
+    },
+    {
+      inputs: [
+        {
+          internalType: 'bytes32',
+          name: 'role',
+          type: 'bytes32',
+        },
+        {
+          internalType: 'address',
+          name: 'account',
+          type: 'address',
+        },
+      ],
+      name: 'revokeRole',
+      outputs: [],
+      stateMutability: 'nonpayable',
       type: 'function',
     },
     {
@@ -1183,6 +1421,23 @@ export const houseBatcherContractConfig = {
       ],
       stateMutability: 'view',
       type: 'function',
+    },
+    {
+      inputs: [
+        {
+          internalType: 'uint256',
+          name: 'amount',
+          type: 'uint256',
+        },
+      ],
+      name: 'withdraw',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function',
+    },
+    {
+      stateMutability: 'payable',
+      type: 'receive',
     },
   ],
 } as const;
