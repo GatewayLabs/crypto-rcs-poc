@@ -1,4 +1,5 @@
 import { ElGamalPublicKey, FIELD_MODULUS } from '@/lib/crypto/elgamal';
+import { ethers } from 'ethers';
 
 export const GAME_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS!;
 export const HOUSE_BATCHER_CONTRACT_ADDRESS =
@@ -20,6 +21,10 @@ export const ELGAMAL_PUBLIC_KEY = {
   },
   p: FIELD_MODULUS,
 } as ElGamalPublicKey;
+
+export const GAME_GAS_FEE = ethers.parseEther(
+  process.env.NEXT_PUBLIC_GAME_GAS_FEE ?? '0.02',
+);
 
 export const gameContractConfig = {
   address: GAME_CONTRACT_ADDRESS as `0x${string}`,

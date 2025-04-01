@@ -6,7 +6,7 @@ import {
   ElGamalCiphertext,
   generateEncryptedMoveHash,
 } from '@/lib/crypto';
-import { gameContractConfig } from '@/config/contracts';
+import { GAME_GAS_FEE, gameContractConfig } from '@/config/contracts';
 import { usePublicClient, useReadContract, useWriteContract } from 'wagmi';
 import { useCallback } from 'react';
 import { EstimateContractGasParameters, parseEventLogs } from 'viem';
@@ -88,7 +88,7 @@ export function useGameContract(gameId?: number) {
           ...gameContractConfig,
           functionName: 'createGame',
           args: [moveHash],
-          value: betAmount,
+          value: betAmount + GAME_GAS_FEE,
         });
 
         // Execute transaction with retry
@@ -98,7 +98,7 @@ export function useGameContract(gameId?: number) {
               ...gameContractConfig,
               functionName: 'createGame',
               args: [moveHash],
-              value: betAmount,
+              value: betAmount + GAME_GAS_FEE,
               gas,
             }),
           {
