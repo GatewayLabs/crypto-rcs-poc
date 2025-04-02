@@ -1,4 +1,9 @@
-import { publicClient, walletClient, walletClient2 } from '@/config/server';
+import {
+  houseAccount,
+  publicClient,
+  walletClient,
+  walletClient2,
+} from '@/config/server';
 import { retry } from '@/lib/utils';
 import { WalletClient } from 'viem';
 
@@ -10,28 +15,37 @@ interface ExecuteTransactionOptions {
 }
 
 // Local nonce tracker (initialize once)
-let localNonce: number | null = null;
-let nonceLastUpdated = 0;
+let localNonce: { [key: string]: number | null } = {
+  [walletClient.account.address]: null,
+  [walletClient2.account.address]: null,
+};
+let nonceLastUpdated: { [key: string]: number } = {
+  [walletClient.account.address]: 0,
+  [walletClient2.account.address]: 0,
+};
 
 async function getAndIncrementNonce(
-  houseAccount: WalletClient,
+  houseAccountAddress: `0x${string}`,
 ): Promise<number> {
   const now = Date.now();
 
   // Refresh from chain if nonce is null or was last updated more than 10 seconds ago
-  if (localNonce === null || now - nonceLastUpdated > 10000) {
+  if (
+    localNonce[houseAccountAddress] === null ||
+    now - nonceLastUpdated[houseAccountAddress] > 10000
+  ) {
     try {
-      localNonce = Number(
+      localNonce[houseAccountAddress] = Number(
         await publicClient.getTransactionCount({
-          address: houseAccount.account?.address!,
+          address: houseAccountAddress,
           blockTag: 'pending',
         }),
       );
-      nonceLastUpdated = now;
+      nonceLastUpdated[houseAccountAddress] = now;
       console.log(`Refreshed nonce from chain: ${localNonce}`);
     } catch (error) {
       // If we can't refresh, and have no nonce, throw
-      if (localNonce === null) {
+      if (localNonce[houseAccountAddress] === null) {
         throw new Error(`Failed to get initial nonce: ${error}`);
       }
       // Otherwise, continue with existing nonce
@@ -39,8 +53,12 @@ async function getAndIncrementNonce(
     }
   }
 
-  const currentNonce = localNonce;
-  localNonce += 1;
+  const currentNonce = localNonce[houseAccountAddress];
+  if (currentNonce === null) {
+    throw new Error('Nonce is null');
+  }
+  localNonce[houseAccountAddress] = currentNonce + 1;
+
   return currentNonce;
 }
 
@@ -65,7 +83,7 @@ export async function executeContractFunction(
         `${logPrefix}: Using house account ${houseAccount.account.address}`,
       );
 
-      const nonce = await getAndIncrementNonce(houseAccount);
+      const nonce = await getAndIncrementNonce(houseAccount.account?.address!);
       console.log(`${logPrefix}: Using nonce ${nonce}`);
 
       try {
@@ -107,8 +125,14 @@ export async function executeContractFunction(
             `${logPrefix}: Nonce error detected, resetting nonce state`,
           );
           // Reset the nonce tracking completely
-          localNonce = null;
-          nonceLastUpdated = 0;
+          localNonce = {
+            [walletClient.account.address]: null,
+            [walletClient2.account.address]: null,
+          };
+          nonceLastUpdated = {
+            [walletClient.account.address]: 0,
+            [walletClient2.account.address]: 0,
+          };
           throw new Error(`Nonce error: ${errorMessage}`);
         }
 
