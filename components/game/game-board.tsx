@@ -58,7 +58,7 @@ export default function GameBoard() {
   // Local component state
   const [betValue, setBetValue] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const limit = 1;
+  const limit = 5;
 
   // Sound effects for game outcomes
   useEffect(() => {
