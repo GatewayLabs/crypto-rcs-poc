@@ -42,14 +42,18 @@ async function getAndIncrementNonce(
         }),
       );
       nonceLastUpdated[houseAccountAddress] = now;
-      console.log(`Refreshed nonce from chain: ${localNonce}`);
+      console.log(
+        `Refreshed nonce from chain: ${localNonce[houseAccountAddress]}`,
+      );
     } catch (error) {
       // If we can't refresh, and have no nonce, throw
       if (localNonce[houseAccountAddress] === null) {
         throw new Error(`Failed to get initial nonce: ${error}`);
       }
       // Otherwise, continue with existing nonce
-      console.warn(`Failed to refresh nonce, using existing: ${localNonce}`);
+      console.warn(
+        `Failed to refresh nonce, using existing: ${localNonce[houseAccountAddress]}`,
+      );
     }
   }
 
